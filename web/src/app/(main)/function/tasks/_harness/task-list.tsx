@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 
 import {
   Archive,
+  RotateCcw,
+  Trash2,
   ChevronDown,
   Inbox,
   Loader2,
@@ -21,7 +23,7 @@ import {
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
-import type { Task, TaskCategory, TaskStatus } from "@/lib/types";
+import type { Task, TaskArchive, TaskCategory, TaskStatus } from "@/lib/types";
 
 import styles from "./task-list.module.css";
 
@@ -201,6 +203,12 @@ export function HarnessTaskList() {
   const [page, setPage] = React.useState(1);
   const [busy, setBusy] = React.useState<string>("");
 
+  // 会话记录管理：当前 / 已归档。归档是"移出列表但可恢复"，所以它必须有独立视图，
+  // 否则归档完就再也找不到了。
+  const [view, setView] = React.useState<"active" | "archived">("active");
+  const [archives, setArchives] = React.useState<TaskArchive[]>([]);
+  const [archivesLoading, setArchivesLoading] = React.useState(false);
+
   const load = React.useCallback(async () => {
     try {
       const [list, cats] = await Promise.all([
@@ -231,6 +239,54 @@ export function HarnessTaskList() {
     ],
     [categories],
   );
+
+  // 归档视图的数据源与动作：列表走 /task-archives，恢复后回到当前列表。
+  const loadArchives = React.useCallback(async () => {
+    setArchivesLoading(true);
+    try {
+      const result = await api.taskArchives({ page: 1, size: 100, q: query.trim() });
+      setArchives(result.items);
+    } catch (err) {
+      toast.error((err as Error).message || "加载归档失败");
+    } finally {
+      setArchivesLoading(false);
+    }
+  }, [query]);
+
+  React.useEffect(() => {
+    if (view === "archived") void loadArchives();
+  }, [view, loadArchives]);
+
+  const restoreArchive = async (item: TaskArchive) => {
+    if (busy) return;
+    setBusy(`archive-${item.id}`);
+    try {
+      await api.restoreTaskArchive(item.id);
+      toast.success("已恢复，任务会回到当前列表");
+      await loadArchives();
+      await load();
+    } catch (err) {
+      toast.error((err as Error).message || "恢复失败");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const purgeArchive = async (item: TaskArchive) => {
+    if (busy) return;
+    // 永久删除不可恢复，必须二次确认。
+    if (!window.confirm(`永久删除归档「${item.task_name || item.task_id}」？归档包与关联快照都会被删除，无法恢复。`)) return;
+    setBusy(`archive-${item.id}`);
+    try {
+      await api.deleteTaskArchive(item.id);
+      toast.success("已永久删除");
+      await loadArchives();
+    } catch (err) {
+      toast.error((err as Error).message || "删除失败");
+    } finally {
+      setBusy("");
+    }
+  };
 
   const filtered = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -337,9 +393,79 @@ export function HarnessTaskList() {
         <Picker label="状态筛选" value={status} options={STATUS_OPTIONS} onChange={setStatus} testId="task-status-filter" />
         <Picker label="分类筛选" value={category} options={categoryOptions} onChange={setCategory} testId="task-category-filter" />
         <Picker label="排序" value={sort} options={SORT_OPTIONS} onChange={setSort} testId="task-sort" />
+        <div className={styles.viewSwitch} role="group" aria-label="当前 / 已归档">
+          <button
+            type="button"
+            className={styles.viewTab}
+            data-active={view === "active" || undefined}
+            data-testid="tasks-view-active"
+            onClick={() => setView("active")}
+          >
+            当前
+          </button>
+          <button
+            type="button"
+            className={styles.viewTab}
+            data-active={view === "archived" || undefined}
+            data-testid="tasks-view-archived"
+            onClick={() => setView("archived")}
+          >
+            已归档
+          </button>
+        </div>
       </div>
 
       <div className={styles.listWrap}>
+        {view === "archived" ? (
+          archivesLoading ? (
+            <div className={styles.state}><Loader2 size={16} className={styles.spin} aria-hidden="true" /> 加载归档…</div>
+          ) : archives.length === 0 ? (
+            <div className={styles.empty} data-testid="archives-empty">
+              <span className={styles.emptyIcon}><Archive size={18} strokeWidth={1.7} aria-hidden="true" /></span>
+              <span className={styles.emptyTitle}>还没有归档</span>
+              <span className={styles.emptyText}>在当前列表里归档任务后，会出现在这里，可随时恢复。</span>
+            </div>
+          ) : (
+            <ul className={styles.list} data-testid="archive-rows">
+              {archives.map((item) => (
+                <li key={item.id} className={styles.row} data-archive-id={item.id}>
+                  <span className={`${styles.dot} ${styles.dotDone}`} aria-hidden="true" />
+                  <span className={styles.rowMain}>
+                    <span className={styles.rowTop}>
+                      <span className={styles.rowName}>{item.task_name || item.task_id}</span>
+                      <span className={styles.rowStatus}>已归档</span>
+                    </span>
+                    <span className={styles.rowMeta}>归档于 {new Date(item.created_at).toLocaleString()}</span>
+                  </span>
+                  <span className={styles.rowActions}>
+                    <button
+                      type="button"
+                      className={styles.rowAction}
+                      title="恢复到当前列表"
+                      data-testid="archive-restore"
+                      disabled={busy === `archive-${item.id}`}
+                      onClick={() => void restoreArchive(item)}
+                    >
+                      <RotateCcw size={12} aria-hidden="true" /> 恢复
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.rowAction}
+                      title="永久删除（不可恢复）"
+                      data-testid="archive-purge"
+                      disabled={busy === `archive-${item.id}`}
+                      onClick={() => void purgeArchive(item)}
+                    >
+                      <Trash2 size={12} aria-hidden="true" /> 永久删除
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : null}
+        {view === "active" ? (
+          <>
         {loading ? (
           <div className={styles.state}><Loader2 size={16} className={styles.spin} aria-hidden="true" /> 加载中…</div>
         ) : error ? (
@@ -435,6 +561,8 @@ export function HarnessTaskList() {
             })}
           </ul>
         )}
+          </>
+        ) : null}
       </div>
 
       {pageCount > 1 ? (
