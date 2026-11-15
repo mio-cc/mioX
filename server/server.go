@@ -3139,7 +3139,15 @@ func (s *Server) activityDetail(w http.ResponseWriter, r *http.Request) {
 // This prevents a guessed global activity id from exposing source planner/main
 // or in-flight transcripts.
 func taskActivityDetail(t *Task, seq int64) (string, error) {
-	return t.Store.ActivityDetailWithSources(seq)
+	d, err := t.Store.ActivityDetailWithSources(seq)
+	if err != nil || d != "" {
+		return d, err
+	}
+	// The session store can be bound to a different exploration than the task
+	// row (inherited lanes). Retry against the task's own ExpID before giving up:
+	// an empty answer here is what made the transcript fall back to a one-line
+	// summary and drop the rest of the reply.
+	return t.Store.ActivityDetailByExp(seq, t.ExpID)
 }
 
 func (s *Server) getTraffic(w http.ResponseWriter, r *http.Request) {

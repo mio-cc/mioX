@@ -989,6 +989,41 @@ function EmptyHero({ onPick }: { readonly onPick: (text: string) => void }) {
   );
 }
 
+/**
+ * The final answer is stored in full in the activity detail; the history row only
+ * carries its first line. Render the detail once it loads, keeping the summary as
+ * the immediate (and fallback) text - rendering the summary alone is what made a
+ * long reply look truncated to its opening sentence.
+ */
+function AssistantAnswer({
+  taskId,
+  seq,
+  summary,
+}: {
+  readonly taskId: string;
+  readonly seq: number;
+  readonly summary: string;
+}) {
+  const [text, setText] = React.useState(summary);
+
+  React.useEffect(() => {
+    if (taskId === "" || seq <= 0) return;
+    let live = true;
+    api
+      .activityDetail(seq, taskId)
+      .then((result) => {
+        const detail = (result?.detail ?? "").trim();
+        if (live && detail.length > summary.trim().length) setText(detail);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [seq, summary, taskId]);
+
+  return <Markdown text={text} />;
+}
+
 function buildActivityNodes(activities: Activity[], taskId: string, streamingSeq: number): React.ReactNode[] {
   const resultByUse = new Map<string, Activity>();
   for (const activity of activities) {
@@ -1068,7 +1103,7 @@ function buildActivityNodes(activities: Activity[], taskId: string, streamingSeq
         <React.Fragment key={`result-${activity.seq}`}>
           {answer ? (
             <div className={styles.assistant} data-testid="assistant-answer">
-              <Markdown text={answer} />
+              <AssistantAnswer taskId={taskId} seq={activity.seq} summary={answer} />
             </div>
           ) : null}
           <div className={styles.footer} data-seq={activity.seq} data-turn-end={activity.seq}>

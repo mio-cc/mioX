@@ -1794,6 +1794,19 @@ func (s *ExplorationStore) ActivityDetail(id int64) (string, error) {
 	return d.String, err
 }
 
+// ActivityDetailByExp reads one activity detail against an explicit exploration id.
+// The session store can be bound to a different exploration than the task row
+// (inherited lanes), so callers that already know the task ExpID pass it here
+// instead of relying on s.expID.
+func (s *ExplorationStore) ActivityDetailByExp(id, expID int64) (string, error) {
+	var d sql.NullString
+	err := s.db.QueryRow(`SELECT detail FROM activity WHERE id=$1 AND exploration_id=$2`, id, expID).Scan(&d)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return d.String, err
+}
+
 // scanTrace reads the summary-only column set shared by the worker-trace tools
 // (ActivityTrace / ActivityTraceSearch). Detail is never selected here — it is
 // pulled separately, on demand, via ActivityByIDs.
