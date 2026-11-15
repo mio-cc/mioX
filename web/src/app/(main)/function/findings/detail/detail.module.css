@@ -1,0 +1,313 @@
+/* 发现详情页 —— harness 设计系统（与任务工作区共用 tokens） */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+}
+
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 0;
+  border-bottom: 1px solid var(--ax-border-subtle);
+  background: color-mix(in srgb, var(--ax-bg-base) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.headRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  background: var(--ax-bg-elevated);
+  color: var(--ax-text-primary);
+}
+
+.title {
+  max-width: 28rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ax-text-primary);
+}
+
+.idChip {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--ax-bg-elevated);
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.tab {
+  padding: 4px 10px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tab[data-active] {
+  border-bottom-color: var(--ax-text-primary);
+  color: var(--ax-text-primary);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.grid {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+    align-items: start;
+  }
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.panel {
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 10px;
+  background: var(--ax-bg-panel, var(--ax-bg-elevated));
+  overflow: hidden;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ax-border-subtle);
+}
+
+.panelTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ax-text-secondary);
+}
+
+.panelBody {
+  padding: 12px;
+}
+
+.summaryText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ax-text-secondary);
+  white-space: pre-wrap;
+}
+
+.code {
+  max-height: 46vh;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ax-bg-base);
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family-code);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+}
+
+.muted {
+  margin: 0;
+  color: var(--ax-text-tertiary);
+  font-size: 12px;
+}
+
+.field {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ax-border-subtle);
+}
+
+.field:last-child {
+  border-bottom: 0;
+}
+
+.fieldLabel {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.fieldValue {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ax-text-primary);
+  text-align: right;
+}
+
+.mono {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--ax-bg-base);
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+}
+
+.assetList {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 16rem;
+  color: var(--ax-text-primary);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--ax-border-strong);
+}
+
+.link:hover {
+  border-bottom-style: solid;
+}
+
+.notice {
+  padding: 8px 10px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ax-warning, #d19a1a) 12%, transparent);
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+}
+
+.empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px;
+  color: var(--ax-text-tertiary);
+  font-size: 13px;
+}
+
+/* 紧凑下拉：与任务列表的 Picker 视觉一致 */
+.picker {
+  position: relative;
+}
+
+.pickerTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.pickerTrigger:hover {
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-primary);
+}
+
+.pickerList {
+  position: absolute;
+  right: 0;
+  z-index: 30;
+  margin-top: 4px;
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid var(--ax-border-strong);
+  border-radius: 8px;
+  background: var(--ax-bg-panel, var(--ax-bg-elevated));
+  box-shadow: 0 10px 28px rgb(0 0 0 / 22%);
+  outline: none;
+}
+
+.pickerItem {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pickerItem[data-cursor] {
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+}
