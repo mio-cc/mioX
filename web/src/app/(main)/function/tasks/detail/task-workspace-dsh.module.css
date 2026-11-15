@@ -2636,3 +2636,77 @@
   border-color: var(--ax-border-strong);
   color: var(--ax-text-primary);
 }
+/* ---- Diff card (reference: DiffBlock + diff totals) ---- */
+.diffBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.diffRow {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.diffRow[data-sign="-"] {
+  background: color-mix(in srgb, var(--ax-danger) 10%, transparent);
+}
+
+.diffRow[data-sign="+"] {
+  background: color-mix(in srgb, var(--ax-success) 10%, transparent);
+}
+
+.diffSign {
+  flex: 0 0 10px;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  user-select: none;
+}
+
+.diffRow[data-sign="-"] .diffSign {
+  color: var(--ax-danger);
+}
+
+.diffRow[data-sign="+"] .diffSign {
+  color: var(--ax-success);
+}
+
+.diffText {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diffStat {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 6px;
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+}
+
+.diffAdded {
+  color: var(--ax-success);
+}
+
+.diffRemoved {
+  color: var(--ax-danger);
+}
+
+.cardEmpty {
+  margin: 0;
+  color: var(--ax-text-tertiary);
+  font-size: 12px;
+}

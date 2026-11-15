@@ -673,6 +673,10 @@ function ToolRow({
   // differently from a file read or a search (reference: per-tool views).
   const cardKind = toolCardKind(tool);
   const args = parseToolArgs(tool, step.summary || "");
+  // File mutations render as a diff: removed lines then added lines, with the
+  // +/- totals in the row summary (reference: DiffBlock + diff totals).
+  const hunks = React.useMemo(() => diffHunks(args), [args]);
+  const totals = React.useMemo(() => diffTotals(hunks), [hunks]);
   const failed = Boolean(result?.is_error);
   const pending = !result;
   // The backend summary already starts with the tool name ("Bash {...}"); the row
@@ -704,6 +708,12 @@ function ToolRow({
         <span className={styles.toolName}>{tool}</span>
         <span className={styles.toolSep} aria-hidden="true" />
         <span className={styles.toolSummary}>{argSummary || "执行中…"}</span>
+        {cardKind === "diff" && (totals.added > 0 || totals.removed > 0) ? (
+          <span className={styles.diffStat} data-testid="diff-summary">
+            <span className={styles.diffAdded}>+{totals.added}</span>
+            <span className={styles.diffRemoved}>-{totals.removed}</span>
+          </span>
+        ) : null}
         {failed ? <span className={styles.toolErrorMark}>失败</span> : null}
         <ChevronDown size={12} aria-hidden="true" className={styles.toolChevron} />
       </button>
@@ -741,6 +751,20 @@ function ToolRow({
                 {args?.path ? <span className={styles.cardMeta}>{String(args.path)}</span> : null}
               </div>
               <SearchGroups text={loading ? "加载中…" : bodyText} maxLines={10} />
+            </>
+          ) : null}
+          {cardKind === "diff" ? (
+            <>
+              <div className={styles.cardHead}>
+                <span className={styles.cardLabel}>{tool}</span>
+                <code className={styles.cardPath}>{hunks[0]?.path || argSummary || "—"}</code>
+                <span className={styles.diffStat} data-testid="diff-stat">
+                  <span className={styles.diffAdded}>+{totals.added}</span>
+                  {" "}
+                  <span className={styles.diffRemoved}>-{totals.removed}</span>
+                </span>
+              </div>
+              <DiffBody hunks={hunks} />
             </>
           ) : null}
           {cardKind === "generic" ? (
