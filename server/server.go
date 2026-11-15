@@ -958,6 +958,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/intercept/pending", s.interceptListPending)
 	mux.HandleFunc("GET /api/intercept/pending/{id}", s.interceptGetOne)
 	mux.HandleFunc("POST /api/intercept/pending/{id}/decide", s.interceptDecide)
+	// 计划审阅的三态决定（approve / keep_planning / dismiss）：见 intercept/plan_review.go。
+	mux.HandleFunc("POST /api/intercept/pending/{id}/plan-review", s.interceptPlanReview)
 	mux.HandleFunc("GET /api/intercept/history", s.interceptHistory)
 	mux.HandleFunc("GET /api/intercept/history/{id}", s.interceptDetail)
 	mux.HandleFunc("GET /api/intercept/history/{id}/execution", s.interceptExecution)
@@ -4154,4 +4156,19 @@ func (s *Server) setTaskPlanMode(w http.ResponseWriter, r *http.Request) {
 	s.taskAgentMu.Unlock()
 	log.Printf("[task] #%s 计划模式 -> %v", t.ID, req.On)
 	writeJSON(w, 200, map[string]any{"id": t.ID, "plan_mode": req.On})
+}
+
+// leavePlanMode 在用户批准计划后退出计划模式（DSH plan-mode/src/index.ts:358-362：
+// 批准即离开计划模式，下一步开始执行）。与 setTaskPlanMode 的 HTTP 版共用同一套动作：
+// 落库 plan_mode=false，再丢弃该任务的 agent bundle，让下一轮重建出非计划模式的 agent。
+// 由 exit_plan_mode 在批准分支里调用（跑在 agent goroutine 上，不持任何 server 锁）。
+func (s *Server) leavePlanMode(taskID string) {
+	if _, err := s.m.SetTaskPlanMode(taskID, false); err != nil {
+		log.Printf("[task] #%s 批准计划后退出计划模式失败: %v", taskID, err)
+		return
+	}
+	s.taskAgentMu.Lock()
+	delete(s.taskAgents, taskID)
+	s.taskAgentMu.Unlock()
+	log.Printf("[task] #%s 计划已获批准 → 退出计划模式（plan_mode=false）", taskID)
 }

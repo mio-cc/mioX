@@ -15,6 +15,7 @@ import (
 
 	"github.com/Autumn-27/artex/agent"
 	"github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/artex/llmrec"
 	"github.com/Autumn-27/norma/llm"
 	"github.com/Autumn-27/norma/transcript"
@@ -644,6 +645,14 @@ func (s *Server) agentsForTask(t *Task) *taskAgentBundle {
 		main.SetTaskWorkDir(t.WorkDir)
 	}
 	main.SetPlanMode(t.PlanMode)
+	// 计划审阅闭环（DSH plan-mode/src/index.ts:316-333）：提交计划 → 写 pending 审批 +
+	// 会话流审阅卡片 → 阻塞等用户批准/继续规划/关闭。
+	main.SetPlanReview(func(ctx context.Context, title, plan string) (intercept.PlanReviewOutcome, error) {
+		return s.m.interceptor.AskPlanReview(ctx, title, plan, nil)
+	})
+	// 批准后退出计划模式（DSH index.ts:358-362）：落库 plan_mode=false 并丢弃 bundle，
+	// 下一轮重建出"非计划模式"的 agent（工具集与系统提示都固化在 bundle 里）。
+	main.SetPlanExit(func() { s.leavePlanMode(t.ID) })
 	main.SetFindingRecorder(s.evidenceStore())
 	main.SetCompactionWindowResolver(mainRuntime.CompactionWindow)
 	main.SetNonStreaming(mainRuntime.nonStreaming)

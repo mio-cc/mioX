@@ -36,6 +36,12 @@ type MainAgent struct {
 	workDir         string                                 // shared work dir (surfaced in prompt as artifact-output target)
 	taskWorkDir     string                                 // 用户为任务选的目录；空=默认 run 目录
 	planMode        bool                                   // 计划模式：工具全保留，靠提示词约束"只侦察+交计划"，等审批（DSH 语义）
+	// planReview 是计划审阅通道（DSH plan-mode/src/index.ts:316-333 的 userQuestions.ask）：
+	// 写 pending 审批 + 往会话流写审阅卡片，阻塞等用户决定。nil = 没有审阅通道
+	// （exit_plan_mode 会 fail closed，DSH index.ts:310-313）。
+	planReview func(ctx context.Context, title, plan string) (intercept.PlanReviewOutcome, error)
+	// planExit 在用户批准后退出计划模式（DSH index.ts:358-362）。nil = 只在本轮内存里退出。
+	planExit func()
 	steerWork       func(intentID int64, msg string) error // engine callback: steer a running work (nil = off)
 	nonStreamingFn  func() bool                            // resolver: use non-streaming (Complete) path? (nil = streaming)
 	noaEnabledFn    func() bool                            // resolver: use experimental noa compaction? (nil = off)
@@ -122,6 +128,15 @@ func (m *MainAgent) SetTaskWorkDir(dir string) { m.taskWorkDir = dir }
 // 用户审批决定（PATCH /api/tasks/{id}/plan-mode {"on":false}）。
 func (m *MainAgent) SetPlanMode(on bool) { m.planMode = on }
 
+// SetPlanReview 接上计划审阅通道（DSH plan-mode/src/index.ts:316-333）：提交计划后
+// **当场**向用户提问审批，按结果返回 批准 / 继续规划（带反馈）/ 关闭审阅。
+func (m *MainAgent) SetPlanReview(fn func(ctx context.Context, title, plan string) (intercept.PlanReviewOutcome, error)) {
+	m.planReview = fn
+}
+
+// SetPlanExit 接上"退出计划模式"（用户批准后，DSH index.ts:358-362）。
+func (m *MainAgent) SetPlanExit(fn func()) { m.planExit = fn }
+
 // planModeBlock 是计划模式的系统提示段（DSH 的 plan:policy section，部署方自有的
 // 那段文本：index.ts:67-70 注册、index.ts:197-204 仅在计划模式渲染）。
 // 它约束的是**行为**而不是能力：可以随便侦察，但不要改系统状态；侦察完用
@@ -143,8 +158,10 @@ const planModeBlock = `
 - 入参 {"plan": "<Markdown>"}；plan 不能为空，且**首行必须是一级标题**（如 ` + "`# 测试计划`" + `），
   否则工具会报错让你重写。
 - 计划要写清：目标、步骤（每步做什么/用哪个工具/预期结果）、风险与回滚、需要人工确认的点。
-提交成功后本轮就结束了：不要再调用任何工具，用一句话告诉用户计划已提交、等待他审阅。
-用户批准（退出计划模式）之后，你才会真正开始执行。`
+提交后用户会**当场**看到计划全文并选择：
+- **批准** → 工具返回「计划已获批准」，计划模式退出，你从下一步开始按计划执行；
+- **继续规划** → 工具返回错误并带回用户的反馈，按反馈修改计划后**重新调用 ` + exitPlanModeName + `** 提交；
+- **关闭审阅** → 本轮结束，不要再调用任何工具，用一句话收尾。`
 
 func mainAgentSystem(goal, dataDir, workDir string) string {
 	body := renderSystem("mainagent", mainAgentDefaultTmpl, MainVars{Goal: goal, DataDir: dataDir, Now: nowStr()})
@@ -195,6 +212,13 @@ func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int
 		tsx.SetPlanMode(true)
 		tsx.SetPlanTurn(planTurn)
 		tsx.SetPlanEmit(stepEmit) // 计划 → 一条 kind="plan" 的 activity（DSH 的 submitted-plan 聊天节点）
+		// 计划审阅通道：提交计划后当场提问审批（DSH index.ts:316-333），按结果分三条路。
+		if m.planReview != nil {
+			tsx.SetPlanReview(m.planReview)
+		}
+		if m.planExit != nil {
+			tsx.SetPlanExit(m.planExit)
+		}
 		base = append(base, tsx.exitPlanMode())
 	}
 	ctx = WithRunInfo(ctx, RunInfo{TaskID: taskID, ExplorationID: explorationID(ts)})

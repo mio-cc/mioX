@@ -17,18 +17,29 @@ package agent
 //     "exit_plan_mode is only available in plan mode"。
 //   - plan-mode/src/index.ts:375 工具注册带 `when: selectedActive || entered`：
 //     只在计划模式披露，其余时候模型根本看不到它。
-//   - plan-mode/src/index.ts:340 `exec.concludeTurn()`：计划审阅（这里是"提交"）之后
-//     本轮直接结束，不再发下一次模型请求。
+//   - plan-mode/src/index.ts:310-333 审阅是**当场提问**（不是"落库后结束本轮"）：
+//     `userQuestions.ask({ questions:[{ header:'Plan review',
+//      question:'Approve this plan and leave plan mode?', detail: args.plan, options:[
+//      APPROVE_LABEL / KEEP_PLANNING_LABEL ] }] })` —— detail 就是完整 markdown 计划。
+//   - plan-mode/src/index.ts:339-341 用户取消/关闭提问（ASK_CANCELLED）→
+//     `exec.concludeTurn()` + `return { approved:false }`：本轮结束，不再发模型请求。
+//   - plan-mode/src/index.ts:352-357 不是选 Approve → **抛错**把反馈带回模型：
+//     "The user chose to keep planning; revise the plan and present it again."
+//     （带反馈时 "The user chose to keep planning; their feedback: <feedback>"）。
+//   - plan-mode/src/index.ts:358-362 选 Approve → 计划模式退出（active=false），
+//     下一步开始执行计划。
 //   - plan-mode/README.md:32 「It does not restrict the agent: every tool stays
 //     callable」/ README.md:81 「restrains through text rather than filtering
 //     capabilities」：计划模式是**软约束**——一段系统提示 + 一个工具，工具一个都不摘。
 //
 // 本文件对应关系：
-//   exitPlanMode()  → 上面那个工具（名字/入参/校验/标题规则逐条对齐 DSH）；
-//   planTurn        → 本轮是否已提交计划（DSH concludeTurn 之后本轮不再有模型请求）；
-//   planGateHooks   → 把 concludeTurn 落到本仓库的 loop 上：提交后本轮不再执行任何工具。
+//   exitPlanMode()  → 上面那个工具（名字/入参/校验/标题规则/审阅闭环逐条对齐 DSH）；
+//   planTurn        → 本轮的计划状态（open / approved / concluded）；
+//   planGateHooks   → 把 concludeTurn 落到本仓库的 loop 上（ConcludeTurn + 提交后拦工具）；
 //   计划落库        → 一条 kind="plan" 的 activity（对应 DSH 的 submitted-plan 聊天节点，
-//                     plan-definition.ts:15-33：每次提交生成一个聊天节点，不是任务字段）。
+//                     plan-definition.ts:15-33：每次提交生成一个聊天节点，不是任务字段）；
+//   审阅落库        → 一条 intercept_pending（tool_name=exit_plan_mode）+ 一条
+//                     kind="plan_review" 的 activity（见 intercept/plan_review.go）。
 
 import (
 	"context"
@@ -38,6 +49,7 @@ import (
 	"sync"
 
 	"github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/norma/harness"
 	"github.com/Autumn-27/norma/llm"
 	acperm "github.com/Autumn-27/norma/permission"
@@ -45,7 +57,7 @@ import (
 )
 
 // exitPlanModeName 是 DSH 的模型可调用工具名（index.ts:64），保持 snake_case 原样。
-const exitPlanModeName = "exit_plan_mode"
+const exitPlanModeName = intercept.ExitPlanModeTool
 
 // exitPlanModeHeading 取计划的首个一级标题当卡片标题：DSH ui-plan/plan.ts:47
 // `/^#\s+(\S[^\r\n]*)/.exec(markdown.trim())`。校验用同一形状（DSH index.ts:307
@@ -62,39 +74,60 @@ func planTitle(markdown string) string {
 	return strings.TrimSpace(m[1])
 }
 
+// planTurnState 是本轮计划模式的三种走向（DSH index.ts:352-362 的两条分支 + 取消）。
+type planTurnState int
+
+const (
+	// planOpen：还没提交计划，或用户要求继续规划——exit_plan_mode 可再次调用。
+	planOpen planTurnState = iota
+	// planApproved：用户批准，计划模式已退出，本轮后续可以正常执行工具。
+	planApproved
+	// planConcluded：用户关闭了审阅（ASK_CANCELLED）——本轮结束，不再执行工具、
+	// 不再请求模型（DSH index.ts:340 exec.concludeTurn()）。
+	planConcluded
+)
+
 // planTurn 是本轮（一次 Chat = 一个回合）的计划模式状态，由 exit_plan_mode 与
 // planGateHooks 共享。MainAgent 每轮新建一个 Session，所以它天然是按轮隔离的。
 type planTurn struct {
-	mu        sync.Mutex
-	submitted bool
-	title     string
+	mu    sync.Mutex
+	state planTurnState
+	title string
 }
 
-// markSubmitted 记录本轮已提交计划（DSH index.ts:361 之后本轮不再推进）。
-func (p *planTurn) markSubmitted(title string) {
+// set 记录本轮的计划状态。
+func (p *planTurn) set(state planTurnState, title string) {
 	if p == nil {
 		return
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.submitted = true
+	p.state = state
 	p.title = title
 }
 
-// submittedPlan 报告本轮是否已提交计划，以及标题。
-func (p *planTurn) submittedPlan() (bool, string) {
+// status 返回本轮的计划状态与最近一次提交的标题。
+func (p *planTurn) status() (planTurnState, string) {
 	if p == nil {
-		return false, ""
+		return planOpen, ""
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.submitted, p.title
+	return p.state, p.title
 }
 
-// planGateHooks 是 harness.HookRunner 的包装：计划一旦提交，本轮后续任何工具调用都被
-// 拦下，模型只能收尾回话——把 DSH 的 `exec.concludeTurn()`（index.ts:340，提交/审阅后
-// 本轮直接结束、不再发模型请求）落到本仓库的 loop 上（loop 没有 concludeTurn，只有
-// PreToolUse 能确定性地掐断后续动作，见 harness/tools.go:77-83）。
+// markSubmitted 记录本轮已提交计划（DSH index.ts:340：提交后本轮到此为止）。
+func (p *planTurn) markSubmitted(title string) { p.set(planConcluded, title) }
+
+// submittedPlan 报告本轮是否已结束（提交后未批准 / 用户关闭审阅），以及标题。
+func (p *planTurn) submittedPlan() (bool, string) {
+	state, title := p.status()
+	return state == planConcluded, title
+}
+
+// planGateHooks 是 harness.HookRunner 的包装：把 DSH 的 concludeTurn 语义落到本仓库
+// 的 loop 上（loop 没有 concludeTurn，只有 PreToolUse 能拦工具、ConcludeTurn 能掐掉
+// 下一次模型请求，见 harness/query.go 的 TurnConcluder）。
 // 其余钩子原样委托给任务原有的 guard（可能为 nil）。
 type planGateHooks struct {
 	inner harness.HookRunner
@@ -102,13 +135,20 @@ type planGateHooks struct {
 }
 
 func (h *planGateHooks) PreToolUse(ctx context.Context, name string, input []byte) (bool, string, []byte) {
-	if submitted, _ := h.turn.submittedPlan(); submitted {
-		return true, "计划已提交，本轮结束：等待用户审阅/批准后再执行（批准后会退出计划模式）。不要继续调用工具，用一句话告诉用户计划已提交。", nil
+	if state, _ := h.turn.status(); state == planConcluded {
+		return true, "本轮计划审阅已结束（用户关闭了审阅或计划已提交未批准）：不要再调用任何工具，用一句话收尾。", nil
 	}
 	if h.inner == nil {
 		return false, "", nil
 	}
 	return h.inner.PreToolUse(ctx, name, input)
+}
+
+// ConcludeTurn 实现 harness.TurnConcluder：用户关闭计划审阅后，本轮**不再请求模型**
+// （DSH plan-mode/src/index.ts:340 `exec.concludeTurn()`）。
+func (h *planGateHooks) ConcludeTurn() bool {
+	state, _ := h.turn.status()
+	return state == planConcluded
 }
 
 func (h *planGateHooks) PostToolUse(ctx context.Context, name string, input, result []byte, isErr bool) {
@@ -124,14 +164,18 @@ func (h *planGateHooks) Stop(ctx context.Context, messages []llm.Message) (bool,
 	return h.inner.Stop(ctx, messages)
 }
 
-// exitPlanMode 是计划模式的退出/提交工具（DSH index.ts:280-376 的对齐实现）：
+// exitPlanMode 是计划模式的提交/审阅工具（DSH index.ts:280-376 的对齐实现）：
 // 入参 `{ "plan": "<markdown>" }`，校验非空 + 首行 `# 标题`，把计划落成一条
-// kind="plan" 的 activity（= DSH 的 submitted-plan 聊天节点），然后本轮结束等审批。
+// kind="plan" 的 activity（= DSH 的 submitted-plan 聊天节点），然后**当场向用户
+// 提问审批**（DSH index.ts:316-333），按结果分三条路走：
+//   - 批准 → 退出计划模式，返回"已批准，开始执行"；
+//   - 继续规划 → 返回**错误**，把用户反馈带回模型（DSH index.ts:352-357）；
+//   - 关闭审阅 → 本轮结束，不再请求模型（DSH index.ts:339-341）。
 func (t *ToolSet) exitPlanMode() actool.CoreTool {
 	return actool.Build(actool.Spec{
 		Name: exitPlanModeName,
-		Description: "只在计划模式下可用。把已经写好的完整计划提交给用户审阅；提交成功后本轮结束，" +
-			"等待用户批准（批准后会退出计划模式，你再开始执行）。用户也可能让你继续修改计划。" +
+		Description: "只在计划模式下可用。把已经写好的完整计划提交给用户审阅（用户会当场看到计划全文并选择" +
+			"批准或继续规划）。批准后退出计划模式，你从下一步开始执行；用户要求继续规划时，反馈会作为错误返回给你。" +
 			"调用前先用只读手段把情况侦察清楚。",
 		Prompt: "plan 必须是完整的 Markdown，且首行是一级标题（例如 `# 测试计划`）；" +
 			"写清目标、步骤（每步做什么/用哪个工具/预期结果）、风险与回滚、需要人工确认的点。",
@@ -139,15 +183,17 @@ func (t *ToolSet) exitPlanMode() actool.CoreTool {
 			"plan": str("完整的计划正文（Markdown），首行必须是一级标题 `# 标题`。"),
 		}, "plan"),
 		// 对权限而言是只读（计划模式里必须允许调用，DSH index.ts:112 同理）；
-		// 但它会写一条 activity 并结束本轮，所以不并发安全（DSH index.ts:113）。
+		// 但它会写一条 activity、发起审批并结束本轮，所以不并发安全（DSH index.ts:113）。
 		ReadOnly:   func(json.RawMessage) bool { return true },
 		Concurrent: func(json.RawMessage) bool { return false },
 		Permissions: func(context.Context, json.RawMessage, acperm.Context) acperm.Decision {
 			return acperm.Allowed()
 		},
 		Run: func(ctx context.Context, in json.RawMessage, tc *actool.ToolContext) (actool.Result, error) {
-			// DSH index.ts:304-306：不在计划模式调用 → 报错。
-			if !t.planMode {
+			// DSH index.ts:304-306：不在计划模式调用 → 报错。已批准/已结束的本轮
+			// 同样不算计划模式（DSH 读的是 committed 状态：index.ts:304 loggedActive）。
+			state, _ := t.planTurn.status()
+			if !t.planMode || state != planOpen {
 				return actool.Errorf(exitPlanModeName + " 只在计划模式下可用（当前不是计划模式，直接执行即可）。"), nil
 			}
 			var args struct {
@@ -168,11 +214,12 @@ func (t *ToolSet) exitPlanMode() actool.CoreTool {
 			if tc != nil {
 				callID = tc.ToolUseID
 			}
-			// 没有落库通道就不能假装提交成功：DSH 在没有审阅通道时也是 fail closed
-			// （README.md:63「If no interactive review is available, exit_plan_mode
-			// cannot run」、index.ts:310-313 抛错）。否则用户永远看不到这份计划。
-			if t.planEmit == nil {
-				return actool.Errorf(exitPlanModeName + " 当前没有可用的计划通道（会话未接线），计划没有保存。请直接用文字把计划回复给用户。"), nil
+			// 没有落库通道 / 没有审阅通道都不能假装提交成功：DSH 在没有审阅通道时也是
+			// fail closed（README.md:63「If no interactive review is available,
+			// exit_plan_mode cannot run」、index.ts:310-313 抛错）。否则用户永远看不到
+			// 这份计划，也没法批准。
+			if t.planEmit == nil || t.planReview == nil {
+				return actool.Errorf(exitPlanModeName + " 当前没有可用的计划审阅通道（会话未接线），计划没有保存。请直接用文字把计划回复给用户。"), nil
 			}
 			// 落库：一条 kind="plan" 的 activity，detail=完整 Markdown，summary=标题，
 			// metadata 带 tool_use_id（DSH 用 callId 标识一份计划：plan.ts:14-16、plan-definition.ts:20）。
@@ -184,9 +231,37 @@ func (t *ToolSet) exitPlanMode() actool.CoreTool {
 				Kind: "plan", Tool: exitPlanModeName, ToolUseID: callID,
 				Summary: title, Detail: plan, Metadata: meta,
 			})
-			t.planTurn.markSubmitted(title)
-			return actool.Text("计划已提交，等待审批。本轮到此结束：不要再调用任何工具，用一句话告诉用户计划已提交、请先审阅；" +
-				"用户批准（退出计划模式）后你再开始执行。"), nil
+			// DSH index.ts:316-333：**当场向用户提问审批**，detail 是完整计划，
+			// 两个选项（批准 / 继续规划）。这里阻塞等用户决定。
+			outcome, reviewErr := t.planReview(ctx, title, plan)
+			if reviewErr != nil {
+				// 计划已落库，但审阅没能发起：不谎报成功，让模型知道用户没看到计划。
+				return actool.Errorf("计划已保存，但审阅通道出错（用户没看到审批）：" + reviewErr.Error() +
+					"。请直接告诉用户计划已生成、需要在会话里审阅。"), nil
+			}
+			switch {
+			case outcome.Approved:
+				// DSH index.ts:358-362：退出计划模式，下一步开始执行。
+				if t.planExit != nil {
+					t.planExit()
+				}
+				t.planTurn.set(planApproved, title)
+				return actool.Text("计划已获用户批准，计划模式已退出：从下一步开始按计划执行。"), nil
+			case outcome.Dismissed:
+				// DSH index.ts:339-341：用户关闭审阅 → concludeTurn，本轮结束。
+				t.planTurn.markSubmitted(title)
+				return actool.Text("用户关闭了计划审阅（没有批准，也没有要求继续规划）。本轮到此结束：不要再调用任何工具，" +
+					"用一句话告诉用户计划已生成、可在会话里随时查看。"), nil
+			default:
+				// DSH index.ts:352-357：不是选 Approve → 抛错把反馈带回模型。
+				feedback := strings.TrimSpace(outcome.Feedback)
+				if feedback == "" {
+					return actool.Errorf("用户选择继续规划；请修改计划后重新提交（再次调用 " + exitPlanModeName +
+						" 提交完整的新计划）。"), nil
+				}
+				return actool.Errorf("用户选择继续规划；反馈：" + feedback +
+					"。请按反馈修改计划后重新提交（再次调用 " + exitPlanModeName + " 提交完整的新计划）。"), nil
+			}
 		},
 	})
 }

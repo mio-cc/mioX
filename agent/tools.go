@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/intercept"
 	acperm "github.com/Autumn-27/norma/permission"
 	actool "github.com/Autumn-27/norma/tool"
 )
@@ -91,6 +92,16 @@ type ToolSet struct {
 	// caller's step emitter (so it is stamped worker=mainagent + main_seg and is
 	// broadcast live). nil = plan is not persisted (tests / non-main agents).
 	planEmit func(db.Activity)
+	// planReview, if set, asks the user to review a submitted plan and blocks for the
+	// decision (DSH plan-mode/src/index.ts:316-333 `userQuestions.ask`). The outcome is
+	// one of three: approved / keep planning (feedback goes back to the model) /
+	// dismissed (turn concluded). nil = no review channel → exit_plan_mode fails closed
+	// (index.ts:310-313).
+	planReview func(ctx context.Context, title, plan string) (intercept.PlanReviewOutcome, error)
+	// planExit, if set, leaves plan mode after approval (DSH index.ts:358-362: an
+	// approved plan exits plan mode and the plan is carried out from the next step).
+	// nil = the DB task stays in plan mode (tests / non-main agents).
+	planExit func()
 	// enrich, if set, receives async auto-completion triggers (DNS resolve for a
 	// domain, HTTP probe for a site). nil = no engine enrichment.
 	enrich EnrichTrigger
@@ -194,6 +205,17 @@ func (t *ToolSet) SetPlanTurn(p *planTurn) { t.planTurn = p }
 // SetPlanEmit wires the step emitter used to persist a submitted plan as a
 // kind="plan" activity (nil = don't persist).
 func (t *ToolSet) SetPlanEmit(fn func(db.Activity)) { t.planEmit = fn }
+
+// SetPlanReview wires the interactive plan review (DSH plan-mode/src/index.ts:316-333
+// `userQuestions.ask`): it writes a pending approval, surfaces the review card in the
+// conversation, and blocks until the user approves / keeps planning / dismisses.
+// nil = no review channel → exit_plan_mode fails closed (index.ts:310-313).
+func (t *ToolSet) SetPlanReview(fn func(ctx context.Context, title, plan string) (intercept.PlanReviewOutcome, error)) {
+	t.planReview = fn
+}
+
+// SetPlanExit wires "leave plan mode" after an approved review (DSH index.ts:358-362).
+func (t *ToolSet) SetPlanExit(fn func()) { t.planExit = fn }
 
 // SetCoverageEnabled records whether this task has the asset-coverage feature on
 // (default enabled). Passing false makes graphOverviewData omit the coverage block

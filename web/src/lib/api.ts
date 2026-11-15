@@ -1273,6 +1273,13 @@ export const api = {
   interceptGetOne: (id: number) => get<InterceptPending>(`/intercept/pending/${id}`),
   interceptDecide: (id: number, decision: "allowed" | "denied") =>
     post<{ ok: boolean }>(`/intercept/pending/${id}/decide`, { decision }),
+  // 计划审阅的三态决定（DSH plan-mode/src/index.ts:316-333 的两个选项 + :339-341 的取消）。
+  // approve=退出计划模式开始执行；keep_planning=反馈回模型继续改；dismiss=本轮结束。
+  interceptPlanReview: (id: number, decision: "approve" | "keep_planning" | "dismiss", feedback = "") =>
+    post<{ ok: boolean; decision: string }>(`/intercept/pending/${id}/plan-review`, { decision, feedback }),
+  // 计划模式开关（工具全保留、只侦察 + 交计划，等审阅批准）。
+  setTaskPlanMode: (id: string, on: boolean) =>
+    patch<{ id: string; plan_mode: boolean }>(`/tasks/${id}/plan-mode`, { on }),
   interceptExecution: (id: number, conversationId?: number) =>
     get<import("@/lib/types").InterceptExecution>(
       `/intercept/history/${id}/execution${conversationId ? `?conversation=${conversationId}` : ""}`,

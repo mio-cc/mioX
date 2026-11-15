@@ -175,6 +175,18 @@ type HookRunner interface {
 	Stop(ctx context.Context, messages []llm.Message) (prevent bool, blockingErrors []string, message string)
 }
 
+// TurnConcluder is an optional HookRunner extension: a tool may take the turn over
+// and end it WITHOUT spending another model request. Checked once per tool batch,
+// right before the loop would ask the model again.
+//
+// This is DSH's `exec.concludeTurn()` (dsh-plan-mode/src/index.ts:340): when the user
+// dismisses a plan review the turn ends there — "the turn ends here instead of
+// spending a model request on waiting". Hooks that don't need it simply don't
+// implement the interface.
+type TurnConcluder interface {
+	ConcludeTurn() bool
+}
+
 // QueryDeps are injectable side-effect boundaries for testing (FR-01.6).
 type QueryDeps struct {
 	CallModel func(ctx context.Context, req llm.CompletionRequest) iter.Seq2[llm.StreamEvent, error]
@@ -547,6 +559,14 @@ func (l *loop) run() {
 
 		// next_turn: only tool-turns advance turnCount.
 		l.stopHookActive = false // a real turn happened; stop hooks may fire fresh
+		// A tool may take the turn over and end it here: DSH's plan review does exactly
+		// this (plan-mode/src/index.ts:340 exec.concludeTurn() — a dismissed review ends
+		// the turn "instead of spending a model request on waiting"). Checked before the
+		// loop would ask the model again, so no further request is made.
+		if c, ok := l.in.Hooks.(TurnConcluder); ok && c.ConcludeTurn() {
+			l.finish(ReasonCompleted, nil, "")
+			return
+		}
 		if l.settling {
 			// wrap-up phase: bounded by its own small turn budget. When spent, finish
 			// with the original budget reason (not "completed").

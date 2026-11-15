@@ -39,6 +39,9 @@ export interface Task {
   archive_blocked_by_task_id?: string; // live direct dependent that must be archived first
   company_ids?: number[]; // associated company scopes; current company assets join the task at creation
   coverage_enabled?: boolean; // 资产覆盖度功能开关(创建时定,默认开)；false=不计算/不展示覆盖度
+  // 计划模式：开着时 agent 工具全保留、只能侦察 + 用 exit_plan_mode 交计划，
+  // 用户在审阅里点「批准」后变 false（DSH @deepseek-ai/dsh-plan-mode 语义）。
+  plan_mode?: boolean;
 }
 
 export interface TaskCategory {
@@ -627,7 +630,9 @@ export type ActivityKind =
   | "usage" // live cumulative token usage (per model turn); not rendered
   | "llm_switch" // automatic/manual task-level LLM switch
   | "llm_failover" // task-level provider switch / chain exhaustion audit event
-  | "intercept_request"; // user-approval request from the intercept layer
+  | "intercept_request" // user-approval request from the intercept layer
+  | "plan" // 计划模式提交的一份计划（detail=完整 markdown，summary=标题）
+  | "plan_review"; // 计划审阅请求（detail={pending_id,title,plan}，点击批准/继续规划/关闭）
 
 // ChatAttachment 是一次上传的文件:path 相对该会话/任务工作目录(即 agent 的 CWD)。
 export interface ChatAttachment {

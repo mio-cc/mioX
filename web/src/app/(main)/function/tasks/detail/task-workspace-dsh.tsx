@@ -11,6 +11,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ClipboardList,
   Loader2,
   PanelRight,
   Rows2,
@@ -28,6 +29,7 @@ import { toast } from "sonner";
 import { useAppLayout } from "@/components/layout/app-frame";
 import { ApprovalRecords } from "@/components/approval-records";
 import { Markdown } from "@/components/markdown";
+import { PlanCard, PlanReviewCard } from "@/components/transcript";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api, sseUrl } from "@/lib/api";
@@ -1223,6 +1225,28 @@ function buildActivityNodes(activities: Activity[], taskId: string, streamingSeq
       nodes.push(<ApprovalCard key={`approval-${activity.seq}`} activity={activity} />);
       continue;
     }
+    // 计划模式：提交的计划是一张卡片（DSH ui-plan/PlanCard.tsx:43-60），审阅请求是
+    // 一张带「批准 / 继续规划 / 关闭」的卡片（plan-mode/src/index.ts:316-333）。
+    if (activity.kind === "plan") {
+      nodes.push(
+        <PlanCard
+          key={`plan-${activity.seq}`}
+          step={activity}
+          getDetail={(seq) => api.activityDetail(seq, taskId).then((r) => r.detail ?? "")}
+        />,
+      );
+      continue;
+    }
+    if (activity.kind === "plan_review") {
+      nodes.push(
+        <PlanReviewCard
+          key={`plan-review-${activity.seq}`}
+          step={activity}
+          getDetail={(seq) => api.activityDetail(seq, taskId).then((r) => r.detail ?? "")}
+        />,
+      );
+      continue;
+    }
     if (activity.kind === "result") {
       const tokens = (activity.input_tokens ?? 0) + (activity.output_tokens ?? 0);
       // The main agent's final answer lives in `result.summary` (the server does
@@ -1299,6 +1323,21 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   // Safety valve: a turn that never emits `result` must not leave the composer
   // stuck in the running state forever.
   const turnTimeoutRef = React.useRef<number | null>(null);
+  // 计划模式 chip：只在 task.plan_mode 为 true 时渲染，点击 = 退出计划模式
+  // （DSH ui-plan/PlanModeControl.tsx:19-40：计划模式开着才渲染，点击执行 /plan off）。
+  const [planModeBusy, setPlanModeBusy] = React.useState(false);
+  const leavePlanMode = React.useCallback(async () => {
+    setPlanModeBusy(true);
+    try {
+      const res = await api.setTaskPlanMode(taskId, false);
+      setTask((current) => (current ? { ...current, plan_mode: res.plan_mode } : current));
+      toast.success("已退出计划模式");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setPlanModeBusy(false);
+    }
+  }, [taskId]);
 
   // A turn ends when its `result` frame lands (that frame carries the answer).
   // Clearing `sending` here - instead of right after the 202 - is what lets the
@@ -2508,6 +2547,24 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
                   inheritedEffort={reasoningEffort}
                   onEffortChange={setReasoningOverride}
                 />
+                {task?.plan_mode ? (
+                  // 计划模式 chip（DSH ui-plan/PlanModeControl.tsx:19-40）：计划模式开着
+                  // 才渲染，点击 = 退出计划模式（PATCH /api/tasks/{id}/plan-mode {"on":false}）。
+                  <button
+                    type="button"
+                    className={styles.chipButton}
+                    title="计划模式：agent 只侦察并提交计划，你批准后才开始执行（点击退出计划模式）"
+                    aria-label="退出计划模式"
+                    disabled={planModeBusy}
+                    onClick={() => void leavePlanMode()}
+                    data-testid="plan-mode-chip"
+                    data-plan-mode="on"
+                  >
+                    <ClipboardList size={13} aria-hidden="true" />
+                    计划模式
+                    <X size={11} aria-hidden="true" />
+                  </button>
+                ) : null}
                 <span
                   className={`${styles.chipWrap} ${styles.chipWrapApproval}`}
                   data-testid="composer-approval-wrap"

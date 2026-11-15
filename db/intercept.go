@@ -248,6 +248,11 @@ func interceptSource(ruleID int64, reason string) string {
 	if ruleID != 0 {
 		return "rule"
 	}
+	// 计划审阅（intercept/plan_review.go 的 PlanReasonPrefix）：既不是规则命中也不是
+	// 模型判定，单独标一个来源，审批历史里能一眼分开。
+	if strings.HasPrefix(reason, "[计划]") {
+		return "plan"
+	}
 	if strings.HasPrefix(reason, "[模型]") {
 		return "model"
 	}

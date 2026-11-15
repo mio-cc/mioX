@@ -334,9 +334,9 @@ func interceptFilterParams(q url.Values) (db.InterceptApprovalFilter, error) {
 		return filter, fmt.Errorf("status 必须是 pending、allowed、denied 或 timeout")
 	}
 	switch filter.DecisionSource {
-	case "", "model", "rule", "unknown":
+	case "", "model", "rule", "unknown", "plan":
 	default:
-		return filter, fmt.Errorf("decision_source 必须是 model、rule 或 unknown")
+		return filter, fmt.Errorf("decision_source 必须是 model、rule、plan 或 unknown")
 	}
 	return filter, nil
 }
@@ -382,6 +382,42 @@ func (s *Server) interceptDecide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// interceptPlanReview 处理一次计划审阅决定（DSH plan-mode index.ts:316-333 的
+// userQuestions.ask 的两个选项 + index.ts:339-341 的取消）。三种结果：
+//   - approve        → 退出计划模式，模型下一步开始执行
+//   - keep_planning  → 把反馈带回模型，让它改完计划再提交
+//   - dismiss        → 本轮结束，不再请求模型（concludeTurn）
+func (s *Server) interceptPlanReview(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt(r, "id")
+	if !ok {
+		writeErr(w, 400, "bad pending id")
+		return
+	}
+	var req struct {
+		Decision string `json:"decision"` // approve | keep_planning | dismiss
+		Feedback string `json:"feedback"`
+	}
+	if err := decode(r, &req); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	switch req.Decision {
+	case intercept.PlanReviewApprove, intercept.PlanReviewKeep, intercept.PlanReviewDismiss:
+	default:
+		writeErr(w, 400, "decision 必须是 approve、keep_planning 或 dismiss")
+		return
+	}
+	if err := s.m.interceptor.DecidePlanReview(id, req.Decision, req.Feedback); err != nil {
+		if errors.Is(err, intercept.ErrAlreadyDecided) {
+			writeErr(w, 409, err.Error())
+			return
+		}
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "decision": req.Decision})
 }
 
 // --- tool-config (全局工具拦截范围) ---

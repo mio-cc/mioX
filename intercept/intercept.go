@@ -129,7 +129,8 @@ type Interceptor struct {
 	cached       []compiledRule  // sorted by priority DESC; nil means not loaded yet
 	enabledTools map[string]bool // nil means not loaded yet
 	pending      *pendingManager
-	reviewer     Reviewer // nil = LLM fallback judge not wired
+	planPending  *planPendingManager // in-flight plan reviews (see plan_review.go)
+	reviewer     Reviewer            // nil = LLM fallback judge not wired
 }
 
 // SetReviewer installs the LLM fallback judge callback. Passing nil disables it.
@@ -150,7 +151,7 @@ var defaultEnabledTools = []string{
 // New creates an Interceptor backed by d. The rule cache is lazy-loaded on
 // first use.
 func New(d *db.DB) *Interceptor {
-	return &Interceptor{db: d, pending: newPendingManager()}
+	return &Interceptor{db: d, pending: newPendingManager(), planPending: newPlanPendingManager()}
 }
 
 // Invalidate clears the in-memory rule cache and the enabled-tools cache.
@@ -673,6 +674,16 @@ var ErrAlreadyDecided = errors.New("审批已处理或不存在，请刷新记�
 
 // Decide resolves a pending request. Called by the HTTP decide endpoint.
 func (i *Interceptor) Decide(pendingID int64, allowed bool) error {
+	// 计划审阅的 pending 行也用这张表：它的三种结果不是布尔，交给 plan review
+	// 语义处理（允许=批准计划，拒绝=继续规划）。否则通用的 bool channel 找不到
+	// 接收方，计划审阅会一直挂到工作取消。
+	if i.planPending != nil && i.planPending.has(pendingID) {
+		decision := PlanReviewKeep
+		if allowed {
+			decision = PlanReviewApprove
+		}
+		return i.DecidePlanReview(pendingID, decision, "")
+	}
 	status := "denied"
 	if allowed {
 		status = "allowed"

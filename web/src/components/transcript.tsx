@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   CrosshairIcon,
+  FileTextIcon,
   Flag,
   MessageSquare,
   PaperclipIcon,
@@ -82,7 +83,9 @@ type Group =
   | { type: "round"; key: number; label: string }
   | { type: "tool"; key: number; worker: string; use?: Activity; result?: Activity }
   | { type: "msg"; key: number; worker: string; steps: Activity[] }
-  | { type: "intercept"; key: number; step: Activity };
+  | { type: "intercept"; key: number; step: Activity }
+  | { type: "plan"; key: number; step: Activity }
+  | { type: "plan_review"; key: number; step: Activity };
 
 function groupSteps(steps: Activity[], chat: boolean): Group[] {
   const out: Group[] = [];
@@ -95,6 +98,16 @@ function groupSteps(steps: Activity[], chat: boolean): Group[] {
     }
     if (s.kind === "intercept_request") {
       out.push({ type: "intercept", key: s.seq, step: s });
+      continue;
+    }
+    // 计划模式：一份提交的计划渲染成卡片（DSH ui-plan/PlanCard.tsx:43-60 的回合尾部
+    // 计划卡片），审阅请求渲染成审批卡片（两个选项 + 反馈）。
+    if (s.kind === "plan") {
+      out.push({ type: "plan", key: s.seq, step: s });
+      continue;
+    }
+    if (s.kind === "plan_review") {
+      out.push({ type: "plan_review", key: s.seq, step: s });
       continue;
     }
     if (s.kind === "user" || s.kind === "intent") {
@@ -344,6 +357,230 @@ function InterceptCard({
           </CollapsibleContent>
         </Collapsible>
       ) : null}
+    </div>
+  );
+}
+
+// PlanCard renders one submitted plan as a card, mirroring DSH
+// ui-plan/PlanCard.tsx:43-60: a file icon, the plan title, the "计划文档" subtitle and
+// `data-plan-card={callId}` so the card is addressable; clicking expands/collapses the
+// markdown body (DSH opens the same document in the sidebar preview instead).
+export function PlanCard({
+  step,
+  getDetail,
+}: {
+  step: Activity;
+  getDetail: (seq: number) => Promise<string>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [body, setBody] = React.useState<string | null>(null);
+  const callId = step.tool_use_id || `seq${step.seq}`;
+  const title = step.summary || "计划";
+  const toggle = React.useCallback(() => {
+    setOpen((was) => {
+      if (!was) {
+        getDetail(step.seq)
+          .then((raw) => { if (raw) setBody(raw); })
+          .catch(() => { /* 详情拉取失败就用 summary 兜底 */ });
+      }
+      return !was;
+    });
+  }, [step.seq, getDetail]);
+  return (
+    <div className="my-2">
+      <button
+        type="button"
+        data-plan-card={callId}
+        aria-label={`打开计划：${title}`}
+        aria-expanded={open}
+        onClick={toggle}
+        className="flex w-full items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-50/40 px-3 py-2 text-left hover:bg-sky-50 dark:bg-sky-950/20 dark:hover:bg-sky-950/35"
+      >
+        <FileTextIcon className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-medium">{title}</span>
+          <span className="block text-[10px] text-muted-foreground">计划文档</span>
+        </span>
+        <span className="shrink-0 text-[10px] text-muted-foreground">{open ? "收起" : "展开"}</span>
+        {open ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+      </button>
+      {open && (
+        <div className="mt-1 rounded-lg border bg-background p-3 text-xs">
+          <Markdown text={body ?? step.detail ?? step.summary} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// PlanReviewCard renders the pending plan review: the plan itself plus the two options
+// DSH offers (plan-mode/src/index.ts:316-333: Approve this plan and leave plan mode? /
+// stay in plan mode, feedback goes back to the model) and a dismiss (index.ts:339-341,
+// the turn ends there). The plan body and the pending id both come from the activity
+// detail the backend wrote, so the card needs no extra fetch to show the plan.
+// parsePlanReviewDetail reads the review payload the backend wrote into the activity
+// detail ({pending_id,title,plan}). The activity LIST endpoint omits detail, so the
+// card also falls back to the pending id embedded in the summary
+// ("计划审阅：<标题> (#12)") — buttons stay usable before the detail arrives.
+function parsePlanReviewDetail(raw: string | undefined, summary: string) {
+  let pendingId: number | null = null;
+  let title = summary;
+  let plan = "";
+  try {
+    const o = JSON.parse(raw ?? "{}") as { pending_id?: number; title?: string; plan?: string };
+    if (typeof o.pending_id === "number") pendingId = o.pending_id;
+    if (o.title) title = o.title;
+    if (o.plan) plan = o.plan;
+  } catch { /* detail 缺失/被裁掉：用 summary 兜底 */ }
+  if (pendingId === null) {
+    const m = /\(#(\d+)\)/.exec(summary);
+    if (m) pendingId = parseInt(m[1], 10);
+  }
+  return { pendingId, title, plan };
+}
+
+export function PlanReviewCard({
+  step,
+  getDetail,
+}: {
+  step: Activity;
+  getDetail: (seq: number) => Promise<string>;
+}) {
+  const initial = React.useMemo(
+    () => parsePlanReviewDetail(step.detail, step.summary),
+    [step.detail, step.summary],
+  );
+  const [pendingId, setPendingId] = React.useState<number | null>(initial.pendingId);
+  const [title, setTitle] = React.useState(initial.title);
+  const [plan, setPlan] = React.useState(initial.plan);
+  const [status, setStatus] = React.useState<"pending" | "allowed" | "denied" | "timeout">("pending");
+  const [busy, setBusy] = React.useState(false);
+  const [feedback, setFeedback] = React.useState("");
+  const [showFeedback, setShowFeedback] = React.useState(false);
+  const [open, setOpen] = React.useState(true);
+
+  // 列表接口不带 detail：挂载后拉一次 activity detail 补出计划正文（getDetail 走 ref，
+  // 调用方每次渲染都会新建闭包，直接进依赖数组会反复重拉）。
+  const getDetailRef = React.useRef(getDetail);
+  getDetailRef.current = getDetail;
+  const detailLoadedRef = React.useRef(initial.plan !== "" && initial.pendingId !== null);
+  React.useEffect(() => {
+    if (detailLoadedRef.current) return;
+    getDetailRef
+      .current(step.seq)
+      .then((raw) => {
+        const o = parsePlanReviewDetail(raw, step.summary);
+        if (o.pendingId !== null) setPendingId(o.pendingId);
+        if (o.title) setTitle(o.title);
+        if (o.plan) setPlan(o.plan);
+        detailLoadedRef.current = true;
+      })
+      .catch(() => { /* 详情拉取失败：卡片仍可用（正文退回 summary） */ });
+  }, [step.seq, step.summary]);
+
+  React.useEffect(() => {
+    if (pendingId === null) return;
+    let live = true;
+    api.interceptGetOne(pendingId)
+      .then((p) => { if (live && p.status !== "pending") setStatus(p.status as typeof status); })
+      .catch(() => { /* ignore */ });
+    return () => { live = false; };
+  }, [pendingId]);
+
+  const decide = React.useCallback(
+    async (decision: "approve" | "keep_planning" | "dismiss", note = "") => {
+      if (pendingId === null || busy) return;
+      setBusy(true);
+      try {
+        await api.interceptPlanReview(pendingId, decision, note);
+        setStatus(decision === "approve" ? "allowed" : "denied");
+        toast.success(
+          decision === "approve" ? "已批准：退出计划模式，开始执行"
+            : decision === "keep_planning" ? "已把反馈发回模型，继续规划"
+              : "已关闭审阅，本轮结束",
+        );
+      } catch (e) {
+        toast.error((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [pendingId, busy],
+  );
+
+  const decidedLabel = status === "allowed" ? "已批准" : status === "timeout" ? "已超时" : "已继续规划/关闭";
+
+  return (
+    <div className="my-2 rounded-lg border border-sky-400/50 bg-sky-50/30 p-3 text-xs dark:bg-sky-950/15">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-2">
+          <FileTextIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 font-medium">
+              <span className="text-sky-700 dark:text-sky-400">计划审阅</span>
+              <span className="truncate text-muted-foreground">{title}</span>
+              {pendingId !== null && <span className="text-muted-foreground">#{pendingId}</span>}
+            </div>
+            <p className="text-muted-foreground">批准后退出计划模式并从下一步开始执行；也可以要求继续规划。</p>
+          </div>
+        </div>
+        {status !== "pending" ? (
+          <span className={
+            "shrink-0 rounded px-2 py-0.5 text-[11px] font-medium " +
+            (status === "allowed"
+              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+              : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400")
+          }>
+            {decidedLabel}
+          </span>
+        ) : (
+          <div className="flex shrink-0 flex-wrap gap-1.5">
+            <Button size="sm" className="h-6 px-2 text-xs" disabled={busy || pendingId === null}
+              onClick={() => void decide("approve")}>
+              <CheckIcon className="h-3 w-3" />
+              批准并退出计划模式
+            </Button>
+            <Button size="sm" variant="outline" className="h-6 px-2 text-xs" disabled={busy || pendingId === null}
+              onClick={() => setShowFeedback((v) => !v)}>
+              <MessageSquare className="h-3 w-3" />
+              继续规划
+            </Button>
+            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={busy || pendingId === null}
+              onClick={() => void decide("dismiss")}>
+              <XIcon className="h-3 w-3" />
+              关闭审阅
+            </Button>
+          </div>
+        )}
+      </div>
+      {showFeedback && status === "pending" && (
+        <div className="mt-2 space-y-1.5">
+          <textarea
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+            rows={2}
+            placeholder="告诉模型要改什么（反馈会作为错误回到模型，它改完会重新提交计划）"
+            className="w-full rounded border bg-background px-2 py-1 text-xs"
+          />
+          <Button size="sm" className="h-6 px-2 text-xs" disabled={busy || pendingId === null}
+            onClick={() => void decide("keep_planning", feedback)}>
+            发送反馈，继续规划
+          </Button>
+        </div>
+      )}
+      <Collapsible open={open} onOpenChange={setOpen} className="mt-2 min-w-0">
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="sm" aria-label={open ? "收起计划" : "展开计划"}>
+            {open ? <ChevronDown data-icon="inline-start" /> : <ChevronRight data-icon="inline-start" />}
+            {open ? "收起计划全文" : "展开计划全文"}
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="rounded border bg-background p-3">
+            <Markdown text={plan || step.summary} />
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
@@ -719,6 +956,10 @@ function ExecView({
           />
         ) : g.type === "intercept" ? (
           <InterceptCard key={"ic" + g.key} step={g.step} getDetail={getDetail} />
+        ) : g.type === "plan" ? (
+          <PlanCard key={"pl" + g.key} step={g.step} getDetail={getDetail} />
+        ) : g.type === "plan_review" ? (
+          <PlanReviewCard key={"pr" + g.key} step={g.step} getDetail={getDetail} />
         ) : (
           <MessageBlock key={"m" + g.key} group={g} getDetail={getDetail} showWorker={showWorker} />
         ),
