@@ -62,4 +62,4 @@ require (
 )
 
 // 本地改造版 norma（加了 hook 可替换历史的能力），见 项目分析/norma-src
-replace github.com/Autumn-27/norma => ../项目分析/norma-src
+replace github.com/Autumn-27/norma => ./third_party/norma
