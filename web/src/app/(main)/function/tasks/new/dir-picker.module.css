@@ -1,0 +1,210 @@
+/* 工作目录选择器（harness tokens） */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 45%);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: 560px;
+  max-height: 70vh;
+  border: 1px solid var(--ax-border-strong);
+  border-radius: 12px;
+  background: var(--ax-bg-panel, var(--ax-bg-elevated));
+  box-shadow: 0 24px 56px rgb(0 0 0 / 38%);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ax-border-subtle);
+}
+
+.title {
+  color: var(--ax-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  cursor: pointer;
+}
+
+.iconBtn:hover:not(:disabled) {
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+}
+
+.iconBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pathRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ax-border-subtle);
+}
+
+.pathInput {
+  flex: 1 1 auto;
+  padding: 5px 9px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 7px;
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family-code);
+  font-size: 12px;
+}
+
+.goBtn {
+  padding: 5px 12px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.goBtn:hover {
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-primary);
+}
+
+.list {
+  flex: 1 1 auto;
+  min-height: 180px;
+  padding: 6px;
+  overflow: auto;
+}
+
+.rootRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 6px 8px;
+}
+
+.rootChip {
+  padding: 3px 10px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.rootChip:hover {
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-primary);
+}
+
+.row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+}
+
+.folderIcon {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+}
+
+.rowName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint,
+.error {
+  padding: 10px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.hint {
+  color: var(--ax-text-tertiary);
+}
+
+.error {
+  color: var(--ax-danger);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--ax-border-subtle);
+}
+
+.current {
+  overflow: hidden;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pickBtn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: 1px solid var(--ax-border-strong);
+  border-radius: 8px;
+  background: var(--ax-text-primary);
+  color: var(--ax-bg-base);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pickBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

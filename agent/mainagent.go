@@ -34,6 +34,7 @@ type MainAgent struct {
 	proxyCACert     string                                 // recording proxy's CA cert path (HTTPS verify)
 	webSearch       WebSearchOpts                          // web_search tool backend selection (off by default)
 	workDir         string                                 // shared work dir (surfaced in prompt as artifact-output target)
+	taskWorkDir     string                                 // 用户为任务选的目录；空=默认 run 目录
 	steerWork       func(intentID int64, msg string) error // engine callback: steer a running work (nil = off)
 	nonStreamingFn  func() bool                            // resolver: use non-streaming (Complete) path? (nil = streaming)
 	noaEnabledFn    func() bool                            // resolver: use experimental noa compaction? (nil = off)
@@ -109,6 +110,9 @@ const mainAgentDefaultTmpl = `你是一个授权渗透测试系统的"主 agent"
 
 不要编造发现；只根据工具返回的真实数据回答。`
 
+// SetTaskWorkDir 绑定任务的工作目录（用户在新建任务时选的文件夹）。空=用默认 run 目录。
+func (m *MainAgent) SetTaskWorkDir(dir string) { m.taskWorkDir = dir }
+
 func mainAgentSystem(goal, dataDir, workDir string) string {
 	body := renderSystem("mainagent", mainAgentDefaultTmpl, MainVars{Goal: goal, DataDir: dataDir, Now: nowStr()})
 	return body + artifactSpec(workDir)
@@ -146,8 +150,13 @@ func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int
 	defer cleanup()
 	// 本任务的工作目录 <workDir>/tasks/<taskID>，先建好。
 	mainDir := ensureRunDir(m.workDir, taskID, 0)
-	ctx = intercept.WithReviewWorkingDirectory(ctx, mainDir)
-	system, boundary := deferredSystem(mainAgentSystem(goal, m.workDir, mainDir), def)
+	// 任务绑定了用户目录就在那里干活；mainDir 仍用于工具产物与评审上下文。
+	agentDir := mainDir
+	if m.taskWorkDir != "" {
+		agentDir = m.taskWorkDir
+	}
+	ctx = intercept.WithReviewWorkingDirectory(ctx, agentDir)
+	system, boundary := deferredSystem(mainAgentSystem(goal, m.workDir, agentDir), def)
 	opts := agentcore.Options{
 		Provider:        prov,
 		SystemPrompt:    system,

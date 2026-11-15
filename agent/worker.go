@@ -56,6 +56,7 @@ type Worker struct {
 	prov            llm.Provider
 	model           string
 	workDir         string
+	taskWorkDir     string // 用户为任务选的目录；空=默认 run 目录
 	proxyAddr       string
 	proxyCACert     string            // recording proxy's CA cert path (for WebFetch HTTPS verify)
 	webSearch       WebSearchOpts     // web_search tool backend selection (off by default)
@@ -152,6 +153,10 @@ func (w *Worker) SetRunTimeout(run time.Duration) {
 // turn/time budget: stop probing, write back what was found, then end with a
 // plain-text one-liner (which becomes this run's displayed result).
 const settleWrapUpPrompt = "你即将因预算耗尽被终止。不要再运行任何命令/探测。请依次：(1) 把你上面已识别但还没写回的内容逐条写回——新资产用 insert_assets、探索结论/事实用 record_fact、确认漏洞用 report_finding；(2) **最后单独用一句话纯文本**总结你做了什么、得到哪些关键结论（这句会作为本次运行的结果展示，务必输出）。"
+
+
+// SetTaskWorkDir 绑定任务的工作目录（用户在新建任务时选的文件夹）。空=用默认 run 目录。
+func (w *Worker) SetTaskWorkDir(dir string) { w.taskWorkDir = dir }
 
 func NewWorker(prov llm.Provider, model, workDir string, tx *transcript.Store, window, maxTurns int, extra ...actool.CoreTool) *Worker {
 	return &Worker{prov: prov, model: model, workDir: workDir, tx: tx, window: window, maxTurns: maxTurns, extraTools: extra}
@@ -390,6 +395,11 @@ func (w *Worker) execute(ctx context.Context, name string, taskID int64, as *db.
 	// worker 有。仅【全局态势 overview】留在启动 user 消息里——它可降级、容忍 stale，压掉无碍。
 	// 本次意图的专属工作目录 <workDir>/tasks/<taskID>/i<intentID>，引擎侧先建好。
 	runDir := ensureRunDir(w.workDir, taskID, intent.ID)
+	// 任务绑定了用户目录就在那里干活；runDir 仍用于工具产物落盘。
+	agentDir := runDir
+	if w.taskWorkDir != "" {
+		agentDir = w.taskWorkDir
+	}
 	// The run-wide intent is not the current tool action. Do not forward it or
 	// inherit a parent run's background into the action reviewer.
 	ctx = intercept.WithReviewContext(ctx, runDir, intercept.ReviewBackground{})
@@ -452,7 +462,7 @@ func (w *Worker) execute(ctx context.Context, name string, taskID int64, as *db.
 		WebSearchProxy:        w.webSearch.Proxy,
 		// Bash 子命令的 HTTP 默认走记录代理 + 信任其 CA（工具无需 -x/-k）。
 		BashEnv:    proxyEnv(w.proxyAddr, w.proxyCACert),
-		WorkingDir: runDir,
+		WorkingDir: agentDir,
 		MaxTurns:   w.maxTurns, // 0 = unlimited (configurable in agent management)
 		// 墙钟预算,轮边界判,不打断半路;0 = 不限。有任务级 deadline 时夹逼到 min(自身预算,
 		// 距 deadline 剩余),让本 run 在任务到点时自然进收尾(见 taskclock.go)。

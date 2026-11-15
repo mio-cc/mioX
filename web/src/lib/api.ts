@@ -287,12 +287,14 @@ export const api = {
     planHeartbeatSeconds?: number;
     coverageEnabled?: boolean;
     interceptRules?: AssetInterceptRuleInput[];
+    workDir?: string;
   }) =>
     post<Task>("/tasks", {
       name: input.name ?? "",
       category_id: input.categoryId ?? null,
       description: input.description,
       goal: input.goal,
+      work_dir: input.workDir ?? "",
       llm_profile_ids: input.llmProfileIds ?? [],
       source_task_ids: input.sourceTaskIds ?? [],
       company_ids: input.companyIds ?? [],
@@ -351,6 +353,11 @@ export const api = {
       llm_profile_ids: llmProfileIds,
       active_llm_profile_id: activeLLMProfileId ?? null,
     }),
+  // 目录浏览：新建任务选工作目录用。
+  fsDirs: (path?: string) =>
+    get<{ path: string; parent?: string; roots?: { name: string; path: string }[]; entries: { name: string; path: string }[] }>(
+      `/fs/dirs${path ? `?path=${encodeURIComponent(path)}` : ""}`,
+    ),
   deleteTask: (id: string, options: DeleteTaskOptions) => del<DeleteTaskResult>(`/tasks/${id}`, options),
   controlTask: (id: string, action: "pause" | "resume") =>
     post<{ id: string; paused: boolean; queued: boolean; status: string }>(`/tasks/${id}/control`, { action }),

@@ -11,10 +11,12 @@ import * as React from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Check, ChevronDown, Cpu, Folder, Layers, Plus } from "lucide-react";
+import { Check, ChevronDown, Cpu, Folder, FolderOpen, Layers, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+
+import { DirPicker } from "./dir-picker";
 import type { LLMProfile, TaskCategory } from "@/lib/types";
 
 import styles from "./new-task.module.css";
@@ -340,6 +342,10 @@ export default function NewTaskPage() {
     node.style.overflowY = node.scrollHeight > 200 ? "auto" : "hidden";
   }, [goal]);
 
+  // 工作目录（参照 DSH：新建会话时选一个文件夹）。空=后端默认 data/tasks/<id>。
+  const [workDir, setWorkDir] = React.useState("");
+  const [dirOpen, setDirOpen] = React.useState(false);
+
   const trimmed = goal.trim();
   const busy = submitting !== "";
   const canSubmit = trimmed.length > 0 && !busy;
@@ -357,6 +363,7 @@ export default function NewTaskPage() {
           categoryId: categoryId === "" ? undefined : Number(categoryId),
           seedFirstIntent: run,
           coverageEnabled,
+          workDir: workDir.trim(),
         });
         // 输入框里的这句话就是与模型对话的第一条消息（参照 DSH：新建会话时输入即首条消息）。
         // 任务已经建好，首条消息失败不回滚，只提示手动重发。
@@ -374,7 +381,7 @@ export default function NewTaskPage() {
         textareaRef.current?.focus();
       }
     },
-    [categoryId, coverageEnabled, goal, profileId, router, submitting],
+    [categoryId, coverageEnabled, goal, profileId, router, submitting, workDir],
   );
 
   const modelOptions: ChipOption[] = React.useMemo(() => {
@@ -408,6 +415,12 @@ export default function NewTaskPage() {
 
   return (
     <div className={styles.root} data-testid="newtask-root">
+      <DirPicker
+        open={dirOpen}
+        initial={workDir}
+        onClose={() => setDirOpen(false)}
+        onPick={setWorkDir}
+      />
       <div className={styles.stack}>
         <div className={styles.headline}>
           <HeroMark />
@@ -470,6 +483,19 @@ export default function NewTaskPage() {
                 setCategoryId(String(created.id));
               }}
             />
+            <button
+              type="button"
+              className={styles.toggleChip}
+              onClick={() => setDirOpen(true)}
+              title={workDir || "默认：任务自己的目录"}
+              data-testid="newtask-workdir"
+            >
+              <FolderOpen size={13} aria-hidden="true" className={styles.chipIcon} />
+              <span className={styles.chipCaption}>目录</span>
+              <span className={styles.toggleState}>
+                {workDir ? workDir.split(/[\\/]/).filter(Boolean).pop() || workDir : "默认"}
+              </span>
+            </button>
             <button
               type="button"
               className={styles.toggleChip}
