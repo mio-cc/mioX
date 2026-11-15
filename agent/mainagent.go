@@ -35,6 +35,7 @@ type MainAgent struct {
 	webSearch       WebSearchOpts                          // web_search tool backend selection (off by default)
 	workDir         string                                 // shared work dir (surfaced in prompt as artifact-output target)
 	taskWorkDir     string                                 // 用户为任务选的目录；空=默认 run 目录
+	planMode        bool                                   // 计划模式：工具全保留，靠提示词约束"只侦察+交计划"，等审批（DSH 语义）
 	steerWork       func(intentID int64, msg string) error // engine callback: steer a running work (nil = off)
 	nonStreamingFn  func() bool                            // resolver: use non-streaming (Complete) path? (nil = streaming)
 	noaEnabledFn    func() bool                            // resolver: use experimental noa compaction? (nil = off)
@@ -113,6 +114,38 @@ const mainAgentDefaultTmpl = `你是一个授权渗透测试系统的"主 agent"
 // SetTaskWorkDir 绑定任务的工作目录（用户在新建任务时选的文件夹）。空=用默认 run 目录。
 func (m *MainAgent) SetTaskWorkDir(dir string) { m.taskWorkDir = dir }
 
+// SetPlanMode 切换计划模式。语义对齐 DSH @deepseek-ai/dsh-plan-mode：
+// 计划模式是**软约束**——工具一个都不摘（README.md:32「It does not restrict the
+// agent: every tool stays callable」、README.md:81「restrains through text rather than
+// filtering capabilities」），只做两件事：系统提示加一段 plan:policy（见 planModeBlock），
+// 并披露 exit_plan_mode 工具让模型把计划交出来（index.ts:64/375）。是否真的改状态由
+// 用户审批决定（PATCH /api/tasks/{id}/plan-mode {"on":false}）。
+func (m *MainAgent) SetPlanMode(on bool) { m.planMode = on }
+
+// planModeBlock 是计划模式的系统提示段（DSH 的 plan:policy section，部署方自有的
+// 那段文本：index.ts:67-70 注册、index.ts:197-204 仅在计划模式渲染）。
+// 它约束的是**行为**而不是能力：可以随便侦察，但不要改系统状态；侦察完用
+// exit_plan_mode 交计划，然后停下等审批。
+const planModeBlock = `
+
+## 当前处于「计划模式」（plan mode）
+你可以照常使用**全部**工具去侦察：读文件、列目录、搜索、跑只读命令、查任务图/资产库。
+不要因为"现在是计划模式"就拒绝工作，也不要声称自己没有执行能力。
+
+但在计划被批准之前，**不要做任何会改变系统状态的操作**：
+- 不写/改/删文件（不用 Write / Edit / MultiEdit 落盘）；
+- 不跑有副作用的命令（攻击、扫描、爆破、安装、删除、重启、改配置等；只读命令随便跑）；
+- 不落库（不要用 insert_assets / record_fact / report_finding / set_goals 等写工具）。
+用户明确要求执行时，先告诉他：现在是计划模式，请先审阅并批准计划（或退出计划模式），
+然后再执行。
+
+侦察完成后，调用 ` + exitPlanModeName + ` 提交计划：
+- 入参 {"plan": "<Markdown>"}；plan 不能为空，且**首行必须是一级标题**（如 ` + "`# 测试计划`" + `），
+  否则工具会报错让你重写。
+- 计划要写清：目标、步骤（每步做什么/用哪个工具/预期结果）、风险与回滚、需要人工确认的点。
+提交成功后本轮就结束了：不要再调用任何工具，用一句话告诉用户计划已提交、等待他审阅。
+用户批准（退出计划模式）之后，你才会真正开始执行。`
+
 func mainAgentSystem(goal, dataDir, workDir string) string {
 	body := renderSystem("mainagent", mainAgentDefaultTmpl, MainVars{Goal: goal, DataDir: dataDir, Now: nowStr()})
 	return body + artifactSpec(workDir)
@@ -130,6 +163,16 @@ func (m *MainAgent) Chat(ctx context.Context, taskID int64, mainSeg int, as *db.
 // turn, a different model — the one lever that works when the current model keeps
 // declining regardless of how the request is phrased.
 func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int64, mainSeg int, as *db.AssetStore, ts *db.ExplorationStore, goal, message string, emit func(db.Activity), notify, resume func(), notifyGoal, notifyHint func([]string)) (string, error) {
+	// stepEmit 是这一轮所有步骤的唯一出口（emit 由 server 注入：盖章 worker=mainagent +
+	// main_seg、落库、SSE 广播）。工具自己产出的记录（计划卡片）也走它，才能和普通步骤
+	// 一样进同一个会话流，而不是另开一条写库路径。
+	stepEmit := func(r db.Activity) {
+		if emit == nil {
+			return
+		}
+		r.Worker = "mainagent"
+		emit(r)
+	}
 	tsx := NewToolSet(ts, "human")
 	tsx.SetFindingRecorder(m.findingRecorder)
 	if as != nil {
@@ -145,6 +188,15 @@ func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int
 	// 领域工具 + 基础默认工具集（Read/Write/Edit/MultiEdit/LS/Glob/Grep/Bash）
 	// 资产覆盖度功能关闭时剔除 add_task_scope/list_untested_assets（不入 prompt）。
 	base := append(tsx.DropCoverageTools(tsx.MainAgentTools()), actool.DefaultTools()...)
+	// 计划模式：工具一个都不摘（DSH README.md:32/81 的软约束模型），只额外披露
+	// exit_plan_mode（DSH index.ts:64，仅计划模式可见：index.ts:375）。
+	planTurn := &planTurn{}
+	if m.planMode {
+		tsx.SetPlanMode(true)
+		tsx.SetPlanTurn(planTurn)
+		tsx.SetPlanEmit(stepEmit) // 计划 → 一条 kind="plan" 的 activity（DSH 的 submitted-plan 聊天节点）
+		base = append(base, tsx.exitPlanMode())
+	}
 	ctx = WithRunInfo(ctx, RunInfo{TaskID: taskID, ExplorationID: explorationID(ts)})
 	tools, def, cleanup := AugmentTools(ctx, "mainagent", base)
 	defer cleanup()
@@ -156,7 +208,11 @@ func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int
 		agentDir = m.taskWorkDir
 	}
 	ctx = intercept.WithReviewWorkingDirectory(ctx, agentDir)
-	system, boundary := deferredSystem(mainAgentSystem(goal, m.workDir, agentDir), def)
+	sysBody := mainAgentSystem(goal, m.workDir, agentDir)
+	if m.planMode {
+		sysBody += planModeBlock
+	}
+	system, boundary := deferredSystem(sysBody, def)
 	opts := agentcore.Options{
 		Provider:        prov,
 		SystemPrompt:    system,
@@ -192,6 +248,10 @@ func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int
 	if m.guard != nil {
 		opts.Hooks = m.guard.Hooks()
 	}
+	if m.planMode {
+		// 计划提交后本轮不再执行任何工具（DSH index.ts:340 的 concludeTurn）。
+		opts.Hooks = &planGateHooks{inner: opts.Hooks, turn: planTurn}
+	}
 	if m.tx != nil { // persist raw human↔AI conversation; one accumulating file per segment
 		opts.Transcript = m.tx
 		// Segment 0 keeps the legacy "exp%d-main" name so existing transcripts still
@@ -220,11 +280,6 @@ func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int
 	// C2: this session is fresh each turn; re-unlock skill-gated MCPs from prior
 	// Skill() calls in the reloaded history so revealed tools stay callable.
 	seedUnlockFromHistory(s.Messages(), def.UnlockSkill)
-	text, _, err := captureRunSession(ctx, s, message, func(r db.Activity) {
-		if emit != nil {
-			r.Worker = "mainagent"
-			emit(r)
-		}
-	})
+	text, _, err := captureRunSession(ctx, s, message, stepEmit)
 	return text, err
 }

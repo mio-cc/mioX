@@ -58,7 +58,8 @@ type Task struct {
 	TimeoutSeconds       int                    `json:"timeout_seconds"`
 	PlanHeartbeatSeconds int                    `json:"plan_heartbeat_seconds"` // planner 心跳触发间隔(秒)
 	CoverageEnabled      bool                   `json:"coverage_enabled"`
-	WorkDir              string                 `json:"work_dir,omitempty"` // 用户为任务选的工作目录；空=默认 run 目录       // 资产覆盖度功能开关(创建时定,默认开)
+	WorkDir              string                 `json:"work_dir,omitempty"`
+	PlanMode             bool                   `json:"plan_mode"` // 用户为任务选的工作目录；空=默认 run 目录       // 资产覆盖度功能开关(创建时定,默认开)
 	FirstRunAt           int64                  `json:"first_run_at,omitempty"`
 	DeadlineAt           int64                  `json:"deadline_at,omitempty"`
 	Store                *pgdb.ExplorationStore `json:"-"`
@@ -847,6 +848,7 @@ func taskFromPG(pt *pgdb.Task, store *pgdb.ExplorationStore, ic *intercept.Inter
 		TimeoutSeconds: pt.TimeoutSeconds, PlanHeartbeatSeconds: pt.PlanHeartbeatSeconds,
 		CoverageEnabled: pt.CoverageEnabled,
 		WorkDir:         pt.WorkDir,
+		PlanMode:        pt.PlanMode,
 		FirstRunAt:      unixOrZero(pt.FirstRunAt), DeadlineAt: unixOrZero(pt.DeadlineAt),
 		Store: store, Guard: guard.NewWithInterceptor(ic), notify: make(chan struct{}, 1),
 	}
@@ -1859,4 +1861,25 @@ func (t *Task) drainTriggers() []agent.TriggerEvent {
 	ev := t.pendingTriggers
 	t.pendingTriggers = nil
 	return ev
+}
+
+// SetTaskPlanMode 切换任务的计划模式；调用方负责重建该任务的 agent（工具集在 bundle 里）。
+func (m *Manager) SetTaskPlanMode(taskID string, on bool) (*Task, error) {
+	m.taskStateMu.Lock()
+	defer m.taskStateMu.Unlock()
+	id, err := strconv.ParseInt(taskID, 10, 64)
+	if err != nil || id <= 0 {
+		return nil, nil
+	}
+	if err := m.pg.SetTaskPlanMode(id, on); err != nil {
+		return nil, err
+	}
+	m.mu.RLock()
+	task := m.tasks[taskID]
+	m.mu.RUnlock()
+	if task == nil {
+		return nil, nil
+	}
+	task.PlanMode = on
+	return task, nil
 }

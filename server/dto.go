@@ -62,6 +62,7 @@ type TaskDTO struct {
 	CompanyIDs         []int64            `json:"company_ids"`
 	CoverageEnabled    bool               `json:"coverage_enabled"` // 资产覆盖度功能开关(创建时定)
 	WorkDir            string `json:"work_dir,omitempty"`
+	PlanMode           bool   `json:"plan_mode"`
 }
 
 // FindingSeverityDTO 是任务列表里按严重度分档的漏洞计数（严重/高/中/低）。
@@ -136,6 +137,7 @@ func taskDTO(t *Task, status string) TaskDTO {
 		CompanyIDs:         lifecycle.CompanyIDs,
 		CoverageEnabled:    t.CoverageEnabled,
 		WorkDir:            t.WorkDir,
+		PlanMode:           t.PlanMode,
 	}
 }
 

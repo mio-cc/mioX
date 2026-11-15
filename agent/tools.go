@@ -79,6 +79,18 @@ type ToolSet struct {
 	// intent id (engine callback, wired by the planner): the worker injects it before
 	// its next tool call and re-plans, without being killed. nil = tool unavailable.
 	steerWork func(intentID int64, msg string) error
+	// planMode mirrors tasks.plan_mode. While on, the agent keeps its FULL tool set
+	// (DSH plan mode restrains through text, not by filtering capabilities —
+	// dsh-plan-mode/README.md:32/81) and gains the exit_plan_mode tool
+	// (dsh-plan-mode/src/index.ts:64, admitted only in plan mode: index.ts:375).
+	planMode bool
+	// planTurn latches "a plan was submitted in this turn", which ends the turn:
+	// DSH calls exec.concludeTurn() after the plan review (index.ts:340).
+	planTurn *planTurn
+	// planEmit persists a submitted plan as one kind="plan" activity row through the
+	// caller's step emitter (so it is stamped worker=mainagent + main_seg and is
+	// broadcast live). nil = plan is not persisted (tests / non-main agents).
+	planEmit func(db.Activity)
 	// enrich, if set, receives async auto-completion triggers (DNS resolve for a
 	// domain, HTTP probe for a site). nil = no engine enrichment.
 	enrich EnrichTrigger
@@ -169,6 +181,19 @@ func NewToolSet(ts *db.ExplorationStore, worker string) *ToolSet {
 // SetTaskID sets the PG task id on this ToolSet so that report_finding can
 // dual-write to the standalone findings table (which survives task deletion).
 func (t *ToolSet) SetTaskID(id int64) { t.taskID = id }
+
+// SetPlanMode records whether this task runs in plan mode. It does NOT remove any
+// tool: DSH plan mode is guidance (dsh-plan-mode/README.md:32/81), so the only tool
+// change is that exit_plan_mode becomes available (index.ts:375).
+func (t *ToolSet) SetPlanMode(on bool) { t.planMode = on }
+
+// SetPlanTurn binds this turn's plan latch (shared with the exit_plan_mode tool and
+// the post-submission tool gate).
+func (t *ToolSet) SetPlanTurn(p *planTurn) { t.planTurn = p }
+
+// SetPlanEmit wires the step emitter used to persist a submitted plan as a
+// kind="plan" activity (nil = don't persist).
+func (t *ToolSet) SetPlanEmit(fn func(db.Activity)) { t.planEmit = fn }
 
 // SetCoverageEnabled records whether this task has the asset-coverage feature on
 // (default enabled). Passing false makes graphOverviewData omit the coverage block

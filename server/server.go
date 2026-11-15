@@ -831,6 +831,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/settings", s.getSettings)
 	// 目录浏览：新建任务时选工作目录用（只列目录名，不读文件内容）。
 	mux.HandleFunc("GET /api/fs/dirs", s.fsDirs)
+	// 计划模式开关：进入后 agent 只有只读工具，只能出计划。
+	mux.HandleFunc("PATCH /api/tasks/{id}/plan-mode", s.setTaskPlanMode)
 	mux.HandleFunc("PUT /api/settings", s.putSettings)
 	// 漏洞 IM 推送。渠道是「多实例 + 各自过滤规则」的资源，因此独立成一组
 	// REST 接口，而不是塞进扁平的 /api/settings 键值里。
@@ -4125,4 +4127,31 @@ func atoiDefault(s string, d int) int {
 		return n
 	}
 	return d
+}
+
+// setTaskPlanMode 切换任务的计划模式，并重建该任务的 agent bundle——
+// 工具集与系统提示都固化在 bundle 里，不重建就还是旧模式。
+func (s *Server) setTaskPlanMode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req struct {
+		On bool `json:"on"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, 400, "bad json: "+err.Error())
+		return
+	}
+	t, err := s.m.SetTaskPlanMode(id, req.On)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if t == nil {
+		writeErr(w, 404, "任务不存在")
+		return
+	}
+	s.taskAgentMu.Lock()
+	delete(s.taskAgents, t.ID)
+	s.taskAgentMu.Unlock()
+	log.Printf("[task] #%s 计划模式 -> %v", t.ID, req.On)
+	writeJSON(w, 200, map[string]any{"id": t.ID, "plan_mode": req.On})
 }

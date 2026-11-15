@@ -643,6 +643,7 @@ func (s *Server) agentsForTask(t *Task) *taskAgentBundle {
 	if t.WorkDir != "" {
 		main.SetTaskWorkDir(t.WorkDir)
 	}
+	main.SetPlanMode(t.PlanMode)
 	main.SetFindingRecorder(s.evidenceStore())
 	main.SetCompactionWindowResolver(mainRuntime.CompactionWindow)
 	main.SetNonStreaming(mainRuntime.nonStreaming)

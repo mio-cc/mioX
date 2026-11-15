@@ -295,6 +295,12 @@ CREATE TABLE IF NOT EXISTS task_constraints (
 );
 CREATE INDEX IF NOT EXISTS idx_task_constraints_exp ON task_constraints(exploration_id);
 
+-- kind has no CHECK constraint (open vocabulary). Plan mode adds 'plan': one row per
+-- plan submitted through the exit_plan_mode tool — detail = the plan Markdown,
+-- summary = its first `# heading`, metadata.tool_use_id = the call that submitted it.
+-- It is a chat node in the main-agent session (the equivalent of DSH's
+-- 'submitted-plan' node, ui-plan/plan-definition.ts:15-33), not a task field: the
+-- plan is read back per turn/main_seg exactly like the other steps around it.
 CREATE TABLE IF NOT EXISTS activity (
     id                 BIGSERIAL PRIMARY KEY,
     exploration_id     BIGINT NOT NULL REFERENCES explorations(id) ON DELETE CASCADE,
@@ -526,6 +532,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     coverage_enabled BOOLEAN NOT NULL DEFAULT true,
     -- 用户为任务指定的工作目录(绝对路径)；空=默认 <data>/tasks/<id>。
     work_dir       TEXT NOT NULL DEFAULT '',
+    -- 计划模式：只读侦察 + 出计划，不执行写操作。
+    plan_mode      BOOLEAN NOT NULL DEFAULT false,
     pinned_at      TIMESTAMPTZ,
     first_run_at   TIMESTAMPTZ,
     deadline_at    TIMESTAMPTZ,
@@ -558,6 +566,7 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT '';
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS category_id BIGINT REFERENCES task_categories(id) ON DELETE SET NULL;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS work_dir TEXT NOT NULL DEFAULT '';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_mode BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS active_llm_profile_id BIGINT REFERENCES llm_profiles(id) ON DELETE SET NULL;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS llm_chain_revision BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
