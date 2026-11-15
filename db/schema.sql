@@ -1407,3 +1407,21 @@ CREATE INDEX IF NOT EXISTS idx_team_tasks_status ON team_tasks(task_id, status);
 DROP TRIGGER IF EXISTS trg_team_tasks_upd ON team_tasks;
 CREATE TRIGGER trg_team_tasks_upd BEFORE UPDATE ON team_tasks
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+-- Cross-task memory: durable lessons / techniques / target facts that outlive a task.
+-- Kept in its own table (not in the exploration graph) so recall can span tasks and
+-- so an operator can rewrite a poisoned entry without touching a live transcript.
+CREATE TABLE IF NOT EXISTS memories (
+    id         BIGSERIAL PRIMARY KEY,
+    scope      TEXT NOT NULL DEFAULT 'global',   -- 'global' | 'task'
+    task_id    TEXT,                             -- set when scope='task'
+    kind       TEXT NOT NULL DEFAULT 'note',     -- note | lesson | technique | target
+    title      TEXT NOT NULL DEFAULT '',
+    content    TEXT NOT NULL,
+    tags       TEXT[] NOT NULL DEFAULT '{}',
+    hits       INTEGER NOT NULL DEFAULT 0,       -- recall counter, for pruning
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_memories_scope  ON memories(scope, task_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_kind   ON memories(kind, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_tags   ON memories USING GIN(tags);

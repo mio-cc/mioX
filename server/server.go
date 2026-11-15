@@ -695,6 +695,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/team-tasks/{id}/claim", s.pgClaimTeamTask)
 	mux.HandleFunc("POST /api/team-tasks/{id}/complete", s.pgCompleteTeamTask)
 	mux.HandleFunc("POST /api/team-tasks/{id}/dispatch", s.pgDispatchTeamTask)
+
+	// --- 跨任务记忆（记忆沉淀与检索）---
+	mux.HandleFunc("GET /api/memories", s.listMemories)
+	mux.HandleFunc("POST /api/memories", s.createMemory)
+	mux.HandleFunc("PATCH /api/memories/{id}", s.updateMemory)
+	mux.HandleFunc("DELETE /api/memories/{id}", s.deleteMemory)
 	mux.HandleFunc("DELETE /api/team-tasks/{id}", s.pgDeleteTeamTask)
 	mux.HandleFunc("POST /api/tasks/category/batch", s.updateTasksCategoryBatch)
 	mux.HandleFunc("GET /api/task-templates", s.pgListTaskTemplates)

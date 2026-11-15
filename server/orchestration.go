@@ -489,6 +489,7 @@ func (s *Server) seedOrchestrationTools() {
 	s.refreshBuiltinToolSchemas()
 	s.seedAutoDefaultBindings()
 	s.seedPlannerDefaultBindings()
+	s.seedMemoryToolBindings()
 	s.seedPlannerListAssetsBinding()
 	s.seedCompanyScopeRebind()
 	s.seedWorkerReadToolsUnbind() // list_facts/list_companies/list_worker_traces 从 worker 默认解绑(一次性)
@@ -777,6 +778,24 @@ func (s *Server) seedReporterAgent() {
 		log.Printf("[reporter] 创建触发器失败: %v", err)
 	}
 	log.Printf("[reporter] 已预置「报告撰写」agent + finding 触发器")
+}
+
+// seedMemoryToolBindings backfills mainagent/worker onto the memory tools ONCE.
+// Their rows were first seeded planner-only, and SeedTool never rewrites an existing
+// row (that is what protects UI edits), so without this backfill the main agent and
+// workers never see memory_write / memory_search.
+func (s *Server) seedMemoryToolBindings() {
+	const flag = "memory_tools_mainagent_worker_v1"
+	if v, _, _ := s.m.pg.GetSetting(flag); v == "true" {
+		return
+	}
+	for _, agentKey := range []string{"mainagent", "worker"} {
+		if err := s.m.pg.AddAgentToToolBinding(agentKey, []string{"memory_write", "memory_search"}); err != nil {
+			log.Printf("[memory] %s 记忆工具绑定失败: %v", agentKey, err)
+			return
+		}
+	}
+	_ = s.m.pg.SetSetting(flag, "true")
 }
 
 // seedAutoReportFindingBinding adds "auto" to report_finding's binding ONCE so

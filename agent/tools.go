@@ -2054,5 +2054,7 @@ func (t *ToolSet) PlannerTools() []actool.CoreTool {
 		t.listUntestedAssets(),
 		// 团队任务板：planner 把拆解结果写进共享板，worker 从板上认领。
 		t.teamBoardWrite(), t.teamBoardList(),
+		// 跨任务记忆：把可复用的结论沉淀下来，并在开工前检索，避免重复踩坑。
+		t.memoryWrite(), t.memorySearch(),
 	}
 }
