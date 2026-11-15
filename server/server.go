@@ -74,6 +74,11 @@ type Server struct {
 	// concurrent messages don't corrupt the shared exp<id>-main transcript.
 	chatMu   sync.Mutex
 	chatBusy map[string]bool
+
+	// lastRefusal remembers, per task, whether the previous main-agent turn ended in a
+	// refusal. The next prompt then carries a neutral framing instead of letting the
+	// model continue the refusal it just produced (context governance, layer 2).
+	lastRefusal sync.Map // taskID -> bool
 	// chatCancel holds the cancel func for each in-flight conversation run (keyed by
 	// convBusyKey), so a manual stop can abort JUST that session's agent run. Set/
 	// cleared alongside chatBusy under chatMu. Aborting a run does NOT touch the P3
@@ -3829,7 +3834,13 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 			// 把上传附件的【绝对路径】清单拼进发给 agent 的消息,它据此用 Read/Bash 打开文件。
 			// taskDir = agent 的工作目录(CWD),与 chatUpload 落盘、ensureRunDir 一致。
 			taskDir := filepath.Join(s.m.dir, "tasks", t.ID)
-			agentMsg := composeAgentMessage(agentMessage, req.Attachments, taskDir)
+			// 上一轮被拒答过 → 本轮消息带中性重述，避免模型顺着自己的拒绝往下写。
+			prevRefused, _ := s.lastRefusal.Load(t.ID)
+			if prevRefused == true {
+				s.engine.emitActivity(t, db.Activity{Worker: "mainagent", Kind: "context", MainSeg: segPtr,
+					Summary: "上一轮被拒答，本轮已加入中性重述（上下文治理）", Detail: agent.GovernancePrefix})
+			}
+			agentMsg := composeAgentMessage(agent.GovernedPrompt(prevRefused == true, agentMessage), req.Attachments, taskDir)
 			s.engine.BeginLLMCall(t.ID)
 			// 拒答自愈：检测到拒答就按阶梯重试（L0 原样 → L1 中性重述），到上限就停，
 			// 不无限烧 token。工具调用数由 emit 计数得到——零工具本身就是拒答信号之一。
@@ -3843,7 +3854,9 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 			recovery, err := agent.RunWithRefusalRecovery(ctx, func(runCtx context.Context, plan agent.RefusalPlan) (agent.TurnResult, error) {
 				// 测试夹具：ARTEX_REFUSAL_FIXTURE=1 时第一次尝试直接返回一次合成拒答，
 				// 用来验证"检测→升级→恢复"整条链路。默认关闭，生产不受影响。
-				if os.Getenv("ARTEX_REFUSAL_FIXTURE") == "1" && plan.Attempt == 0 {
+				fixture := os.Getenv("ARTEX_REFUSAL_FIXTURE")
+				// "always" 每档都拒（用来验证"未恢复"与下一轮的上下文治理）；"1" 只拒第一档。
+				if (fixture == "1" && plan.Attempt == 0) || fixture == "always" {
 					return agent.TurnResult{Text: "我不能协助这个请求。", ToolCalls: 0, Reason: "stop"}, nil
 				}
 				attemptMsg := agentMsg
@@ -3862,7 +3875,12 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 					Detail:  string(detail),
 				})
 			}
-			_ = recovery
+			// 记住本轮最终是否仍是拒答：下一轮据此决定要不要加中性重述。
+			if n := len(recovery.Events); n > 0 {
+				s.lastRefusal.Store(t.ID, recovery.Events[n-1].Refused)
+			} else {
+				s.lastRefusal.Delete(t.ID)
+			}
 			s.engine.EndLLMCall(t.ID)
 			if err != nil && ctx.Err() == nil {
 				s.engine.emitActivity(t, db.Activity{Worker: "mainagent", Kind: "text", IsError: true, Summary: "（主 Agent 出错：" + err.Error() + "）", MainSeg: segPtr})
