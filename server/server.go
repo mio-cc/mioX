@@ -3349,6 +3349,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) settingsPayload() map[string]any {
 	on, backend, braveKey, tavilyKey, proxy := s.m.WebSearch()
 	pyStored, _, _ := s.m.pg.GetSetting(settingPythonInterp)
+	refusalFallbackRaw, _, _ := s.m.pg.GetSetting(refusalFallbackSetting)
 	concOn, concLimit := s.m.ConcurrencyLimit()
 	if concLimit == 0 {
 		concLimit = defaultConcurrencyLimit // 关闭时也回显一个合理默认值给 UI
@@ -3364,6 +3365,8 @@ func (s *Server) settingsPayload() map[string]any {
 		"web_search_proxy":         proxy,                       // 独立出口代理(http/https/socks5)，空=直连
 		"global_proxy":             s.m.GlobalProxy(),           // 全局出口代理(http/https/socks5)，所有目标流量走它，空=直连
 		"python_interpreter":       strings.TrimSpace(pyStored), // 用户/自动设的值(空=用运行时检测)
+		// 拒答阶梯 L3 的 fallback profile id（""=未启用，L3 降级为 give_up）
+		"refusal_fallback_profile": strings.TrimSpace(refusalFallbackRaw),
 		"workers":                  s.m.Workers(),               // 并发工作 agent 数(默认3)；对之后启动的任务生效
 		"task_concurrency_enabled": concOn,                      // 任务并发上限开关(默认关)
 		"task_concurrency_limit":   concLimit,                   // 同时运行任务上限(开启后默认5)
@@ -3454,6 +3457,8 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		NotifyEnabled    *bool   `json:"notify_enabled"`
 		NotifyBaseURL    *string `json:"notify_public_base_url"`
 		NotifyDigestMins *int    `json:"notify_digest_interval_min"`
+		// 拒答阶梯 L3 用的 fallback 模型 profile id（""=不启用，L3 降级为 give_up）。
+		RefusalFallbackProfile *string `json:"refusal_fallback_profile"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, 400, err.Error())
@@ -3477,6 +3482,17 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 500, err.Error())
 			return
 		}
+	}
+	// Refusal ladder L3: the fallback LLM profile. Read per refusal, so a change here
+	// takes effect immediately (and the provider cache must be invalidated).
+	if req.RefusalFallbackProfile != nil {
+		if err := s.m.pg.SetSetting(refusalFallbackSetting, strings.TrimSpace(*req.RefusalFallbackProfile)); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		fallbackProvMu.Lock()
+		fallbackProvKey, fallbackProvVal, fallbackProvMiss = "", nil, false
+		fallbackProvMu.Unlock()
 	}
 	// 推送全局项:投递引擎每轮重新读取,所以即时生效、无需重启。
 	if req.NotifyEnabled != nil {
@@ -3856,13 +3872,19 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 				// 用来验证"检测→升级→恢复"整条链路。默认关闭，生产不受影响。
 				fixture := os.Getenv("ARTEX_REFUSAL_FIXTURE")
 				// "always" 每档都拒（用来验证"未恢复"与下一轮的上下文治理）；"1" 只拒第一档。
-				if (fixture == "1" && plan.Attempt == 0) || fixture == "always" {
+				if (fixture == "1" && plan.Attempt == 0) || (fixture == "always" && plan.Attempt < 3) {
 					return agent.TurnResult{Text: "我不能协助这个请求。", ToolCalls: 0, Reason: "stop"}, nil
 				}
 				// L2：整条消息替换成中性指令（具体措辞才是触发点，意图保留）。
-				// L3：换 fallback 模型；没配就当作"本档不可用"，返回拒答让阶梯收口。
+				// L3：换 fallback 模型——同一轮、同一段历史，只换 provider。
+				// 没配 fallback profile 就当作"本档不可用"，返回拒答让阶梯收口，
+				// 而不是假装重试一次。
+				var attemptProv llm.Provider
 				if plan.UseFallback {
-					return agent.TurnResult{Text: "我不能协助这个请求。", ToolCalls: 0, Reason: "no_fallback_configured"}, nil
+					attemptProv = s.refusalFallbackProvider()
+					if attemptProv == nil {
+						return agent.TurnResult{Text: "我不能协助这个请求。", ToolCalls: 0, Reason: "no_fallback_configured"}, nil
+					}
 				}
 				attemptMsg := agentMsg
 				if plan.ReplaceMessage != "" {
@@ -3871,7 +3893,13 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 					attemptMsg += plan.Suffix
 				}
 				before := toolCalls
-				text, chatErr := ma.Chat(runCtx, maTaskID, mainSeg, s.m.Assets(), t.Store, t.Goal, attemptMsg, countEmit, t.Notify, resume, t.NotifyGoal, t.NotifyHint)
+				var text string
+				var chatErr error
+				if attemptProv != nil {
+					text, chatErr = ma.ChatUsing(runCtx, attemptProv, maTaskID, mainSeg, s.m.Assets(), t.Store, t.Goal, attemptMsg, countEmit, t.Notify, resume, t.NotifyGoal, t.NotifyHint)
+				} else {
+					text, chatErr = ma.Chat(runCtx, maTaskID, mainSeg, s.m.Assets(), t.Store, t.Goal, attemptMsg, countEmit, t.Notify, resume, t.NotifyGoal, t.NotifyHint)
+				}
 				return agent.TurnResult{Text: text, ToolCalls: toolCalls - before, Reason: ""}, chatErr
 			})
 			if recovery.Attempts > 1 || (len(recovery.Events) > 0 && recovery.Events[0].Refused) {

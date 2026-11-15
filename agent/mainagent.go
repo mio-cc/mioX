@@ -119,6 +119,13 @@ func mainAgentSystem(goal, dataDir, workDir string) string {
 // text / result) so the main-agent session shows its work — exactly like the
 // worker/planner sessions — not just the final answer.
 func (m *MainAgent) Chat(ctx context.Context, taskID int64, mainSeg int, as *db.AssetStore, ts *db.ExplorationStore, goal, message string, emit func(db.Activity), notify, resume func(), notifyGoal, notifyHint func([]string)) (string, error) {
+	return m.ChatUsing(ctx, m.prov, taskID, mainSeg, as, ts, goal, message, emit, notify, resume, notifyGoal, notifyHint)
+}
+
+// ChatUsing is Chat on an explicit provider. The refusal ladder uses it for L3: the same
+// turn, a different model — the one lever that works when the current model keeps
+// declining regardless of how the request is phrased.
+func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int64, mainSeg int, as *db.AssetStore, ts *db.ExplorationStore, goal, message string, emit func(db.Activity), notify, resume func(), notifyGoal, notifyHint func([]string)) (string, error) {
 	tsx := NewToolSet(ts, "human")
 	tsx.SetFindingRecorder(m.findingRecorder)
 	if as != nil {
@@ -142,7 +149,7 @@ func (m *MainAgent) Chat(ctx context.Context, taskID int64, mainSeg int, as *db.
 	ctx = intercept.WithReviewWorkingDirectory(ctx, mainDir)
 	system, boundary := deferredSystem(mainAgentSystem(goal, m.workDir, mainDir), def)
 	opts := agentcore.Options{
-		Provider:        m.prov,
+		Provider:        prov,
 		SystemPrompt:    system,
 		DynamicBoundary: boundary,
 		Tools:           tools,
