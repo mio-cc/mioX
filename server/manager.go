@@ -60,6 +60,9 @@ type Task struct {
 	CoverageEnabled      bool                   `json:"coverage_enabled"`
 	WorkDir              string                 `json:"work_dir,omitempty"`
 	PlanMode             bool                   `json:"plan_mode"` // 用户为任务选的工作目录；空=默认 run 目录       // 资产覆盖度功能开关(创建时定,默认开)
+	// TeamMode 是会话级团队模式：只有开启时该会话才渲染共享任务板
+	// (DSH TeamModeToggle.tsx:1 session-owned selection + TeamBoard.tsx:86 enabled 门控)。
+	TeamMode             bool                   `json:"team_mode"`
 	FirstRunAt           int64                  `json:"first_run_at,omitempty"`
 	DeadlineAt           int64                  `json:"deadline_at,omitempty"`
 	Store                *pgdb.ExplorationStore `json:"-"`
@@ -849,6 +852,7 @@ func taskFromPG(pt *pgdb.Task, store *pgdb.ExplorationStore, ic *intercept.Inter
 		CoverageEnabled: pt.CoverageEnabled,
 		WorkDir:         pt.WorkDir,
 		PlanMode:        pt.PlanMode,
+		TeamMode:        pt.TeamMode,
 		FirstRunAt:      unixOrZero(pt.FirstRunAt), DeadlineAt: unixOrZero(pt.DeadlineAt),
 		Store: store, Guard: guard.NewWithInterceptor(ic), notify: make(chan struct{}, 1),
 	}
@@ -1881,5 +1885,28 @@ func (m *Manager) SetTaskPlanMode(taskID string, on bool) (*Task, error) {
 		return nil, nil
 	}
 	task.PlanMode = on
+	return task, nil
+}
+
+// SetTaskTeamMode 切换任务的团队模式（会话级共享任务板开关）。
+// 与计划模式不同，它不改变 agent bundle 的工具集，所以不重建 agent：
+// 落库 + 同步内存里的任务对象即可，前端下一次 GET 就能读到真值。
+func (m *Manager) SetTaskTeamMode(taskID string, on bool) (*Task, error) {
+	m.taskStateMu.Lock()
+	defer m.taskStateMu.Unlock()
+	id, err := strconv.ParseInt(taskID, 10, 64)
+	if err != nil || id <= 0 {
+		return nil, nil
+	}
+	if err := m.pg.SetTaskTeamMode(id, on); err != nil {
+		return nil, err
+	}
+	m.mu.RLock()
+	task := m.tasks[taskID]
+	m.mu.RUnlock()
+	if task == nil {
+		return nil, nil
+	}
+	task.TeamMode = on
 	return task, nil
 }

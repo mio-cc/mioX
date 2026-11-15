@@ -127,6 +127,10 @@ export function ModelSelect({
   effort,
   inheritedEffort,
   onEffortChange,
+  teamMode,
+  teamModeBusy,
+  teamModeError,
+  onTeamModeToggle,
 }: {
   readonly groups: ModelGroup[];
   readonly pending: boolean;
@@ -138,6 +142,17 @@ export function ModelSelect({
   /** The profile's own level, shown when no override is set (DSH shows the effective value). */
   readonly inheritedEffort?: string;
   readonly onEffortChange: (next: string) => void;
+  /**
+   * 会话级团队模式：`undefined` = 这不是根会话（旁开/派发出来的子会话），
+   * 开关整体不渲染 —— DSH TeamModeToggle.tsx:30-32 `if (addressedChild || listedChild) return null`。
+   */
+  readonly teamMode?: boolean;
+  /** 保存中：开关禁用（DSH TeamModeToggle.tsx:67 `disabled={locked || pending ...}`）。 */
+  readonly teamModeBusy?: boolean;
+  /** 保存失败原因；非空时在菜单里常驻显示，开关不翻转。 */
+  readonly teamModeError?: string;
+  /** 用户拨动开关。关闭方向由调用方弹二次确认（DSH 的 requestDisableConfirmation）。 */
+  readonly onTeamModeToggle?: (enabled: boolean) => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [pane, setPane] = React.useState<"root" | "model" | "effort">("root");
@@ -300,6 +315,50 @@ export function ModelSelect({
                 <span className={styles.modelCellValue}>{effortLabel}</span>
                 <ChevronRight size={12} aria-hidden="true" className={styles.modelCellChevron} />
               </button>
+              {/* 团队模式：会话拥有的选择，只对根会话渲染；非乐观——点击后等服务端
+                  返回才改 UI（DSH TeamModeToggle.tsx:24-34/44-56）。关闭方向先关菜单
+                  再交给调用方弹确认框（同 :45-49 dismiss() + requestDisableConfirmation()）。 */}
+              {teamMode === undefined ? null : (
+                <div className={styles.modelTeamRow} data-testid="team-mode-row">
+                  <span className={styles.modelTeamLabel}>
+                    团队模式
+                    <span
+                      className={styles.modelTeamHint}
+                      title="通过共享任务板协调多个智能体的分工与进度，复杂任务表现更好，token 开销也更高。"
+                    >
+                      共享任务板
+                    </span>
+                  </span>
+                  <button
+                    ref={registerItem}
+                    type="button"
+                    role="switch"
+                    aria-checked={teamMode}
+                    aria-label="团队模式"
+                    title={teamMode ? "关闭团队模式（需要确认）" : "开启团队模式"}
+                    className={styles.modelSwitch}
+                    data-state={teamMode ? "on" : "off"}
+                    data-testid="team-mode-toggle"
+                    data-busy={teamModeBusy ? "true" : "false"}
+                    disabled={teamModeBusy}
+                    onClick={() => {
+                      if (teamMode) {
+                        close(true);
+                        onTeamModeToggle?.(false);
+                        return;
+                      }
+                      onTeamModeToggle?.(true);
+                    }}
+                  >
+                    <span className={styles.modelSwitchKnob} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+              {teamMode !== undefined && teamModeError ? (
+                <p role="alert" className={styles.modelTeamError} data-testid="team-mode-error">
+                  {teamModeError}
+                </p>
+              ) : null}
             </div>
           ) : null}
 

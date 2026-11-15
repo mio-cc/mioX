@@ -1759,6 +1759,94 @@
   flex: 0 0 auto;
   color: var(--ax-text-tertiary);
 }
+
+/* ---- Team mode switch (ported from the reference TeamModeToggle) ----
+   The reference renders it as a label + Switch row inside the model menu
+   (TeamModeToggle.tsx:57-68), separated from the drill-in cells. */
+.modelTeamRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  margin-top: 2px;
+  border-top: 1px solid var(--ax-border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 0 0 6px 6px;
+}
+
+.modelTeamLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ax-text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.modelTeamHint {
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.modelSwitch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid var(--ax-border-subtle, rgba(255, 255, 255, 0.16));
+  border-radius: 999px;
+  background: var(--ax-bg-elevated, rgba(255, 255, 255, 0.06));
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.modelSwitch[data-state="on"] {
+  background: var(--ax-accent, #3b82f6);
+  border-color: var(--ax-accent, #3b82f6);
+}
+
+.modelSwitch:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.modelSwitch:focus-visible {
+  outline: 2px solid var(--ax-accent, #3b82f6);
+  outline-offset: 2px;
+}
+
+.modelSwitchKnob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 120ms ease;
+}
+
+.modelSwitch[data-state="on"] .modelSwitchKnob {
+  transform: translateX(13px);
+}
+
+/* Failure copy stays inside the menu: the reference reports the failure through
+   the session's failure channel (TeamModeToggle.tsx:51-55) so the switch never
+   silently flips. */
+.modelTeamError {
+  margin: 4px 8px 2px;
+  color: var(--ax-danger, #ef4444);
+  font-size: 11px;
+  line-height: 1.4;
+}
 /* ---- Reasoning disclosure (ported from the reference ReasoningRow) ---- */
 .thinkRow {
   display: flex;
@@ -2428,6 +2516,22 @@
   font-size: 12px;
   line-height: 18px;
   white-space: pre-wrap;
+}
+
+/* 展开区里「负责人 / 依赖 / 来源」三行元信息（看板行细节）。 */
+.teamMetaRow {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 4px;
+  color: var(--ax-text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  word-break: break-word;
+}
+
+.teamMetaLabel {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
 }
 
 .teamActions {

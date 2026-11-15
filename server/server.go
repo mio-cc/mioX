@@ -841,6 +841,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/fs/dirs", s.fsDirs)
 	// 计划模式开关：进入后 agent 只有只读工具，只能出计划。
 	mux.HandleFunc("PATCH /api/tasks/{id}/plan-mode", s.setTaskPlanMode)
+	// 团队模式开关（会话级）：只有开启时该会话才渲染共享任务板。
+	mux.HandleFunc("PATCH /api/tasks/{id}/team-mode", s.setTaskTeamMode)
 	mux.HandleFunc("PUT /api/settings", s.putSettings)
 	// 漏洞 IM 推送。渠道是「多实例 + 各自过滤规则」的资源，因此独立成一组
 	// REST 接口，而不是塞进扁平的 /api/settings 键值里。
@@ -4173,6 +4175,32 @@ func (s *Server) setTaskPlanMode(w http.ResponseWriter, r *http.Request) {
 	s.taskAgentMu.Unlock()
 	log.Printf("[task] #%s 计划模式 -> %v", t.ID, req.On)
 	writeJSON(w, 200, map[string]any{"id": t.ID, "plan_mode": req.On})
+}
+
+// setTaskTeamMode 切换任务的团队模式（会话级）。
+// 与计划模式不同：它不改 agent 工具集，所以不重建 bundle——DSH 的团队开关是
+// 「会话拥有的选择」（TeamModeToggle.tsx:1），只决定看板是否可用
+// （TeamBoard.tsx:86 `if (!team?.enabled) return null`）。落库 + 同步内存即可。
+func (s *Server) setTaskTeamMode(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req struct {
+		On bool `json:"on"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, 400, "bad json: "+err.Error())
+		return
+	}
+	t, err := s.m.SetTaskTeamMode(id, req.On)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if t == nil {
+		writeErr(w, 404, "任务不存在")
+		return
+	}
+	log.Printf("[task] #%s 团队模式 -> %v", t.ID, req.On)
+	writeJSON(w, 200, map[string]any{"id": t.ID, "team_mode": req.On})
 }
 
 // leavePlanMode 在用户批准计划后退出计划模式（DSH plan-mode/src/index.ts:358-362：

@@ -534,6 +534,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     work_dir       TEXT NOT NULL DEFAULT '',
     -- 计划模式：只读侦察 + 出计划，不执行写操作。
     plan_mode      BOOLEAN NOT NULL DEFAULT false,
+    -- 团队模式（会话级）：开启后该会话才拥有共享任务板（TeamBoard 在
+    -- agentTeam.enabled 为假时整体不渲染，见 DSH TeamBoard.tsx:86）。
+    team_mode      BOOLEAN NOT NULL DEFAULT false,
     pinned_at      TIMESTAMPTZ,
     first_run_at   TIMESTAMPTZ,
     deadline_at    TIMESTAMPTZ,
@@ -567,6 +570,8 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS category_id BIGINT REFERENCES task_ca
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS work_dir TEXT NOT NULL DEFAULT '';
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS plan_mode BOOLEAN NOT NULL DEFAULT false;
+-- 团队模式(会话级开关);补旧库。false(默认)=没有共享任务板,true=看板可用。
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS team_mode BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS active_llm_profile_id BIGINT REFERENCES llm_profiles(id) ON DELETE SET NULL;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS llm_chain_revision BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;

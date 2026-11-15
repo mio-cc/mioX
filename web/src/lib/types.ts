@@ -42,6 +42,9 @@ export interface Task {
   // 计划模式：开着时 agent 工具全保留、只能侦察 + 用 exit_plan_mode 交计划，
   // 用户在审阅里点「批准」后变 false（DSH @deepseek-ai/dsh-plan-mode 语义）。
   plan_mode?: boolean;
+  // 团队模式（会话级开关）：只有为 true 时该会话才渲染共享任务板
+  // （DSH TeamModeToggle.tsx:1 session-owned + TeamBoard.tsx:86 enabled 门控）。
+  team_mode?: boolean;
   // 任务级「目标」(/goal 命令)的当前快照;null/缺省=没有目标 → GoalBar 不渲染。
   // 注意与上面的 goal(建任务时填的静态目标字符串)不是同一字段。
   goal_state?: GoalSnapshot | null;

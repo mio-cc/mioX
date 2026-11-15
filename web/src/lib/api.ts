@@ -1303,6 +1303,9 @@ export const api = {
   // 计划模式开关（工具全保留、只侦察 + 交计划，等审阅批准）。
   setTaskPlanMode: (id: string, on: boolean) =>
     patch<{ id: string; plan_mode: boolean }>(`/tasks/${id}/plan-mode`, { on }),
+  // 团队模式开关（会话级）：只有开启时该会话才渲染共享任务板。
+  setTaskTeamMode: (id: string, on: boolean) =>
+    patch<{ id: string; team_mode: boolean }>(`/tasks/${id}/team-mode`, { on }),
   interceptExecution: (id: number, conversationId?: number) =>
     get<import("@/lib/types").InterceptExecution>(
       `/intercept/history/${id}/execution${conversationId ? `?conversation=${conversationId}` : ""}`,

@@ -6,6 +6,10 @@
  *
  * Row shape mirrors the backend `TeamTask`: subject / status / owner / ready,
  * where `ready === false` on a pending row means it is blocked by a dependency.
+ *
+ * The board itself is gated on the session-level team mode: the reference
+ * renders nothing when `agentTeam.enabled` is false (TeamBoard.tsx:86), so the
+ * switch in the model menu is what makes this tab meaningful.
  */
 
 import * as React from "react";
@@ -28,7 +32,29 @@ const STATUS_LABEL: Record<string, string> = {
 
 const EMPTY_PROGRESS: TeamTaskProgress = { total: 0, completed: 0, active: 0, pending: 0, blocked: 0 };
 
-export function TeamTab({ taskId }: { readonly taskId: string }) {
+/**
+ * 进度摘要：DSH TeamBoard.tsx:29-38 —— 三段「{count} 已完成 / {count} 进行中 /
+ * {count} 待处理」，只用 `\u2002·\u2002` 连接，且**只显示非零项**（全零时返回空串）。
+ */
+function progressLabel(progress: TeamTaskProgress): string {
+  return [
+    ...(progress.completed > 0 ? [`${progress.completed} 已完成`] : []),
+    ...(progress.active > 0 ? [`${progress.active} 进行中`] : []),
+    ...(progress.pending > 0 ? [`${progress.pending} 待处理`] : []),
+  ].join("\u2002·\u2002");
+}
+
+/** 依赖项的展示文案：#id 标题（状态）；已被删掉的依赖只留 #id。 */
+function dependencyText(ids: readonly number[], tasks: readonly TeamTask[]): string {
+  return ids
+    .map((id) => {
+      const target = tasks.find((item) => item.id === id);
+      return target ? `#${id} ${target.subject}（${STATUS_LABEL[target.status] ?? target.status}）` : `#${id}`;
+    })
+    .join("、");
+}
+
+export function TeamTab({ taskId, teamMode }: { readonly taskId: string; readonly teamMode: boolean }) {
   const [board, setBoard] = React.useState<Board>({ tasks: [], progress: EMPTY_PROGRESS });
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
@@ -120,17 +146,26 @@ export function TeamTab({ taskId }: { readonly taskId: string }) {
   };
 
   const { progress } = board;
-  const summary = [
-    progress.completed > 0 ? `已完成 ${progress.completed}` : "",
-    progress.active > 0 ? `进行中 ${progress.active}` : "",
-    progress.pending > 0 ? `待处理 ${progress.pending}` : "",
-  ].filter(Boolean).join(" · ");
+  const summary = progressLabel(progress);
+
+  // 会话级团队模式关闭时整块看板不渲染（DSH TeamBoard.tsx:86
+  // `if (!team?.enabled) return null`）。这里比源码多一句说明文案：mioX 的看板是
+  // 独立 tab，纯空白会让人以为坏了；DSH 的看板挂在子 agent 目录下方，没有这个问题。
+  if (!teamMode) {
+    return (
+      <div className={styles.teamWrap} data-testid="team-board-off">
+        <p className={styles.teamEmpty}>
+          团队模式未开启：在输入框的「模型」菜单里打开「团队模式」，这个会话才会出现共享任务板。
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.teamWrap} data-testid="team-board">
       <div className={styles.teamHeader}>
         <div className={styles.teamSummary} data-testid="team-summary">
-          {summary || "还没有任务"}
+          <span data-testid="team-progress">{summary || "还没有任务"}</span>
           {progress.blocked > 0 ? <span className={styles.teamBlocked}>· {progress.blocked} 项被阻塞</span> : null}
         </div>
         <div className={styles.teamComposer}>
@@ -187,12 +222,14 @@ export function TeamTab({ taskId }: { readonly taskId: string }) {
         {board.tasks.map((item) => {
           const blocked = item.status === "pending" && !item.ready;
           const open = expanded === item.id;
+          const detailsId = `team-task-details-${item.id}`;
           return (
             <li
               key={item.id}
               className={styles.teamRow}
               data-status={item.status}
               data-blocked={blocked ? "true" : "false"}
+              data-expanded={open ? "true" : "false"}
               data-testid="team-row"
               data-team-id={item.id}
             >
@@ -200,7 +237,9 @@ export function TeamTab({ taskId }: { readonly taskId: string }) {
                 type="button"
                 className={styles.teamRowHead}
                 aria-expanded={open}
+                aria-controls={detailsId}
                 onClick={() => setExpanded(open ? null : item.id)}
+                data-testid="team-row-toggle"
               >
                 <span className={styles.teamDot} data-state={blocked ? "blocked" : item.status} aria-hidden="true" />
                 <span className={styles.teamSubject}>{item.subject}</span>
@@ -211,8 +250,27 @@ export function TeamTab({ taskId }: { readonly taskId: string }) {
                 <ChevronDown size={12} aria-hidden="true" className={styles.teamChevron} data-open={open ? "true" : "false"} />
               </button>
               {open ? (
-                <div className={styles.teamRowBody}>
-                  {item.detail ? <p className={styles.teamDetail}>{item.detail}</p> : null}
+                <div className={styles.teamRowBody} id={detailsId} data-testid="team-row-details">
+                  {/* 内容：DSH 展开区先放 description（TeamBoard.tsx:68）。 */}
+                  <p className={styles.teamDetail} data-testid="team-detail">
+                    {item.detail ? item.detail : "（没有补充说明）"}
+                  </p>
+                  {/* 负责人：DSH `data-team-task-owner`（TeamBoard.tsx:69-74）；
+                      空 owner 用 DSH 的 unowned 文案（locales.ts:33 '未分配'）。 */}
+                  <p className={styles.teamMetaRow} data-testid="team-row-owner">
+                    <span className={styles.teamMetaLabel}>负责人：</span>
+                    <span>{item.owner ? item.owner : "未分配"}</span>
+                  </p>
+                  {/* 依赖：mioX 的 team_tasks 有 depends_on（DSH TeamTaskView 无此字段）。 */}
+                  <p className={styles.teamMetaRow} data-testid="team-row-deps" data-deps={item.depends_on.join(",")}>
+                    <span className={styles.teamMetaLabel}>依赖：</span>
+                    <span>{item.depends_on.length > 0 ? dependencyText(item.depends_on, board.tasks) : "无"}</span>
+                  </p>
+                  {/* 来源：手动添加 vs 由探索意图投影而来（team_tasks.source_intent_id）。 */}
+                  <p className={styles.teamMetaRow} data-testid="team-row-source">
+                    <span className={styles.teamMetaLabel}>来源：</span>
+                    <span>{item.source_intent_id ? `意图 #${item.source_intent_id}` : "手动添加"}</span>
+                  </p>
                   <div className={styles.teamActions}>
                     {item.status === "pending" ? (
                       <button

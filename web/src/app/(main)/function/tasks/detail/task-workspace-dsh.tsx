@@ -31,6 +31,7 @@ import { ApprovalRecords } from "@/components/approval-records";
 import { Markdown } from "@/components/markdown";
 import { PlanCard, PlanReviewCard } from "@/components/transcript";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api, sseUrl } from "@/lib/api";
 import { ScrollFollow, scrollMetrics } from "@/lib/scroll-follow";
@@ -1376,6 +1377,38 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     }
   }, [taskId]);
 
+  // 团队模式（会话级）：模型菜单里的开关。
+  // 语义照 DSH TeamModeToggle：① 非乐观——点击后等 PATCH 返回才改 UI（:24-34,44-56）；
+  // ② 关闭方向先弹二次确认（:45-49 dismiss() + requestDisableConfirmation()），
+  // 确认后才发请求（TeamDisableConfirmation.tsx:49-58）；③ 失败原因留在菜单里。
+  const [teamModeBusy, setTeamModeBusy] = React.useState(false);
+  const [teamModeError, setTeamModeError] = React.useState("");
+  const [teamModeConfirmOpen, setTeamModeConfirmOpen] = React.useState(false);
+  const applyTeamMode = React.useCallback(async (enabled: boolean) => {
+    setTeamModeBusy(true);
+    setTeamModeError("");
+    try {
+      const res = await api.setTaskTeamMode(taskId, enabled);
+      // 只认服务端回写的值，绝不本地先翻转。
+      setTask((current) => (current ? { ...current, team_mode: res.team_mode } : current));
+      toast.success(res.team_mode ? "已开启团队模式" : "已关闭团队模式");
+    } catch (e) {
+      const reason = (e as Error).message;
+      setTeamModeError(`无法确认团队模式设置已保存，请重试：${reason}`);
+      toast.error(`团队模式保存失败：${reason}`);
+    } finally {
+      setTeamModeBusy(false);
+    }
+  }, [taskId]);
+  const requestTeamModeToggle = React.useCallback((enabled: boolean) => {
+    // 关闭必须走确认框；直接调 API 能关（后端不拦），但前端这个入口先确认。
+    if (!enabled) {
+      setTeamModeConfirmOpen(true);
+      return;
+    }
+    void applyTeamMode(true);
+  }, [applyTeamMode]);
+
   // 任务级「目标」(/goal)的动作。DSH 的语义:创建只走 `/goal <objective>` 命令
   // (goal-command-input.ts:9),GoalBar 本身只提供 编辑/清除/暂停/恢复
   // (GoalBar.tsx:1-10),所以这里没有"新建目标"按钮。
@@ -2702,6 +2735,12 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
                   effort={reasoningOverride}
                   inheritedEffort={reasoningEffort}
                   onEffortChange={setReasoningOverride}
+                  // 只对根会话给开关：子会话（旁开/派发的 lane）传 undefined，
+                  // 组件内直接不渲染（DSH TeamModeToggle.tsx:30-32）。
+                  teamMode={readOnlyLane ? undefined : (task?.team_mode ?? false)}
+                  teamModeBusy={teamModeBusy}
+                  teamModeError={teamModeError}
+                  onTeamModeToggle={requestTeamModeToggle}
                 />
                 {task?.plan_mode ? (
                   // 计划模式 chip（DSH ui-plan/PlanModeControl.tsx:19-40）：计划模式开着
@@ -2788,7 +2827,7 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
         </div>
       ) : null}
 
-      {tab === "team" ? <div className={styles.panel}><TeamTab taskId={taskId} /></div> : null}
+      {tab === "team" ? <div className={styles.panel}><TeamTab taskId={taskId} teamMode={!!task?.team_mode} /></div> : null}
       {tab === "graph" ? <div className={styles.panel}><GraphTab taskId={taskId} /></div> : null}
       {tab === "findings" ? <div className={styles.panel}><FindingsTab taskId={taskId} /></div> : null}
       {tab === "report" ? <div className={styles.panel}><ReportTab taskId={taskId} /></div> : null}
@@ -2805,6 +2844,43 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
             </DialogDescription>
           </DialogHeader>
           <ApprovalRecords taskId={taskId} />
+        </DialogContent>
+      </Dialog>
+
+      {/* 关闭团队模式的二次确认（DSH TeamDisableConfirmation.tsx:60-74：warning 语气、
+          取消在左、确认在右；取消后状态不变，确认才发请求）。 */}
+      <Dialog open={teamModeConfirmOpen} onOpenChange={setTeamModeConfirmOpen}>
+        <DialogContent className="w-[92vw] max-w-[460px]" data-testid="team-mode-confirm">
+          <DialogHeader>
+            <DialogTitle>关闭团队模式？</DialogTitle>
+            <DialogDescription>
+              关闭后这个会话不再显示共享任务板；已有的团队任务不会被删除，需要时可以在模型菜单里重新打开。
+            </DialogDescription>
+            <p className="text-muted-foreground text-xs">
+              停用后可能影响缓存复用、增加后续 token 用量与开销，并影响当前任务的协作效果。
+            </p>
+          </DialogHeader>
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setTeamModeConfirmOpen(false)}
+              data-testid="team-mode-confirm-cancel"
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              data-testid="team-mode-confirm-ok"
+              onClick={() => {
+                setTeamModeConfirmOpen(false);
+                void applyTeamMode(false);
+              }}
+            >
+              关闭团队模式
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
