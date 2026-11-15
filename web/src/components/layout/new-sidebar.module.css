@@ -342,6 +342,52 @@
   color: var(--ax-text-tertiary);
 }
 
+/* Row hover card (reference: DSH HoverCard + SessionHoverContent). Portalled to body,
+   so it is positioned with viewport coordinates and never clipped by the sidebar. */
+.hoverCard {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--ax-border-strong);
+  border-radius: 10px;
+  background: var(--ax-bg-panel, var(--ax-bg-elevated));
+  box-shadow: 0 12px 32px rgb(0 0 0 / 28%);
+  pointer-events: none;
+}
+
+.hoverTitle {
+  color: var(--ax-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  overflow-wrap: break-word;
+}
+
+.hoverPath {
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: break-word;
+}
+
+.hoverMeta {
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.hoverStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ax-text-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .taskTime {
   flex: 0 0 auto;
   font-size: 10px;

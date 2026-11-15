@@ -4,6 +4,7 @@ import * as React from "react";
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { createPortal } from "react-dom";
 
 import {
   Activity,
@@ -247,6 +248,48 @@ function statusLabel(task: Task): string {
   }
 }
 
+/**
+ * Row hover card (reference: DSH `SessionHoverContent` + `HoverCard`).
+ *
+ * DSH shows a delayed card beside the row with the full title, the working directory,
+ * the age, and the status lines. We have no cwd per task, so the card carries the full
+ * title, the description, the relative age and the absolute creation time — the details
+ * a truncated sidebar row cannot show.
+ *
+ * Rendered through a portal so the sidebar's scroll container cannot clip it.
+ */
+function TaskHoverCard({
+  task,
+  anchor,
+}: {
+  readonly task: Task;
+  readonly anchor: DOMRect;
+}) {
+  const width = 280;
+  const left = Math.min(anchor.right + 10, window.innerWidth - width - 12);
+  const top = Math.min(anchor.top - 6, window.innerHeight - 160);
+  // taskName falls back to the description when a task has no name, so only show the
+  // description line when it adds information instead of repeating the title.
+  const title = taskName(task);
+  const description = task.description?.trim() ?? "";
+  const showDescription = description !== "" && description !== title;
+  return createPortal(
+    <div className={styles.hoverCard} style={{ left, top, width }} role="tooltip" data-testid="sidebar-hover-card">
+      <div className={styles.hoverTitle}>{title}</div>
+      {showDescription ? <div className={styles.hoverPath}>{description}</div> : null}
+      <div className={styles.hoverMeta}>
+        {relTime(task)}
+        {task.created_unix ? ` · 创建于 ${new Date(task.created_unix * 1000).toLocaleString("zh-CN")}` : ""}
+      </div>
+      <div className={styles.hoverStatus}>
+        <span className={`${styles.statusDot} ${statusClass(task)}`} />
+        <span>{statusLabel(task)}</span>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function isActivePath(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -286,6 +329,31 @@ export function NewSidebar() {
   const [activeResult, setActiveResult] = React.useState(0);
   const [modLabel, setModLabel] = React.useState("Ctrl");
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+
+  // Row hover card: delayed like DSH's HoverCard so sweeping the list does not flash a
+  // card on every row passed over.
+  const [hoveredRow, setHoveredRow] = React.useState<{ task: Task; anchor: DOMRect } | null>(null);
+  const hoverTimer = React.useRef<number | null>(null);
+
+  const clearHoverTimer = React.useCallback(() => {
+    if (hoverTimer.current !== null) {
+      window.clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+  }, []);
+
+  const onRowEnter = React.useCallback((task: Task, element: HTMLElement) => {
+    clearHoverTimer();
+    const anchor = element.getBoundingClientRect();
+    hoverTimer.current = window.setTimeout(() => setHoveredRow({ task, anchor }), 350);
+  }, [clearHoverTimer]);
+
+  const onRowLeave = React.useCallback(() => {
+    clearHoverTimer();
+    setHoveredRow(null);
+  }, [clearHoverTimer]);
+
+  React.useEffect(() => clearHoverTimer, [clearHoverTimer]);
   const settingsButtonRef = React.useRef<HTMLButtonElement>(null);
   const searchButtonRef = React.useRef<HTMLButtonElement>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
@@ -653,6 +721,10 @@ export function NewSidebar() {
                 aria-current={task.id === activeTaskId ? "page" : undefined}
                 data-task-id={task.id}
                 data-testid="sidebar-task-row"
+                onMouseEnter={(event) => onRowEnter(task, event.currentTarget)}
+                onMouseLeave={onRowLeave}
+                onFocus={(event) => onRowEnter(task, event.currentTarget)}
+                onBlur={onRowLeave}
               >
                 <span className={`${styles.statusDot} ${statusClass(task)}`} />
                 <span className={styles.taskName}>{taskName(task)}</span>
@@ -826,6 +898,8 @@ export function NewSidebar() {
         onClose={closeSettings}
         returnFocusRef={settingsButtonRef}
       />
+
+      {hoveredRow ? <TaskHoverCard task={hoveredRow.task} anchor={hoveredRow.anchor} /> : null}
     </div>
   );
 }
