@@ -358,6 +358,13 @@ export default function NewTaskPage() {
           seedFirstIntent: run,
           coverageEnabled,
         });
+        // 输入框里的这句话就是与模型对话的第一条消息（参照 DSH：新建会话时输入即首条消息）。
+        // 任务已经建好，首条消息失败不回滚，只提示手动重发。
+        try {
+          await api.chat(text, String(task.id));
+        } catch (error) {
+          toast.error("任务已创建，但首条消息发送失败：" + (error as Error).message);
+        }
         toast.success(run ? "任务已创建，agent 开始执行" : "任务已创建");
         router.push(`/function/tasks/detail?id=${encodeURIComponent(task.id)}`);
       } catch (error) {

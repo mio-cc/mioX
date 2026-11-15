@@ -1514,10 +1514,12 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   // Turn boundaries for the navigation rail: a turn opens on a user row and closes
   // on the result row that carries the answer (reference: TurnNavigator rail).
   const turns = React.useMemo(() => {
-    const list: Array<{ index: number; startSeq: number; endSeq: number }> = [];
+    const list: Array<{ index: number; startSeq: number; endSeq: number; label: string }> = [];
     for (const activity of transcript) {
       if (activity.kind === "user") {
-        list.push({ index: list.length, startSeq: activity.seq, endSeq: activity.seq });
+        // The label feeds the rail's hover preview (reference: DSH TurnMark preview):
+        // the reader needs to know which turn a mark is before clicking it.
+        list.push({ index: list.length, startSeq: activity.seq, endSeq: activity.seq, label: activity.summary });
       } else if (activity.kind === "result" && list.length > 0) {
         list[list.length - 1].endSeq = activity.seq;
       }
@@ -1525,6 +1527,8 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     return list;
   }, [transcript]);
   const [activeTurn, setActiveTurn] = React.useState(0);
+  // Hovered turn mark, for the rail's preview card.
+  const [turnPreview, setTurnPreview] = React.useState<{ turn: number; x: number; y: number } | null>(null);
 
   // Jump to a turn: release follow first, otherwise streaming growth would drag the
   // reader back to the floor right after the jump.
@@ -2262,21 +2266,48 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
               with the transcript. */}
           {turns.length > 1 ? (
             <div className={styles.turnRail} data-testid="turn-rail" role="navigation" aria-label="回合导航">
-              <div className={styles.turnRailScroller}>
+              <div className={styles.turnRailScroller} data-testid="turn-rail-scroller">
                 {turns.map((turn) => (
                   <button
                     key={turn.index}
                     type="button"
                     className={styles.turnMark}
                     data-active={turn.index === activeTurn ? "true" : "false"}
-                    aria-label={`跳到第 ${turn.index + 1} 回合`}
+                    aria-label={`跳到第 ${turn.index + 1} 回合：${turn.label}`}
                     aria-current={turn.index === activeTurn ? "true" : undefined}
-                    title={`第 ${turn.index + 1} 回合`}
+                    aria-describedby={turnPreview?.turn === turn.index ? "turn-rail-preview" : undefined}
                     onClick={() => scrollToTurn(turn.index)}
+                    onMouseEnter={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setTurnPreview({ turn: turn.index, x: rect.left, y: rect.top });
+                    }}
+                    onMouseLeave={() => setTurnPreview(null)}
+                    onFocus={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setTurnPreview({ turn: turn.index, x: rect.left, y: rect.top });
+                    }}
+                    onBlur={() => setTurnPreview(null)}
                     data-testid="turn-mark"
                   />
                 ))}
               </div>
+              {turnPreview ? (
+                <div
+                  id="turn-rail-preview"
+                  className={styles.turnPreview}
+                  role="tooltip"
+                  data-testid="turn-rail-preview"
+                  style={{
+                    left: Math.max(8, turnPreview.x - 268),
+                    top: Math.max(8, turnPreview.y - 6),
+                  }}
+                >
+                  <span className={styles.turnPreviewIndex}>第 {turnPreview.turn + 1} 回合</span>
+                  <span className={styles.turnPreviewLabel}>
+                    {turns[turnPreview.turn]?.label || "（空）"}
+                  </span>
+                </div>
+              ) : null}
             </div>
           ) : null}
           {showJump ? (

@@ -3132,8 +3132,10 @@ function CreateTaskSheet({
   }
 
   async function createTask() {
-    if (!description.trim() || !goal.trim()) {
-      toast.error("请填写描述与目标");
+    // 只要求一句话：它既是任务描述，也是对话的第一条消息。目标留空时用它兜底，
+    // 不再强迫用户把同一件事写两遍（DSH 新建会话只有一个输入框）。
+    if (!description.trim()) {
+      toast.error("请输入你想让 agent 做什么");
       return;
     }
     if (sourceTaskIDs.length > MAX_SOURCE_TASKS) {
@@ -3144,11 +3146,11 @@ function CreateTaskSheet({
     try {
       const timeoutSec = Math.max(0, Math.floor(Number(timeoutMin) || 0)) * 60;
       const heartbeatSec = Math.max(10, Math.floor(Number(heartbeatMin) || 10)) * 60; // 下限 10min，与后端归一一致
-      await api.createTask({
+      const created = await api.createTask({
         name: name.trim(),
         categoryId: categoryID,
         description: description.trim(),
-        goal: goal.trim(),
+        goal: goal.trim() || description.trim(),
         llmProfileIds: llmProfileIDs.map(Number),
         sourceTaskIds: sourceTaskIDs,
         companyIds: companyIDs,
@@ -3160,8 +3162,17 @@ function CreateTaskSheet({
           .map((r) => ({ ...r, pattern: r.pattern.trim() }))
           .filter((r) => r.pattern !== ""),
       });
-      toast.success("任务已创建");
-      setName("");
+      // 新建任务的输入就是与模型对话的第一句话（参照 DSH：新建会话时输入框内容即首条消息，
+      // 会话标题由它派生）。任务已经建好，首条消息发送失败不该回滚创建，只提示用户手动重发。
+      const firstMessage = description.trim();
+      if (firstMessage && created?.id) {
+        try {
+          await api.chat(firstMessage, String(created.id));
+        } catch (e) {
+          toast.error("任务已创建，但首条消息发送失败：" + (e as Error).message);
+        }
+      }
+      toast.success("任务已创建");      setName("");
       setCategoryID(undefined);
       setDescription("");
       setGoal("");
@@ -3178,6 +3189,10 @@ function CreateTaskSheet({
       draftIdRef.current = "";
       setOpen(false);
       onCreated();
+      // 直接进到会话里：首条消息已经发出去了，停在列表页看不到它（DSH 新建后即进入会话）。
+      if (created?.id) {
+        window.location.href = `/function/tasks/detail?id=${encodeURIComponent(String(created.id))}`;
+      }
     } catch (e) {
       toast.error("创建失败：" + (e as Error).message);
     } finally {
@@ -3243,11 +3258,11 @@ function CreateTaskSheet({
               <FieldDescription>可选，单个分类；用于任务列表筛选和归档，不影响 Agent 执行。</FieldDescription>
             </Field>
             <div className="grid gap-2">
-              <Label htmlFor="description">描述</Label>
+              <Label htmlFor="description">你想让 agent 做什么</Label>
               <Textarea
                 id="description"
                 className="min-h-32"
-                placeholder="测试对象与背景，例如：测试 example.com 这个站点"
+                placeholder="这句话会作为对话的第一条消息直接发给模型，例如：帮我测一下 example.com 的登录接口"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -3278,11 +3293,11 @@ function CreateTaskSheet({
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="goal">目标</Label>
+              <Label htmlFor="goal">目标（可选）</Label>
               <Textarea
                 id="goal"
-                className="min-h-32"
-                placeholder="要达成什么，例如：拿下后台管理权限、获取服务器权限"
+                className="min-h-24"
+                placeholder="留空则沿用上面那句话。填了才会单独作为规划目标"
                 value={goal}
                 onChange={(e) => setGoal(e.target.value)}
               />
