@@ -1,0 +1,173 @@
+/* 轨迹时间线（harness tokens） */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  min-height: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modes {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 8px;
+}
+
+.mode {
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mode:hover {
+  color: var(--ax-text-primary);
+}
+
+.mode[data-active] {
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+}
+
+.stats {
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plot {
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+}
+
+.laneLabels {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  justify-content: space-around;
+  padding: 4px 0;
+  width: 32px;
+}
+
+.laneLabel {
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 18px;
+  text-align: right;
+}
+
+.track {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+  border-left: 1px solid var(--ax-border-subtle);
+  min-width: 0;
+}
+
+.lane {
+  position: relative;
+  height: 18px;
+  background: color-mix(in srgb, var(--ax-bg-elevated) 45%, transparent);
+  border-radius: 3px;
+}
+
+.span {
+  position: absolute;
+  top: 2px;
+  height: 14px;
+  min-width: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--ax-text-tertiary);
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.span:hover {
+  opacity: 1;
+  outline: 1px solid var(--ax-text-primary);
+}
+
+.span[data-kind="tool_use"],
+.span[data-kind="tool_result"] {
+  background: var(--ax-info);
+}
+
+.span[data-kind="user"],
+.span[data-kind="assistant"],
+.span[data-kind="reasoning"] {
+  background: var(--ax-text-secondary);
+}
+
+.span[data-error] {
+  background: var(--ax-danger);
+}
+
+.boundary {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ax-border-strong);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  padding: 5px 9px;
+  border: 1px solid var(--ax-border-strong);
+  border-radius: 7px;
+  background: var(--ax-bg-panel, var(--ax-bg-elevated));
+  box-shadow: 0 10px 26px rgb(0 0 0 / 26%);
+  pointer-events: none;
+}
+
+.tooltipKind {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--ax-bg-base);
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 10px;
+}
+
+.tooltipLabel {
+  overflow: hidden;
+  color: var(--ax-text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: 40px;
+  color: var(--ax-text-tertiary);
+  font-size: 13px;
+  text-align: center;
+}

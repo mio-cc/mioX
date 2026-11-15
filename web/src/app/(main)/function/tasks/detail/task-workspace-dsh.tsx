@@ -37,6 +37,7 @@ import { TeamTab } from "./_tabs/team-tab";
 import { FindingsTab } from "./_tabs/findings-tab";
 import { GraphTab } from "./_tabs/graph-tab";
 import { ReportTab } from "./_tabs/report-tab";
+import { TrajectoryTimeline } from "./trajectory-timeline";
 import {
   ModelSelect,
   buildModelGroups,
@@ -1477,6 +1478,16 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     setShowJump(false);
   }, []);
 
+  // Trajectory bars jump to their operation in the chat: switch back to the chat tab,
+  // then scroll the row carrying that activity seq into view.
+  const jumpToActivity = React.useCallback((seq: number) => {
+    setTab("chat");
+    window.requestAnimationFrame(() => {
+      const row = document.querySelector(`[data-seq="${seq}"]`);
+      row?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, []);
+
   // The chat composer always targets the main-agent lane; worker lanes are
   // read-only transcripts, so the segment falls back to the newest main lane.
   const currentSeq = React.useMemo(() => {
@@ -2458,14 +2469,7 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
 
       {tab === "trajectory" ? (
         <div className={styles.panel}>
-          <div className={styles.chatColumn}>
-            {activities.map((activity) => (
-              <div className={styles.reasoning} key={activity.seq}>
-                <span style={{ fontFamily: "var(--ax-font-family-code)", marginRight: 8 }}>{activity.seq}</span>
-                {activity.worker} · {activity.kind} · {activity.summary}
-              </div>
-            ))}
-          </div>
+          <TrajectoryTimeline activities={activities} onJump={(seq) => jumpToActivity(seq)} />
         </div>
       ) : null}
 
