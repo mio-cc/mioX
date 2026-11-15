@@ -297,7 +297,8 @@ function isActivePath(pathname: string, href: string): boolean {
 /* Overflow this small hides no meaningful tail; scrolling for it reads as an
    accidental jitter, so the title stays put (reference: DSH MIN_TITLE_REVEAL_PX). */
 const MIN_TITLE_REVEAL_PX = 8;
-/* Marquee travel speed: slow enough to read the text as it passes. */
+/* Folded category groups, persisted per browser. */
+const SIDEBAR_COLLAPSED_KEY = "miox.sidebar.collapsedGroups";/* Marquee travel speed: slow enough to read the text as it passes. */
 const TITLE_MARQUEE_PX_PER_MS = 0.03;
 
 /**
@@ -441,6 +442,32 @@ export function NewSidebar() {  const pathname = usePathname();
   const [activeResult, setActiveResult] = React.useState(0);
   const [modLabel, setModLabel] = React.useState("Ctrl");
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+
+  // Folded sidebar groups (category buckets). Persisted per browser.
+  const [collapsedGroups, setCollapsedGroups] = React.useState<ReadonlySet<string>>(() => {
+    if (typeof window === "undefined") return new Set<string>();
+    try {
+      const raw = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
+
+  const toggleGroup = React.useCallback((key: string) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, JSON.stringify([...next]));
+      } catch {
+        // storage unavailable: keep the in-memory state
+      }
+      return next;
+    });
+  }, []);
 
   // Row hover card: delayed like DSH's HoverCard so sweeping the list does not flash a
   // card on every row passed over.
@@ -730,6 +757,25 @@ export function NewSidebar() {  const pathname = usePathname();
   const visibleTasks = onlyRunning
     ? tasks.filter((task) => task.status === "running" && !task.paused)
     : tasks;
+  // Group the list by task category (reference: DSH groups sessions under their
+  // workspace/project with a collapsible folder row). Collapse state is per browser so
+  // a folded group stays folded across reloads.
+  const groups = React.useMemo(() => {
+    const byKey = new Map<string, { key: string; label: string; tasks: Task[] }>();
+    for (const task of visibleTasks) {
+      const key = task.category_id != null ? `c:${task.category_id}` : "none";
+      const label = task.category_id != null ? task.category_name?.trim() || `分类 #${task.category_id}` : "未分类";
+      const bucket = byKey.get(key);
+      if (bucket) bucket.tasks.push(task);
+      else byKey.set(key, { key, label, tasks: [task] });
+    }
+    // Named categories first (stable by label), the ungrouped bucket last.
+    return [...byKey.values()].sort((a, b) => {
+      if (a.key === "none") return 1;
+      if (b.key === "none") return -1;
+      return a.label.localeCompare(b.label, "zh-CN");
+    });
+  }, [visibleTasks]);
   const moreItems: SidebarMenuItem[] = moreLinks.map((item) => ({
     id: item.href,
     label: item.label,
@@ -824,15 +870,35 @@ export function NewSidebar() {  const pathname = usePathname();
           {visibleTasks.length === 0 ? (
             <div className={styles.emptyTask}>{onlyRunning ? "没有运行中的任务" : "暂无任务"}</div>
           ) : (
-            visibleTasks.map((task) => (
-              <TaskRowItem
-                key={task.id}
-                task={task}
-                active={task.id === activeTaskId}
-                onHover={onRowEnter}
-                onLeave={onRowLeave}
-              />
-            ))
+            groups.map((group) => {
+              const collapsed = collapsedGroups.has(group.key);
+              return (
+                <div className={styles.taskGroup} key={group.key} data-testid="sidebar-group" data-group-key={group.key}>
+                  <button
+                    type="button"
+                    className={styles.groupRow}
+                    aria-expanded={!collapsed}
+                    data-testid="sidebar-group-toggle"
+                    onClick={() => toggleGroup(group.key)}
+                  >
+                    <ChevronUp size={11} className={styles.groupChevron} data-collapsed={collapsed || undefined} aria-hidden="true" />
+                    <span className={styles.groupLabel}>{group.label}</span>
+                    <span className={styles.groupCount}>{group.tasks.length}</span>
+                  </button>
+                  {collapsed
+                    ? null
+                    : group.tasks.map((task) => (
+                        <TaskRowItem
+                          key={task.id}
+                          task={task}
+                          active={task.id === activeTaskId}
+                          onHover={onRowEnter}
+                          onLeave={onRowLeave}
+                        />
+                      ))}
+                </div>
+              );
+            })
           )}
         </div>
       </div>
