@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Loader2,
   PanelRight,
+  Rows2,
+  Rows3,
   Paperclip,
   Pause,
   Send,
@@ -87,6 +89,9 @@ type SessionOption = {
   readonly meta?: string;
   readonly live?: boolean;
 };
+
+// 过程行：紧凑视图下，已完成回合的这些行会被折叠成一行摘要。
+const PROCESS_KINDS = new Set<Activity["kind"]>(["thinking", "tool_use", "tool_result", "usage"]);
 
 const GROUP_LABEL: Record<SessionOption["group"], string> = {
   mainagent: "主 Agent",
@@ -1526,6 +1531,35 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     }
     return list;
   }, [transcript]);
+  // 紧凑视图：已完成回合的过程行折叠（参照 DSH transcriptView）。默认标准。
+  const [compactView, setCompactView] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("miox.chat.compactView") === "1";
+  });
+  const [expandedFolds, setExpandedFolds] = React.useState<ReadonlySet<number>>(new Set());
+  React.useEffect(() => {
+    try {
+      window.localStorage.setItem("miox.chat.compactView", compactView ? "1" : "0");
+    } catch {
+      // storage unavailable: keep the in-memory state
+    }
+  }, [compactView]);
+
+  // One render group per turn, so a finished turn's process rows can fold on their own.
+  const turnGroups = React.useMemo(() => {
+    const groups: Array<{ index: number; rows: Activity[] }> = [];
+    let current: { index: number; rows: Activity[] } = { index: 0, rows: [] };
+    for (const activity of transcript) {
+      if (activity.kind === "user" && current.rows.length > 0) {
+        groups.push(current);
+        current = { index: groups.length, rows: [] };
+      }
+      current.rows.push(activity);
+    }
+    if (current.rows.length > 0) groups.push(current);
+    return groups;
+  }, [transcript]);
+
   const [activeTurn, setActiveTurn] = React.useState(0);
   // Hovered turn mark, for the rail's preview card.
   const [turnPreview, setTurnPreview] = React.useState<{ turn: number; x: number; y: number } | null>(null);
@@ -2177,6 +2211,21 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
               {feedState.label}
             </span>
             <span className={styles.meta}>tokens {fmtTokens(tokenTotal)}</span>
+            {/* Transcript view mode (reference: DSH `transcriptView` policy). Compact folds
+                the process rows of finished turns so a long conversation stays scannable;
+                the live turn is never folded. */}
+            <button
+              type="button"
+              className={`${styles.action} ${styles.actionIcon}`}
+              onClick={() => setCompactView((value) => !value)}
+              aria-pressed={compactView}
+              aria-label={compactView ? "切换到标准视图" : "切换到紧凑视图"}
+              title={compactView ? "紧凑：已完成回合的过程已折叠" : "标准：显示全部过程"}
+              data-action="view-mode"
+              data-testid="chat-view-mode"
+            >
+              {compactView ? <Rows3 size={15} /> : <Rows2 size={15} />}
+            </button>
             {/* No pause control here: stopping a turn belongs to the composer, and
                 task-level pause/resume is available from the command palette. */}
             {!rightOpen ? (
@@ -2256,7 +2305,29 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
                   }}
                 />
               ) : null}
-              {buildActivityNodes(transcript, taskId, streamingSeq, mainSegOf(currentKey), () => { void loadActivity(currentKey); })}
+              {turnGroups.map((group, groupIndex) => {
+                const isLiveTurn = groupIndex === turnGroups.length - 1;
+                const processCount = group.rows.filter((row) => PROCESS_KINDS.has(row.kind)).length;
+                const folded = compactView && !isLiveTurn && processCount > 0 && !expandedFolds.has(group.index);
+                const rows = folded ? group.rows.filter((row) => !PROCESS_KINDS.has(row.kind)) : group.rows;
+                return (
+                  <React.Fragment key={`turn-${group.index}`}>
+                    {folded ? (
+                      <button
+                        type="button"
+                        className={styles.foldBar}
+                        onClick={() => setExpandedFolds((prev) => new Set(prev).add(group.index))}
+                        data-action="unfold-turn"
+                        data-testid="chat-fold-bar"
+                      >
+                        <ChevronDown size={12} aria-hidden="true" />
+                        <span>本回合 {processCount} 步过程已折叠</span>
+                      </button>
+                    ) : null}
+                    {buildActivityNodes(rows, taskId, streamingSeq, mainSegOf(currentKey), () => { void loadActivity(currentKey); })}
+                  </React.Fragment>
+                );
+              })}
               {sending ? <RunningStatus startedAt={turnStartedAt} /> : null}
             </div>
           </div>

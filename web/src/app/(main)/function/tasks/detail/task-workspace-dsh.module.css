@@ -2825,3 +2825,26 @@
   color: var(--ax-danger);
   font-size: 12px;
 }
+
+/* 已完成回合的折叠条（参照 DSH：折叠只压过程，回复仍然可见） */
+.foldBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 6px 0;
+  padding: 5px 10px;
+  border: 1px dashed var(--ax-border-subtle);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.foldBar:hover {
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-secondary);
+}
