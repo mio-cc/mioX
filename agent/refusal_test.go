@@ -66,15 +66,30 @@ func TestDetectRefusalRequiresTwoSignals(t *testing.T) {
 }
 
 func TestNextRefusalPlanTerminates(t *testing.T) {
-	want := []string{InterventionRetry, InterventionReframe, InterventionReframe, InterventionGiveUp, InterventionGiveUp}
+	want := []string{
+		InterventionRetry,
+		InterventionReframe,
+		InterventionStrip,
+		InterventionFallback,
+		InterventionGiveUp,
+		InterventionGiveUp,
+	}
 	for attempt, expected := range want {
 		plan := NextRefusalPlan(attempt)
 		if plan.Intervention != expected {
 			t.Fatalf("attempt %d => %q want %q", attempt, plan.Intervention, expected)
 		}
-		if plan.Intervention == InterventionGiveUp && plan.Suffix != "" {
-			t.Fatalf("give_up must not carry a suffix")
+		if plan.Intervention == InterventionGiveUp && (plan.Suffix != "" || plan.ReplaceMessage != "" || plan.UseFallback) {
+			t.Fatalf("give_up must carry no intervention payload")
 		}
+	}
+	// L2 replaces the message instead of appending to it.
+	if p := NextRefusalPlan(2); p.ReplaceMessage == "" || p.Suffix != "" {
+		t.Fatalf("strip plan must replace the message and not append: %+v", p)
+	}
+	// L3 must ask for the fallback provider.
+	if p := NextRefusalPlan(3); !p.UseFallback {
+		t.Fatalf("fallback plan must set UseFallback: %+v", p)
 	}
 	// Negative input must not panic or loop.
 	if got := NextRefusalPlan(-5); got.Intervention != InterventionRetry {

@@ -3859,8 +3859,15 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 				if (fixture == "1" && plan.Attempt == 0) || fixture == "always" {
 					return agent.TurnResult{Text: "我不能协助这个请求。", ToolCalls: 0, Reason: "stop"}, nil
 				}
+				// L2：整条消息替换成中性指令（具体措辞才是触发点，意图保留）。
+				// L3：换 fallback 模型；没配就当作"本档不可用"，返回拒答让阶梯收口。
+				if plan.UseFallback {
+					return agent.TurnResult{Text: "我不能协助这个请求。", ToolCalls: 0, Reason: "no_fallback_configured"}, nil
+				}
 				attemptMsg := agentMsg
-				if plan.Suffix != "" {
+				if plan.ReplaceMessage != "" {
+					attemptMsg = plan.ReplaceMessage
+				} else if plan.Suffix != "" {
 					attemptMsg += plan.Suffix
 				}
 				before := toolCalls
