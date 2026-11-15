@@ -772,6 +772,28 @@ CREATE INDEX IF NOT EXISTS idx_ts_domain  ON task_scope(domain) WHERE kind IN ('
 CREATE INDEX IF NOT EXISTS idx_ts_net     ON task_scope USING GIST(net inet_ops) WHERE kind IN ('ip','cidr');
 CREATE INDEX IF NOT EXISTS idx_ts_company ON task_scope(company_id) WHERE kind = 'company';
 
+-- ---------------------------------------------------------------------
+-- 任务级「目标」(goal) —— 对齐 DSH @deepseek-ai/dsh-goal 的 goal 投影:
+-- 一个会话/任务只有【一个】目标,由 `/goal <objective>` 命令创建,带阶段
+-- (active/paused/blocked/complete) 与单调递增的 revision(CAS 令牌,防止用
+-- 过期快照覆盖新目标)。与 planner 的目标节点(exploration_nodes kind='goal',
+-- 是拆解出来的子目标、可有多条)是两回事:这里是操作员下的那一条总目标。
+-- task_id UNIQUE:每任务最多一条;任务删除时级联删除。
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS task_goals (
+    id         BIGSERIAL PRIMARY KEY,
+    task_id    BIGINT NOT NULL UNIQUE REFERENCES tasks(id) ON DELETE CASCADE,
+    objective  TEXT NOT NULL,
+    phase      TEXT NOT NULL DEFAULT 'active'
+                 CHECK (phase IN ('active','paused','blocked','complete')),
+    revision   BIGINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+DROP TRIGGER IF EXISTS trg_task_goals_upd ON task_goals;
+CREATE TRIGGER trg_task_goals_upd BEFORE UPDATE ON task_goals
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- =====================================================================
 -- E. Agents / 提示词模板 / 变量目录
 -- =====================================================================

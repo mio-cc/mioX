@@ -35,7 +35,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { api, sseUrl } from "@/lib/api";
 import { ScrollFollow, scrollMetrics } from "@/lib/scroll-follow";
 import { MOCK } from "@/lib/mock/enabled";
-import type { Activity, ChatAttachment, LLMProfile, Task, TaskNode } from "@/lib/types";
+import type { Activity, ChatAttachment, GoalSnapshot, LLMProfile, Task, TaskNode } from "@/lib/types";
 import { TeamTab } from "./_tabs/team-tab";
 
 import { FindingsTab } from "./_tabs/findings-tab";
@@ -48,6 +48,7 @@ import {
   type GlobalLLM,
   type ModelOption,
 } from "./_composer/model-picker";
+import { GoalBar } from "./_composer/goal-bar";
 import { CommandMenu, type CommandItem } from "./_composer/slash-menu";
 import styles from "./task-workspace-dsh.module.css";
 
@@ -1029,6 +1030,18 @@ function EmptyHero({ onPick }: { readonly onPick: (text: string) => void }) {
 }
 
 /**
+ * `/goal <objective>` 命令行 → 命令 chip + 目标正文。
+ * DSH GoalCommandInputView.tsx:6/13-18:这条命令在对话流里是**右对齐气泡**,
+ * 前导 `/goal` token 渲染成命令 chip(其余当普通文本),且**没有**普通消息动作。
+ * 非 /goal 文本返回 null,调用方照旧渲染普通人类气泡。
+ */
+function goalCommandParts(text: string): { chip: string; rest: string } | null {
+  const match = /^(\/goal)(\s+)([\s\S]*)$/.exec(text);
+  if (!match) return null;
+  return { chip: match[1], rest: match[3] };
+}
+
+/**
  * A human turn, editable in place. Editing rewinds the lane to just before this
  * message and resends the edited text, so the model never sees both versions
  * (reference: message editing in codex / zcode; DSH cannot do this at all).
@@ -1048,6 +1061,7 @@ function UserRow({
   const [draft, setDraft] = React.useState(activity.summary ?? "");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
+  const goalCommand = goalCommandParts(activity.summary ?? "");
 
   const save = async () => {
     const text = draft.trim();
@@ -1075,21 +1089,44 @@ function UserRow({
 
   if (!editing) {
     return (
-      <div className={styles.userRow} data-seq={activity.seq} data-turn-start={activity.seq}>
-        <div className={styles.bubble}>{activity.summary}</div>
-        <button
-          type="button"
-          className={styles.userEdit}
-          title="编辑并重新发送"
-          aria-label="编辑这条消息"
-          data-testid="user-edit"
-          onClick={() => {
-            setDraft(activity.summary ?? "");
-            setEditing(true);
-          }}
+      <div
+        className={styles.userRow}
+        data-seq={activity.seq}
+        data-turn-start={activity.seq}
+        {...(goalCommand ? { "data-command-input": "" } : {})}
+      >
+        <div
+          className={styles.bubble}
+          data-testid={goalCommand ? "goal-command-bubble" : undefined}
         >
-          编辑
-        </button>
+          {goalCommand ? (
+            <>
+              <span className={styles.goalChip} data-testid="goal-command-chip">
+                {goalCommand.chip}
+              </span>
+              {goalCommand.rest}
+            </>
+          ) : (
+            activity.summary
+          )}
+        </div>
+        {/* `/goal` 命令气泡没有普通消息动作(DSH GoalCommandInputView.tsx:13-18):
+            编辑它等于截断会话,而目标本身要改应该走 GoalBar。 */}
+        {goalCommand ? null : (
+          <button
+            type="button"
+            className={styles.userEdit}
+            title="编辑并重新发送"
+            aria-label="编辑这条消息"
+            data-testid="user-edit"
+            onClick={() => {
+              setDraft(activity.summary ?? "");
+              setEditing(true);
+            }}
+          >
+            编辑
+          </button>
+        )}
       </div>
     );
   }
@@ -1339,6 +1376,51 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     }
   }, [taskId]);
 
+  // 任务级「目标」(/goal)的动作。DSH 的语义:创建只走 `/goal <objective>` 命令
+  // (goal-command-input.ts:9),GoalBar 本身只提供 编辑/清除/暂停/恢复
+  // (GoalBar.tsx:1-10),所以这里没有"新建目标"按钮。
+  const [goalBusy, setGoalBusy] = React.useState(false);
+  const [goalError, setGoalError] = React.useState("");
+  // 刚清除掉的目标 id:5s 轮询的旧响应不许把它复活(见 loadTask 的 revision 合并)。
+  const clearedGoalRef = React.useRef<string | null>(null);
+  // 返回是否成功:GoalBar 的编辑表单靠它决定收不收起来(DSH GoalBar.tsx:74-79)。
+  const runGoalAction = React.useCallback(async (action: () => Promise<GoalSnapshot | null>): Promise<boolean> => {
+    setGoalBusy(true);
+    setGoalError("");
+    try {
+      const next = await action();
+      setTask((current) => (current ? { ...current, goal_state: next } : current));
+      return true;
+    } catch (goalFailure) {
+      setGoalError((goalFailure as Error).message);
+      toast.error(`目标操作失败：${(goalFailure as Error).message}`);
+      return false;
+    } finally {
+      setGoalBusy(false);
+    }
+  }, []);
+  const editGoal = React.useCallback(
+    (objective: string) => runGoalAction(() => api.editTaskGoal(taskId, objective, task?.goal_state?.revision)),
+    [runGoalAction, task?.goal_state?.revision, taskId],
+  );
+  const pauseGoal = React.useCallback(
+    () => void runGoalAction(() => api.pauseTaskGoal(taskId)),
+    [runGoalAction, taskId],
+  );
+  const resumeGoal = React.useCallback(
+    () => void runGoalAction(() => api.resumeTaskGoal(taskId)),
+    [runGoalAction, taskId],
+  );
+  const clearGoal = React.useCallback(
+    () =>
+      void runGoalAction(() => {
+        // 记下被清除的目标身份,避免在途的旧轮询把它画回来。
+        clearedGoalRef.current = task?.goal_state?.id ?? null;
+        return api.clearTaskGoal(taskId).then(() => null);
+      }),
+    [runGoalAction, task?.goal_state?.id, taskId],
+  );
+
   // A turn ends when its `result` frame lands (that frame carries the answer).
   // Clearing `sending` here - instead of right after the 202 - is what lets the
   // composer show a working stop control for the whole turn.
@@ -1386,7 +1468,25 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   const attachmentSeqRef = React.useRef(0);
 
   const loadTask = React.useCallback(() => {
-    api.task(taskId).then(setTask).catch((e) => setError((e as Error).message));
+    api
+      .task(taskId)
+      .then((next) => {
+        setTask((current) => {
+          if (!current) return next;
+          // 目标(revision 单调令牌)与轮询有竞态:一个在 pause/clear 之前发出的
+          // 5s 轮询响应可能在写入之后才回来,把界面倒回旧状态。用 revision 比较
+          // 丢弃更旧的快照;清除过的那条 id 也不许被旧响应复活。
+          const local = current.goal_state ?? null;
+          const incoming = next.goal_state ?? null;
+          const clearedId = clearedGoalRef.current;
+          const incomingStale =
+            incoming !== null && (incoming.id === clearedId || (local !== null && incoming.revision < local.revision));
+          if (incomingStale) return { ...next, goal_state: local };
+          if (incoming !== null && incoming.id !== clearedId) clearedGoalRef.current = null;
+          return next;
+        });
+      })
+      .catch((e) => setError((e as Error).message));
   }, [taskId]);
 
   const loadSessions = React.useCallback(() => {
@@ -1918,6 +2018,41 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   const send = React.useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
+    // `/goal <objective>` 是**命令**,不是发给模型的消息(DSH goal-command-input.ts:9
+    // `GOAL_COMMAND='goal'`:目标由 /goal 命令创建,输入框只负责把命令发出去)。
+    // 走目标通道而不是 /api/chat:模型不该看见这条命令;服务端会把它记成一条人类
+    // 回合,所以刷新后气泡仍在(GoalCommandInputView.tsx:13-18)。
+    const goalMatch = /^\/goal(?:\s+([\s\S]*))?$/.exec(text);
+    if (goalMatch) {
+      const objective = (goalMatch[1] ?? "").trim();
+      setCommandDismissed(false);
+      if (objective === "") {
+        toast.info("用法：/goal <要达成的目标>");
+        return;
+      }
+      setGoalBusy(true);
+      setGoalError("");
+      try {
+        const created = await api.setTaskGoal(taskId, objective);
+        setTask((current) => (current ? { ...current, goal_state: created } : current));
+        setInput("");
+        setAttachments([]);
+        // 乐观人类回合:服务端写的是同一条 `/goal <objective>` 活动,回声到达即替换
+        // (与普通消息同一条清理逻辑,见下方 echoed effect)。
+        setOptimistic([
+          { seq: -1, worker: "mainagent", ts: new Date().toISOString(), kind: "user", summary: `/goal ${objective}` },
+        ]);
+        jumpToBottom(true);
+        void loadActivity(currentKey);
+      } catch (goalFailure) {
+        setGoalError((goalFailure as Error).message);
+        toast.error(`设置目标失败：${(goalFailure as Error).message}`);
+      } finally {
+        setGoalBusy(false);
+        window.requestAnimationFrame(() => textareaRef.current?.focus());
+      }
+      return;
+    }
     // The POST returns 202 immediately; the turn itself runs server-side and
     // streams back over SSE. `sending` therefore means "a turn is in flight",
     // not "the request is in flight" - it is cleared when this turn's `result`
@@ -2093,6 +2228,15 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   const commands = React.useMemo<CommandItem[]>(
     () => [
       {
+        // `/goal <objective>`:目标命令(DSH GOAL_COMMAND='goal')。这里只把草稿换成
+        // "/goal ",真正的创建在 send() 里 —— 带参数的命令不能"选中就执行"。
+        name: "/goal",
+        title: "设置目标",
+        hint: "写下要达成的最终结果，显示在输入框上方",
+        draft: "/goal ",
+        run: () => undefined,
+      },
+      {
         name: "/clear",
         title: "清空输入",
         hint: "清掉当前草稿，不影响会话",
@@ -2152,7 +2296,8 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   }, [commandsOpen, slashQuery]);
 
   const runCommand = React.useCallback((item: CommandItem) => {
-    setInput("");
+    // 带参数的命令把草稿写成 "/goal " 让用户继续输入;纯动作命令清空草稿。
+    setInput(item.draft ?? "");
     setCommandDismissed(false);
     setCommandIndex(0);
     if (item.disabled) {
@@ -2440,6 +2585,17 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
             </div>
           ) : (
           <div className={styles.composerWrap}>
+            {/* GoalBar 停在输入框上方(input dock strip,DSH GoalBar.tsx:1-10);
+                没有目标时组件自己返回 null,这里不留空壳。 */}
+            <GoalBar
+              goal={task?.goal_state}
+              busy={goalBusy}
+              error={goalError}
+              onEdit={editGoal}
+              onPause={pauseGoal}
+              onResume={resumeGoal}
+              onClear={clearGoal}
+            />
             <div className={`${styles.composer} ${sending ? styles.composerBusy : ""}`} data-testid="composer">
               {commandsOpen ? (
                 <CommandMenu

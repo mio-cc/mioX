@@ -752,6 +752,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/goals", s.addGoal)                        // 目标管理:人工新增目标(复活任务)
 	mux.HandleFunc("PATCH /api/tasks/{id}/goals/{gid}", s.editGoal)                // 目标管理:修改目标(复活任务)
 	mux.HandleFunc("DELETE /api/tasks/{id}/goals/{gid}", s.deleteGoal)             // 目标管理:硬删除目标(不复活)
+	// 任务级「目标」(/goal 命令,DSH @deepseek-ai/dsh-goal):每任务一条、带阶段与 revision。
+	// 与上面的 goals(planner 目标节点,可多条)是两套东西。
+	mux.HandleFunc("GET /api/tasks/{id}/goal", s.taskGoalGet)                      // 读取目标;无目标 → {"goal":null}
+	mux.HandleFunc("POST /api/tasks/{id}/goal", s.taskGoalSet)                     // `/goal <objective>`:创建或替换
+	mux.HandleFunc("PATCH /api/tasks/{id}/goal", s.taskGoalEdit)                   // 改 objective(revision+1)
+	mux.HandleFunc("POST /api/tasks/{id}/goal/pause", s.taskGoalPause)             // 暂停目标(phase=paused)
+	mux.HandleFunc("POST /api/tasks/{id}/goal/resume", s.taskGoalResume)           // 恢复目标(phase=active)
+	mux.HandleFunc("POST /api/tasks/{id}/goal/clear", s.taskGoalClear)             // 清除目标(goal=null)
 	mux.HandleFunc("GET /api/tasks/{id}/constraints", s.listConstraints)           // 约束管理:列出本任务操作约束
 	mux.HandleFunc("POST /api/tasks/{id}/constraints", s.addConstraint)            // 约束管理:新增约束(不通知 planner)
 	mux.HandleFunc("PATCH /api/tasks/{id}/constraints/{cid}", s.editConstraint)    // 约束管理:修改约束
@@ -1814,6 +1822,12 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 	}
 	archiveBlockers, _ := s.m.PG().TaskArchiveBlockers()
 	applyTaskArchiveBlocker(&dto, archiveBlockers)
+	// 任务级目标(/goal):null 时前端 GoalBar 整条不渲染(GoalBar.tsx:87)。
+	if taskID, err := strconv.ParseInt(t.ID, 10, 64); err == nil && taskID > 0 {
+		if goal, err := s.m.PG().GetTaskGoal(taskID); err == nil {
+			dto.GoalState = taskGoalDTO(goal)
+		}
+	}
 	writeJSON(w, 200, dto)
 }
 
@@ -3919,10 +3933,13 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 				before := toolCalls
 				var text string
 				var chatErr error
+				// 目标注入:任务静态目标 + phase=active 的 /goal 目标(复用 {{.Goal}} 这条
+				// 既有注入路径,见 agent.GoalPrompt)。
+				goalText := s.taskGoalPromptText(t)
 				if attemptProv != nil {
-					text, chatErr = ma.ChatUsing(runCtx, attemptProv, maTaskID, mainSeg, s.m.Assets(), t.Store, t.Goal, attemptMsg, countEmit, t.Notify, resume, t.NotifyGoal, t.NotifyHint)
+					text, chatErr = ma.ChatUsing(runCtx, attemptProv, maTaskID, mainSeg, s.m.Assets(), t.Store, goalText, attemptMsg, countEmit, t.Notify, resume, t.NotifyGoal, t.NotifyHint)
 				} else {
-					text, chatErr = ma.Chat(runCtx, maTaskID, mainSeg, s.m.Assets(), t.Store, t.Goal, attemptMsg, countEmit, t.Notify, resume, t.NotifyGoal, t.NotifyHint)
+					text, chatErr = ma.Chat(runCtx, maTaskID, mainSeg, s.m.Assets(), t.Store, goalText, attemptMsg, countEmit, t.Notify, resume, t.NotifyGoal, t.NotifyHint)
 				}
 				return agent.TurnResult{Text: text, ToolCalls: toolCalls - before, Reason: ""}, chatErr
 			})

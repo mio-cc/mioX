@@ -16,6 +16,12 @@ export type CommandItem = {
   readonly name: string;
   readonly title: string;
   readonly hint: string;
+  /**
+   * 选中后写回输入框的草稿。省略 = 清空输入框(纯动作型命令);
+   * 带参数的命令(如 `/goal <objective>`)用它把草稿换成 "/goal ",
+   * 让用户接着把参数打完再回车,而不是弹一个空参数就执行。
+   */
+  readonly draft?: string;
   readonly disabled?: boolean;
   readonly reason?: string;
   readonly run: () => void;

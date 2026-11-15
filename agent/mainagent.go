@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Autumn-27/artex/db"
 	"github.com/Autumn-27/artex/guard"
@@ -166,6 +167,32 @@ const planModeBlock = `
 func mainAgentSystem(goal, dataDir, workDir string) string {
 	body := renderSystem("mainagent", mainAgentDefaultTmpl, MainVars{Goal: goal, DataDir: dataDir, Now: nowStr()})
 	return body + artifactSpec(workDir)
+}
+
+// GoalPrompt 把「当前目标」拼进系统提示**已有的** {{.Goal}} 槽位（mainagent.go:116
+// `当前任务目标：{{.Goal}}`、planner.go:310 同款），不新造模板变量——目标本来就走这
+// 一条注入路径，`/goal` 只是给它换了个来源。
+//
+// 只注入 phase=active 的目标，依据 DSH @deepseek-ai/dsh-goal：
+//   - activation-source.ts:30-32 `activeRef` 只把 `phase === 'active'` 的投影当作
+//     「在推进」，非 active 的目标不产生 continuation；
+//   - GoalBar.tsx:30-41 可见阶段是 active/paused/blocked（complete 直接不渲染），
+//     paused/blocked 是「停下等恢复」，此时继续把目标当命令注入会与 UI 语义相反。
+//
+// objective 为空或 phase 不是 active 时原样返回 base，调用方无需分支。
+func GoalPrompt(base, objective, phase string) string {
+	objective = strings.TrimSpace(objective)
+	if objective == "" || phase != db.GoalPhaseActive {
+		return base
+	}
+	var b strings.Builder
+	if trimmed := strings.TrimSpace(base); trimmed != "" {
+		b.WriteString(trimmed)
+		b.WriteString("\n\n")
+	}
+	b.WriteString("当前目标（/goal，阶段 active）：")
+	b.WriteString(objective)
+	return b.String()
 }
 
 // Chat handles one human message and returns the assistant reply. emit, if

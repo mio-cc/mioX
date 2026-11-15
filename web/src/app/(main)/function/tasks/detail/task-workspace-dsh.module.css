@@ -2486,6 +2486,132 @@
   font-weight: 500;
 }
 
+/* ---- GoalBar (任务级目标,/goal 命令) ----
+   参照 DSH GoalBar.module.css:停在输入框上方的一条 dock strip —— 目标图标 + 阶段
+   标签 + 截断目标 + 图标动作。宽度与下面的输入卡片对齐(max-width 764px)。 */
+.goalDock {
+  max-width: 764px;
+  margin: 0 auto 6px;
+}
+
+.goalBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 12px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.goalBarEdit {
+  border-color: color-mix(in srgb, var(--ax-accent) 45%, var(--ax-border));
+  background: var(--ax-bg-surface);
+}
+
+.goalGlyph {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ax-text-tertiary);
+}
+
+/* 阶段标签:active / paused / blocked 三种可见阶段(complete 不渲染整条)。 */
+.goalPhase {
+  flex: 0 0 auto;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ax-info) 14%, transparent);
+  color: var(--ax-info);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.goalPhase[data-phase="paused"],
+.goalPhase[data-phase="blocked"] {
+  background: color-mix(in srgb, var(--ax-warning) 16%, transparent);
+  color: var(--ax-warning);
+}
+
+/* 截断目标:一条一行,省略号;完整文本在 title 上。 */
+.goalObjective {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ax-text-primary);
+}
+
+.goalEditInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 8px;
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.goalError {
+  flex: 0 0 auto;
+  color: var(--ax-danger);
+  font-size: 11px;
+}
+
+.goalActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.goalIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  cursor: pointer;
+}
+
+.goalIconBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ax-text-primary) 8%, transparent);
+  color: var(--ax-text-primary);
+}
+
+.goalIconBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* `/goal <objective>` 命令气泡里的命令 chip(DSH GoalCommandInputView.tsx:13-18:
+   这条命令在对话流里是右对齐气泡,前导 `/goal` token 是命令 chip)。 */
+.goalChip {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--ax-accent) 35%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ax-accent) 12%, transparent);
+  color: var(--ax-accent);
+  font-family: var(--ax-font-mono, monospace);
+  font-size: 11px;
+  line-height: 18px;
+  vertical-align: 1px;
+}
+
 /* Session dropdown state dot: same gutter for every row, running is filled. */
 .sessionLiveDot[data-state="idle"] {
   background: transparent;

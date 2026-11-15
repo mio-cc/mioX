@@ -42,6 +42,9 @@ export interface Task {
   // 计划模式：开着时 agent 工具全保留、只能侦察 + 用 exit_plan_mode 交计划，
   // 用户在审阅里点「批准」后变 false（DSH @deepseek-ai/dsh-plan-mode 语义）。
   plan_mode?: boolean;
+  // 任务级「目标」(/goal 命令)的当前快照;null/缺省=没有目标 → GoalBar 不渲染。
+  // 注意与上面的 goal(建任务时填的静态目标字符串)不是同一字段。
+  goal_state?: GoalSnapshot | null;
 }
 
 export interface TaskCategory {
@@ -457,6 +460,21 @@ export interface TaskGoal {
   state: string; // GoalState
   origin?: string;
   ts: string;
+}
+
+// 任务级「目标」(/goal 命令) —— 对齐 DSH @deepseek-ai/dsh-goal 的 GoalSnapshot:
+// 一个任务只有一条,带阶段与 revision(CAS 令牌,过期快照改不动)。与上面的 TaskGoal
+// (planner 拆解出来的目标节点,可多条、由 prove_goal 逐条标记)不是一回事。
+// 阶段:active/paused/blocked 会在 GoalBar 显示(GoalBar.tsx:30-41);complete 不渲染。
+export type GoalPhase = "active" | "paused" | "blocked" | "complete";
+export interface GoalSnapshot {
+  id: string;
+  task_id: string;
+  objective: string;
+  phase: GoalPhase;
+  revision: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // 约束管理卡片用的操作约束(allow=允许 / deny=禁止)。

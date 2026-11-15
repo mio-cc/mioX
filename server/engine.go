@@ -877,7 +877,8 @@ func (e *Engine) plannerLoop(ctx context.Context, t *Task) {
 		triggers := t.drainTriggers()
 		taskIDInt, _ := strconv.ParseInt(t.ID, 10, 64)
 		e.BeginLLMCall(t.ID)
-		met, reason, err := planner.Plan(ectx, taskIDInt, e.m.assets, t.Store, t.Goal, triggers, emit)
+		// 目标注入:静态任务目标 + phase=active 的 /goal 目标(planner 的 {{.Goal}} 槽位)。
+		met, reason, err := planner.Plan(ectx, taskIDInt, e.m.assets, t.Store, taskGoalPrompt(e.m.pg, taskIDInt, t.Goal), triggers, emit)
 		e.EndLLMCall(t.ID)
 		switch {
 		case err != nil && ectx.Err() == nil:

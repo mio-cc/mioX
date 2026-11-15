@@ -46,6 +46,7 @@ import type {
   FindingsPage,
   FindingTraffic,
   FindingTrafficDetail,
+  GoalSnapshot,
   IntentAsset,
   InterceptApprovalFilter,
   InterceptApprovalRow,
@@ -439,6 +440,28 @@ export const api = {
     patch<TaskGoal>(`/tasks/${id}/goals/${goalId}`, { text, vulnclass: vulnclass ?? "" }),
   // 人工删除目标（硬删除）：通知 planner，删除不复活任务。
   deleteGoal: (id: string, goalId: string) => del<{ ok: boolean }>(`/tasks/${id}/goals/${goalId}`),
+
+  // ---- 任务级「目标」(/goal 命令,DSH @deepseek-ai/dsh-goal) ----
+  // 与上面的 goals(planner 目标节点,可多条)是两套东西:这里是操作员下的那一条总目标。
+  // 读取:{"goal": 对象} 或 {"goal": null}(null=没有目标,GoalBar 整条不渲染)。
+  taskGoal: (id: string) => get<{ goal: GoalSnapshot | null }>(`/tasks/${id}/goal`).then((r) => r.goal ?? null),
+  // `/goal <objective>`:创建或替换目标(替换是新的 goal 身份,revision 回到 1)。
+  setTaskGoal: (id: string, objective: string) =>
+    post<{ goal: GoalSnapshot | null }>(`/tasks/${id}/goal`, { objective }).then((r) => r.goal ?? null),
+  // 改目标正文:revision+1。带 revision = CAS,过期快照会被 409 拒绝。
+  editTaskGoal: (id: string, objective: string, revision?: number) =>
+    patch<{ goal: GoalSnapshot | null }>(`/tasks/${id}/goal`, { objective, revision: revision ?? 0 }).then(
+      (r) => r.goal ?? null,
+    ),
+  // 暂停目标:phase=paused(系统提示不再注入)。
+  pauseTaskGoal: (id: string) =>
+    post<{ goal: GoalSnapshot | null }>(`/tasks/${id}/goal/pause`, {}).then((r) => r.goal ?? null),
+  // 恢复目标:phase=active。
+  resumeTaskGoal: (id: string) =>
+    post<{ goal: GoalSnapshot | null }>(`/tasks/${id}/goal/resume`, {}).then((r) => r.goal ?? null),
+  // 清除目标:服务端删除该行,之后 GET 返回 null。
+  clearTaskGoal: (id: string) =>
+    post<{ ok: boolean; cleared: boolean }>(`/tasks/${id}/goal/clear`, {}),
 
   // ---- 操作约束管理（总览）----
   // 本任务全部操作约束（allow/deny）。
