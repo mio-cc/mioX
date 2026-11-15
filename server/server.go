@@ -836,6 +836,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/chat/upload", s.chatUpload) // 方式1 文件上传:落到会话/任务工作目录 uploads/
 	mux.HandleFunc("GET /api/tasks/{id}/chat/status", s.taskChatStatus)
 	mux.HandleFunc("POST /api/tasks/{id}/chat/stop", s.stopChat)
+	mux.HandleFunc("POST /api/tasks/{id}/chat/truncate", s.truncateChat) // 编辑已发消息：截断该消息起的会话尾部
 
 	// --- 管理后台 API (PostgreSQL 数据源; 新版数据库与管理后台方案) ---
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.pgDeleteTask)
@@ -3875,6 +3876,40 @@ func (s *Server) taskChatStatus(w http.ResponseWriter, r *http.Request) {
 // stopChat aborts the in-flight main-agent turn for a task (manual stop button).
 // Mirrors pgStopConversation: cancels only the current turn; planner/workers are
 // unaffected and continue running. The user can send a new message immediately.
+// truncateChat rewinds the main-agent lane to just before `seq`, which is what
+// makes "edit a sent message and resend" possible: the model then sees only the
+// edited text instead of both versions. Scoped to worker=mainagent + the given
+// segment, so planner/worker/intent lanes are never touched.
+func (s *Server) truncateChat(w http.ResponseWriter, r *http.Request) {
+	t := s.m.ResolveTask(r.PathValue("id"))
+	if t == nil {
+		writeErr(w, http.StatusNotFound, "task not found")
+		return
+	}
+	var req struct {
+		Seq int64 `json:"seq"`
+		Seg *int  `json:"seg,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Seq <= 0 {
+		writeErr(w, http.StatusBadRequest, "seq required")
+		return
+	}
+	seg := 0
+	if req.Seg != nil && *req.Seg >= 0 {
+		seg = *req.Seg
+	}
+	removed, err := t.Store.TruncateLane(req.Seq, "mainagent", &seg)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"removed": removed, "seg": seg})
+}
+
 func (s *Server) stopChat(w http.ResponseWriter, r *http.Request) {
 	t := s.m.ResolveTask(r.PathValue("id"))
 	if t == nil {

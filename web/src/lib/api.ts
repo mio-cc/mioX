@@ -949,6 +949,10 @@ export const api = {
     return r.json() as Promise<{ attachments: ChatAttachment[] }>;
   },
   stopChat: (taskId: string) => post<{ status: string }>(`/tasks/${taskId}/chat/stop`, {}),
+  // Editing a sent message rewinds the lane to just before that message, then the
+  // caller resends the edited text through chat().
+  truncateChat: (taskId: string, seq: number, seg?: number) =>
+    post<{ removed: number; seg: number }>(`/tasks/${taskId}/chat/truncate`, { seq, seg }),
   gc: (ttl = 86400) => post<{ removed: number }>(`/gc?ttl=${ttl}`, {}),
 
   // ---- LLM ----

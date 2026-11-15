@@ -1224,6 +1224,25 @@ func (s *ExplorationStore) Stats() (map[string]int, error) {
 // --- activity (poll by global id cursor) ---
 
 // AppendActivity records one worker step and returns its id.
+// TruncateLane deletes the tail of one session lane from `fromID` onward. It backs
+// "edit a sent message and resend": rewinding the lane is what makes the model see
+// the edited text instead of both versions. Scoped by worker + main segment so a
+// rewind in the main conversation never touches planner/worker/intent lanes.
+func (s *ExplorationStore) TruncateLane(fromID int64, worker string, mainSeg *int) (int64, error) {
+	if fromID <= 0 || worker == "" {
+		return 0, nil
+	}
+	tag, err := s.db.Exec(`
+DELETE FROM activity
+ WHERE exploration_id=$1 AND worker=$2 AND id>=$3
+   AND ($4::int IS NULL OR COALESCE(main_seg,0) = $4::int)`,  // NULL main_seg is legacy segment 0
+		s.expID, worker, fromID, mainSeg)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected()
+}
+
 func (s *ExplorationStore) AppendActivity(a Activity) (int64, error) {
 	metadata := a.Metadata
 	if len(metadata) == 0 {

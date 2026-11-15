@@ -127,6 +127,12 @@ function intentTitle(payload: string | undefined, id: string): string {
  * bare `main` the history API also accepts — so that keys built from
  * `mainSessions` and keys derived from a frame compare equal.
  */
+/** Segment index encoded in a `main:<n>` session key (0 for any other lane). */
+function mainSegOf(sessionKey: string): number {
+  const match = /^main:(\d+)$/.exec(sessionKey);
+  return match ? Number(match[1]) : 0;
+}
+
 function sessionKeyOf(activity: Activity): string {
   if (activity.worker === "system" || activity.kind === "llm_switch" || activity.kind === "llm_failover") {
     return "system";
@@ -1015,6 +1021,95 @@ function EmptyHero({ onPick }: { readonly onPick: (text: string) => void }) {
 }
 
 /**
+ * A human turn, editable in place. Editing rewinds the lane to just before this
+ * message and resends the edited text, so the model never sees both versions
+ * (reference: message editing in codex / zcode; DSH cannot do this at all).
+ */
+function UserRow({
+  activity,
+  taskId,
+  seg,
+  onEdited,
+}: {
+  readonly activity: Activity;
+  readonly taskId: string;
+  readonly seg: number;
+  readonly onEdited: () => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(activity.summary ?? "");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const save = async () => {
+    const text = draft.trim();
+    if (text === "" || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      // Rewinding mid-turn would strand the lane: the running turn keeps writing into
+      // a tail we just deleted, and the resend is rejected with 409. Wait for idle.
+      for (let attempt = 0; attempt < 120; attempt++) {
+        const status = await api.chatStatus(taskId).catch(() => ({ running: false }));
+        if (!status.running) break;
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+      }
+      await api.truncateChat(taskId, activity.seq, seg);
+      await api.chat(text, taskId, [], seg);
+      setEditing(false);
+      onEdited();
+    } catch (saveError) {
+      setError((saveError as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <div className={styles.userRow} data-seq={activity.seq} data-turn-start={activity.seq}>
+        <div className={styles.bubble}>{activity.summary}</div>
+        <button
+          type="button"
+          className={styles.userEdit}
+          title="编辑并重新发送"
+          aria-label="编辑这条消息"
+          data-testid="user-edit"
+          onClick={() => {
+            setDraft(activity.summary ?? "");
+            setEditing(true);
+          }}
+        >
+          编辑
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.userRow} data-seq={activity.seq} data-editing="true" data-testid="user-edit-form">
+      <textarea
+        className={styles.userEditBox}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        rows={Math.min(8, Math.max(2, draft.split("\n").length))}
+        data-testid="user-edit-input"
+        autoFocus
+      />
+      {error !== "" ? <div className={styles.userEditError}>{error}</div> : null}
+      <div className={styles.userEditActions}>
+        <button type="button" className={styles.userEditSave} onClick={() => void save()} disabled={busy} data-testid="user-edit-save">
+          {busy ? "重发中…" : "保存并重发"}
+        </button>
+        <button type="button" className={styles.userEditCancel} onClick={() => setEditing(false)} disabled={busy} data-testid="user-edit-cancel">
+          取消
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * The final answer is stored in full in the activity detail; the history row only
  * carries its first line. Render the detail once it loads, keeping the summary as
  * the immediate (and fallback) text - rendering the summary alone is what made a
@@ -1049,7 +1144,7 @@ function AssistantAnswer({
   return <Markdown text={text} />;
 }
 
-function buildActivityNodes(activities: Activity[], taskId: string, streamingSeq: number): React.ReactNode[] {
+function buildActivityNodes(activities: Activity[], taskId: string, streamingSeq: number, seg: number, onEdited: () => void): React.ReactNode[] {
   const resultByUse = new Map<string, Activity>();
   for (const activity of activities) {
     if (activity.kind === "tool_result" && activity.tool_use_id) resultByUse.set(activity.tool_use_id, activity);
@@ -1082,9 +1177,13 @@ function buildActivityNodes(activities: Activity[], taskId: string, streamingSeq
 
     if (activity.kind === "user") {
       nodes.push(
-        <div className={styles.userRow} key={`user-${activity.seq}`} data-seq={activity.seq} data-turn-start={activity.seq}>
-          <div className={styles.bubble}>{activity.summary}</div>
-        </div>,
+        <UserRow
+          key={`user-${activity.seq}`}
+          activity={activity}
+          taskId={taskId}
+          seg={seg}
+          onEdited={onEdited}
+        />,
       );
       continue;
     }
@@ -2142,7 +2241,7 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
                   }}
                 />
               ) : null}
-              {buildActivityNodes(transcript, taskId, streamingSeq)}
+              {buildActivityNodes(transcript, taskId, streamingSeq, mainSegOf(currentKey), () => { void loadActivity(currentKey); })}
               {sending ? <RunningStatus startedAt={turnStartedAt} /> : null}
             </div>
           </div>
