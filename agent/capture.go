@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -75,6 +76,9 @@ func captureRunSession(ctx context.Context, s *agentcore.Session, input string, 
 	lastTool := &runTrace{startedAt: time.Now()}
 	var lastUsage *llm.Usage
 
+	// toolCalls counts this turn's tool invocations: a turn that used no tool is one
+	// of the refusal signals (an agent that is working calls tools).
+	toolCalls := 0
 	var finalText string
 	var rerr error
 	for ev, err := range s.Prompt(ctx, input) {
@@ -90,6 +94,7 @@ func captureRunSession(ctx context.Context, s *agentcore.Session, input string, 
 		}
 		switch ev.Kind {
 		case harness.KindToolUse:
+			toolCalls++
 			if ev.ToolUse == nil {
 				continue
 			}
@@ -143,6 +148,16 @@ func captureRunSession(ctx context.Context, s *agentcore.Session, input string, 
 				sum, detail := ev.Terminal.Text, ev.Terminal.Text
 				if sum == "" || ev.Terminal.Reason == harness.ReasonAbortedTools || ev.Terminal.Reason == harness.ReasonAbortedStreaming {
 					sum, detail = terminalText(ctx, ev.Terminal, lastTool)
+				}
+				// Refusal self-healing, step 1: record the verdict so the operator (and the
+				// next round of work) can see that this turn was declined rather than
+				// completed. The ladder that consumes it lives in refusal.go.
+				if sig := DetectRefusal(ev.Terminal.Text, toolCalls, string(ev.Terminal.Reason)); sig.Matched {
+					rec(db.Activity{
+						Kind:    "refusal",
+						Summary: fmt.Sprintf("模型拒答（信号 %d：开场白=%q，工具调用=%d）", sig.Score, sig.Pattern, sig.ToolCalls),
+						Detail:  sig.Detail(),
+					})
 				}
 				u := ev.Terminal.Usage // cumulative token usage for this session
 				rec(db.Activity{Kind: "result", IsError: ev.Terminal.Err != nil,
