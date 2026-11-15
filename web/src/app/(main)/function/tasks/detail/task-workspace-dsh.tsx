@@ -634,6 +634,28 @@ function CopyButton({ value, label }: { readonly value: string; readonly label: 
   );
 }
 
+/**
+ * Chinese label for a tool row. The raw tool name stays available (title/aria),
+ * but the visible line speaks the same language as the rest of the surface.
+ */
+const TOOL_LABELS: Record<string, string> = {
+  Bash: "命令",
+  Read: "读取",
+  Write: "写入",
+  Edit: "编辑",
+  MultiEdit: "编辑",
+  Grep: "搜索",
+  Glob: "查找",
+  LS: "列目录",
+  WebFetch: "抓取",
+  WebSearch: "联网搜索",
+  TodoWrite: "待办",
+};
+
+function toolLabel(tool: string): string {
+  return TOOL_LABELS[tool] ?? tool;
+}
+
 function ToolRow({
   step,
   result,
@@ -682,9 +704,12 @@ function ToolRow({
   // The backend summary already starts with the tool name ("Bash {...}"); the row
   // renders the name as its own title, so drop the duplicate prefix.
   const rawArgSummary = (step.summary || "").trim();
-  const argSummary = rawArgSummary.toLowerCase().startsWith(tool.toLowerCase())
+  const strippedArgs = rawArgSummary.toLowerCase().startsWith(tool.toLowerCase())
     ? rawArgSummary.slice(tool.length).trim()
     : rawArgSummary;
+  // A no-argument call serialises to "{}"; showing that verbatim reads like a
+  // broken payload, so name the state instead.
+  const argSummary = strippedArgs === "{}" || strippedArgs === "" ? "无参数" : strippedArgs;
   const output = (result?.summary || "").trim();
   // result.summary is a truncated one-liner; the full body only arrives through
   // activityDetail when the row expands. Prefer the detail once it lands, or a
@@ -705,7 +730,7 @@ function ToolRow({
         <span className={styles.toolIcon} aria-hidden="true">
           {failed ? <X size={14} /> : tool === "Bash" ? <Terminal size={14} /> : <Wrench size={14} />}
         </span>
-        <span className={styles.toolName}>{tool}</span>
+        <span className={styles.toolName}>{toolLabel(tool)}</span>
         <span className={styles.toolSep} aria-hidden="true" />
         <span className={styles.toolSummary}>{argSummary || "执行中…"}</span>
         {cardKind === "diff" && (totals.added > 0 || totals.removed > 0) ? (
