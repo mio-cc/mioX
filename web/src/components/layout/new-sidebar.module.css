@@ -337,6 +337,11 @@
   flex: 1;
 }
 
+.taskPin {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+}
+
 .taskTime {
   flex: 0 0 auto;
   font-size: 10px;

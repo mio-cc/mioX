@@ -14,6 +14,7 @@ import {
   Network,
   PanelLeftClose,
   PanelLeftOpen,
+  Pin,
   Plus,
   Search,
   Settings,
@@ -190,8 +191,27 @@ function SidebarMenu({
 }
 
 function taskName(task: Task): string {
-  const name = task.name?.trim() || task.description?.trim() || task.goal?.trim() || task.id;
-  return name.length > 28 ? `${name.slice(0, 28)}…` : name;
+  // No JS truncation: the row ellipsises with CSS, so a wide sidebar shows more text
+  // (reference: DSH rows never hard-cut the title in code).
+  return task.name?.trim() || task.description?.trim() || task.goal?.trim() || task.id;
+}
+
+/**
+ * Relative age in the DSH buckets (刚刚 / N分钟 / N小时 / N天). The row shows the age,
+ * the status lives in the dot + tooltip, so the list reads like a recency-ordered
+ * session list instead of a wall of status words.
+ */
+function relTime(task: Task): string {
+  const seconds = task.last_activity_unix ?? task.created_unix ?? 0;
+  if (!seconds) return "";
+  const minutes = Math.floor((Date.now() - seconds * 1000) / 60000);
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes}分钟`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}小时`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}天`;
+  return `${Math.floor(days / 30)}个月`;
 }
 
 function statusClass(task: Task): string {
@@ -629,12 +649,15 @@ export function NewSidebar() {
                 key={task.id}
                 href={`/function/tasks/detail?id=${encodeURIComponent(task.id)}`}
                 className={`${styles.taskRow} ${task.id === activeTaskId ? styles.taskRowActive : ""}`}
-                title={taskName(task)}
+                title={`${taskName(task)} · ${statusLabel(task)}`}
                 aria-current={task.id === activeTaskId ? "page" : undefined}
+                data-task-id={task.id}
+                data-testid="sidebar-task-row"
               >
                 <span className={`${styles.statusDot} ${statusClass(task)}`} />
                 <span className={styles.taskName}>{taskName(task)}</span>
-                <span className={styles.taskTime}>{statusLabel(task)}</span>
+                {task.pinned ? <Pin size={10} className={styles.taskPin} aria-label="已置顶" /> : null}
+                <span className={styles.taskTime} data-testid="sidebar-task-time">{relTime(task)}</span>
               </Link>
             ))
           )}
