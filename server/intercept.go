@@ -11,10 +11,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Autumn-27/artex/agent"
 	"github.com/Autumn-27/artex/db"
 	"github.com/Autumn-27/artex/guard"
 	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/artex/llmrec"
+	"github.com/Autumn-27/norma/hook"
 	"github.com/Autumn-27/norma/llm"
 )
 
@@ -25,7 +27,11 @@ const judgeWorkerLane = "judge"
 // chatGuard returns a guard wired with the manager's interceptor, used for chat
 // conversations. Called once per applyLLM so a new LLM config always gets a fresh guard.
 func (s *Server) chatGuard() *guard.Guard {
-	return guard.NewWithInterceptor(s.m.interceptor)
+	g := guard.NewWithInterceptor(s.m.interceptor)
+	// 上下文治理：把纯文本的拒答轮从历史里抹掉，避免模型顺着自己的拒绝继续拒。
+	// 依赖改造版 norma（hook.Result.UpdatedMessages），见 项目分析/norma-src。
+	g.Hooks().On(hook.UserPromptSubmit, agent.ScrubRefusals)
+	return g
 }
 
 // wireInterceptReviewer installs the LLM fallback judge into the interceptor. The
