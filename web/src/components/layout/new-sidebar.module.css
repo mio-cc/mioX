@@ -418,6 +418,134 @@
   color: var(--ax-text-tertiary);
 }
 
+/* Row action button: hidden until the row is hovered, so the list stays quiet. */
+.rowMenuButton {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.taskRow:hover .rowMenuButton,
+.taskRow:focus-within .rowMenuButton {
+  opacity: 1;
+}
+
+.rowMenuButton:hover {
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+}
+
+/* Row context menu (reference: DSH session context menu). */
+.rowMenu {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid var(--ax-border-strong);
+  border-radius: 8px;
+  background: var(--ax-bg-panel, var(--ax-bg-elevated));
+  box-shadow: 0 12px 32px rgb(0 0 0 / 28%);
+}
+
+.rowMenuItem {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowMenuItem:hover {
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+}
+
+.rowMenuItem[data-danger] {
+  color: var(--ax-danger);
+}
+
+/* Rename dialog */
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 42%);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 340px;
+  padding: 16px;
+  border: 1px solid var(--ax-border-strong);
+  border-radius: 12px;
+  background: var(--ax-bg-panel, var(--ax-bg-elevated));
+  box-shadow: 0 20px 48px rgb(0 0 0 / 36%);
+}
+
+.dialogTitle {
+  color: var(--ax-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dialogInput {
+  padding: 7px 10px;
+  border: 1px solid var(--ax-border-strong);
+  border-radius: 8px;
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+  font-size: 13px;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialogGhost,
+.dialogPrimary {
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dialogGhost {
+  border: 1px solid var(--ax-border-subtle);
+  background: transparent;
+  color: var(--ax-text-secondary);
+}
+
+.dialogPrimary {
+  border: 1px solid var(--ax-border-strong);
+  background: var(--ax-text-primary);
+  color: var(--ax-bg-base);
+}
+
 /* Row hover card (reference: DSH HoverCard + SessionHoverContent). Portalled to body,
    so it is positioned with viewport coordinates and never clipped by the sidebar. */
 .hoverCard {

@@ -371,17 +371,146 @@ function BrandMark({ className = styles.brandMark }: { readonly className?: stri
   );
 }
 
-/** One sidebar task row: status dot, marquee title, pin, relative age. */
-function TaskRowItem({
+/**
+ * Row context menu (reference: DSH `registerSessionMenus` — pin / rename / copy id /
+ * archive, ordered by weight). Right-click or the row's "…" button opens it.
+ */
+function TaskContextMenu({
+  task,
+  x,
+  y,
+  onClose,
+  onPin,
+  onRename,
+  onCopyId,
+  onArchive,
+  onDelete,
+}: {
+  readonly task: Task;
+  readonly x: number;
+  readonly y: number;
+  readonly onClose: () => void;
+  readonly onPin: () => void;
+  readonly onRename: () => void;
+  readonly onCopyId: () => void;
+  readonly onArchive: () => void;
+  readonly onDelete: () => void;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const onDown = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const items: ReadonlyArray<{ id: string; label: string; run: () => void; danger?: boolean }> = [
+    { id: "pin", label: task.pinned ? "取消置顶" : "置顶", run: onPin },
+    { id: "rename", label: "重命名", run: onRename },
+    { id: "copy", label: "复制任务 ID", run: onCopyId },
+    { id: "archive", label: "归档", run: onArchive },
+    { id: "delete", label: "删除", run: onDelete, danger: true },
+  ];
+  return createPortal(
+    <div
+      ref={ref}
+      className={styles.rowMenu}
+      style={{ left: Math.min(x, window.innerWidth - 190), top: Math.min(y, window.innerHeight - 190) }}
+      role="menu"
+      data-testid="sidebar-row-menu"
+    >
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          role="menuitem"
+          className={styles.rowMenuItem}
+          data-danger={item.danger || undefined}
+          data-testid={`sidebar-row-menu-${item.id}`}
+          onClick={() => {
+            onClose();
+            item.run();
+          }}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>,
+    document.body,
+  );
+}
+
+/** Inline rename dialog (a native prompt would break the harness look). */
+function RenameTaskDialog({
+  task,
+  onClose,
+  onSubmit,
+}: {
+  readonly task: Task;
+  readonly onClose: () => void;
+  readonly onSubmit: (name: string) => void;
+}) {
+  const [draft, setDraft] = React.useState(taskName(task));
+  return createPortal(
+    <div className={styles.dialogBackdrop} onMouseDown={onClose} data-testid="sidebar-rename-backdrop">
+      <div className={styles.dialog} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+        <div className={styles.dialogTitle}>重命名任务</div>
+        <input
+          className={styles.dialogInput}
+          value={draft}
+          autoFocus
+          data-testid="sidebar-rename-input"
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") onClose();
+            if (event.key === "Enter" && draft.trim() !== "") {
+              onSubmit(draft.trim());
+              onClose();
+            }
+          }}
+        />
+        <div className={styles.dialogActions}>
+          <button type="button" className={styles.dialogGhost} onClick={onClose} data-testid="sidebar-rename-cancel">
+            取消
+          </button>
+          <button
+            type="button"
+            className={styles.dialogPrimary}
+            data-testid="sidebar-rename-save"
+            onClick={() => {
+              if (draft.trim() !== "") onSubmit(draft.trim());
+              onClose();
+            }}
+          >
+            保存
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** One sidebar task row: status dot, marquee title, pin, relative age. */function TaskRowItem({
   task,
   active,
   onHover,
   onLeave,
+  onMenu,
 }: {
   readonly task: Task;
   readonly active: boolean;
   readonly onHover: (task: Task, element: HTMLElement) => void;
   readonly onLeave: () => void;
+  readonly onMenu: (task: Task, x: number, y: number) => void;
 }) {
   const nameRef = React.useRef<HTMLSpanElement>(null);
   const marquee = useTitleMarquee(nameRef);
@@ -409,18 +538,37 @@ function TaskRowItem({
         marquee.leave();
         onLeave();
       }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onMenu(task, event.clientX, event.clientY);
+      }}
     >
       <span className={`${styles.statusDot} ${statusClass(task)}`} />
       <span className={styles.taskName} ref={nameRef} data-testid="sidebar-task-name">
         {taskName(task)}
       </span>
       {task.pinned ? <Pin size={10} className={styles.taskPin} aria-label="已置顶" /> : null}
+      <button
+        type="button"
+        className={styles.rowMenuButton}
+        aria-label="任务操作"
+        title="任务操作"
+        data-testid="sidebar-row-menu-button"
+        onClick={(event) => {
+          event.preventDefault();
+          const rect = event.currentTarget.getBoundingClientRect();
+          onMenu(task, rect.left, rect.bottom + 4);
+        }}
+      >
+        <MoreHorizontal size={12} aria-hidden="true" />
+      </button>
       <span className={styles.taskTime} data-testid="sidebar-task-time">{relTime(task)}</span>
     </Link>
   );
 }
 
-export function NewSidebar() {  const pathname = usePathname();
+export function NewSidebar() {
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { sidebarCollapsed, toggleSidebar, toggleRight } = useAppLayout();
@@ -442,6 +590,27 @@ export function NewSidebar() {  const pathname = usePathname();
   const [activeResult, setActiveResult] = React.useState(0);
   const [modLabel, setModLabel] = React.useState("Ctrl");
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+
+  // Row actions (reference: DSH session context menu): pin / rename / copy id / archive.
+  const [rowMenu, setRowMenu] = React.useState<{ task: Task; x: number; y: number } | null>(null);
+  const [renaming, setRenaming] = React.useState<Task | null>(null);
+
+  const openRowMenu = React.useCallback((task: Task, x: number, y: number) => {
+    setHoveredRow(null);
+    setRowMenu({ task, x, y });
+  }, []);
+
+  const runRowAction = React.useCallback(
+    (action: () => Promise<unknown>, success: string) => {
+      action()
+        .then(() => {
+          toast.success(success);
+          refreshTasks();
+        })
+        .catch((error: Error) => toast.error(error.message || "操作失败"));
+    },
+    [refreshTasks],
+  );
 
   // Folded sidebar groups (category buckets). Persisted per browser.
   const [collapsedGroups, setCollapsedGroups] = React.useState<ReadonlySet<string>>(() => {
@@ -894,6 +1063,7 @@ export function NewSidebar() {  const pathname = usePathname();
                           active={task.id === activeTaskId}
                           onHover={onRowEnter}
                           onLeave={onRowLeave}
+                          onMenu={openRowMenu}
                         />
                       ))}
                 </div>
@@ -1067,6 +1237,47 @@ export function NewSidebar() {  const pathname = usePathname();
       />
 
       {hoveredRow ? <TaskHoverCard task={hoveredRow.task} anchor={hoveredRow.anchor} /> : null}
+
+      {rowMenu ? (
+        <TaskContextMenu
+          task={rowMenu.task}
+          x={rowMenu.x}
+          y={rowMenu.y}
+          onClose={() => setRowMenu(null)}
+          onPin={() =>
+            runRowAction(() => api.pinTask(rowMenu.task.id, !rowMenu.task.pinned), rowMenu.task.pinned ? "已取消置顶" : "已置顶")
+          }
+          onRename={() => setRenaming(rowMenu.task)}
+          onCopyId={() => {
+            void navigator.clipboard?.writeText(rowMenu.task.id).then(
+              () => toast.success("已复制任务 ID"),
+              () => undefined,
+            );
+          }}
+          onArchive={() => runRowAction(() => api.archiveTask(rowMenu.task.id), "已加入归档队列")}
+          onDelete={() =>
+            runRowAction(
+              () =>
+                api.deleteTask(rowMenu.task.id, {
+                  delete_assets: true,
+                  delete_traffic: true,
+                  delete_files: true,
+                  delete_findings: true,
+                  delete_llm_records: true,
+                }),
+              "任务已删除",
+            )
+          }
+        />
+      ) : null}
+
+      {renaming ? (
+        <RenameTaskDialog
+          task={renaming}
+          onClose={() => setRenaming(null)}
+          onSubmit={(name) => runRowAction(() => api.renameTask(renaming.id, name), "已重命名")}
+        />
+      ) : null}
     </div>
   );
 }
