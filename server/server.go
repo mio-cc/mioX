@@ -3831,7 +3831,38 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 			taskDir := filepath.Join(s.m.dir, "tasks", t.ID)
 			agentMsg := composeAgentMessage(agentMessage, req.Attachments, taskDir)
 			s.engine.BeginLLMCall(t.ID)
-			_, err := ma.Chat(ctx, maTaskID, mainSeg, s.m.Assets(), t.Store, t.Goal, agentMsg, emit, t.Notify, resume, t.NotifyGoal, t.NotifyHint)
+			// 拒答自愈：检测到拒答就按阶梯重试（L0 原样 → L1 中性重述），到上限就停，
+			// 不无限烧 token。工具调用数由 emit 计数得到——零工具本身就是拒答信号之一。
+			toolCalls := 0
+			countEmit := func(rec db.Activity) {
+				if rec.Kind == "tool_use" {
+					toolCalls++
+				}
+				emit(rec)
+			}
+			recovery, err := agent.RunWithRefusalRecovery(ctx, func(runCtx context.Context, plan agent.RefusalPlan) (agent.TurnResult, error) {
+				// 测试夹具：ARTEX_REFUSAL_FIXTURE=1 时第一次尝试直接返回一次合成拒答，
+				// 用来验证"检测→升级→恢复"整条链路。默认关闭，生产不受影响。
+				if os.Getenv("ARTEX_REFUSAL_FIXTURE") == "1" && plan.Attempt == 0 {
+					return agent.TurnResult{Text: "我不能协助这个请求。", ToolCalls: 0, Reason: "stop"}, nil
+				}
+				attemptMsg := agentMsg
+				if plan.Suffix != "" {
+					attemptMsg += plan.Suffix
+				}
+				before := toolCalls
+				text, chatErr := ma.Chat(runCtx, maTaskID, mainSeg, s.m.Assets(), t.Store, t.Goal, attemptMsg, countEmit, t.Notify, resume, t.NotifyGoal, t.NotifyHint)
+				return agent.TurnResult{Text: text, ToolCalls: toolCalls - before, Reason: ""}, chatErr
+			})
+			if recovery.Attempts > 1 || (len(recovery.Events) > 0 && recovery.Events[0].Refused) {
+				detail, _ := json.Marshal(recovery)
+				s.engine.emitActivity(t, db.Activity{
+					Worker: "mainagent", Kind: "refusal", MainSeg: segPtr,
+					Summary: fmt.Sprintf("检测到模型拒答，按阶梯重试 %d 次（%s）", recovery.Attempts, map[bool]string{true: "已恢复", false: "未恢复，已停止"}[recovery.Recovered]),
+					Detail:  string(detail),
+				})
+			}
+			_ = recovery
 			s.engine.EndLLMCall(t.ID)
 			if err != nil && ctx.Err() == nil {
 				s.engine.emitActivity(t, db.Activity{Worker: "mainagent", Kind: "text", IsError: true, Summary: "（主 Agent 出错：" + err.Error() + "）", MainSeg: segPtr})
