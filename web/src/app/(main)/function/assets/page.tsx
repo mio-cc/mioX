@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { AssetsList } from "../_harness/assets-list";
+
 import {
   BuildingIcon,
   ChevronLeftIcon,
@@ -107,7 +109,7 @@ const TABS: { key: string; label: string; icon: LucideIcon }[] = [
   { key: "endpoint", label: "接口", icon: LinkIcon },
 ];
 
-export default function AssetsPage() {
+function LegacyAssetsPage() {
   const [rows, setRows] = React.useState<Asset[]>([]);
   const [total, setTotal] = React.useState(0);
   const [companies, setCompanies] = React.useState<Company[]>([]);
@@ -1213,4 +1215,10 @@ function AppendScopeDialog({ company, onSaved }: { company: Company; onSaved: ()
       </DialogContent>
     </Dialog>
   );
+}
+
+// Harness list is the default; the legacy table is opt-in (see tasks/page.tsx).
+export default function AssetsPage() {
+  if (process.env.NEXT_PUBLIC_LEGACY_SHELL === "1") return <LegacyAssetsPage />;
+  return <AssetsList />;
 }

@@ -58,3 +58,11 @@ Thumbs.db
 /bench/
 /Dockerfile.bench
 /Dockerfile.bench.v2
+# local build artifacts and backups (each ~42MB; never commit them)
+artex.exe
+artex.exe.*
+*.exe.bak*
+*.exe.prev*
+config.json.bak*
+# static export output is rebuilt, not source
+web/out/

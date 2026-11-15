@@ -4,6 +4,8 @@ import * as React from "react";
 
 import Link from "next/link";
 
+import { FindingsList } from "../_harness/findings-list";
+
 import {
   ArrowUpRightIcon,
   BugIcon,
@@ -128,7 +130,7 @@ const EMPTY_STATS: FindingStats = {
   tasks: [],
 };
 
-export default function FindingsPage() {
+function LegacyFindingsPage() {
   const [view, setView] = React.useState<FindingView>("flat");
   const [severity, setSeverity] = React.useState<"all" | Severity>("all");
   const [status, setStatus] = React.useState<"all" | FindingStatus>("all");
@@ -1260,4 +1262,10 @@ export default function FindingsPage() {
       </Dialog>
     </div>
   );
+}
+
+// Harness list is the default; the legacy table is opt-in (see tasks/page.tsx).
+export default function FindingsPage() {
+  if (process.env.NEXT_PUBLIC_LEGACY_SHELL === "1") return <LegacyFindingsPage />;
+  return <FindingsList />;
 }

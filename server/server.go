@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Autumn-27/artex/agent"
+	"github.com/Autumn-27/artex/config"
 	"github.com/Autumn-27/artex/db"
 	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/artex/llmpool"
@@ -45,6 +46,11 @@ type Server struct {
 
 	skillDir string // root directory for skill subdirectories
 	jwtKey   []byte // HS256 signing key loaded from / generated into dataDir/jwt.key
+
+	// authDisabled turns the password/JWT gate off entirely (local single-user
+	// mode). Read once at startup from config.AuthDisabled(); when true every
+	// /api/* route is served without a token and the frontend skips /login.
+	authDisabled bool
 
 	// concMu serializes concurrency-cap decisions (admission + reconcile) so a
 	// scheduler tick and an HTTP settings change / task creation can't both count
@@ -146,11 +152,17 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 		log.Fatalf("[auth] JWT key: %v", err)
 	}
 	s := &Server{m: m, engine: NewEngine(m), ctx: ctx, skillDir: skillDir, jwtKey: key, chatBusy: map[string]bool{},
+		authDisabled: config.AuthDisabled(),
 		chatCancel: map[string]context.CancelCauseFunc{}, triggerQ: map[string][]triggeredRun{},
 		triggerActive: map[string]int{}, triggerCfg: map[string]triggerBehavior{},
 		profChatAgents: map[int64]*agent.ChatAgent{},
 		provByProfile:  map[int64]*provEntry{}, llmHealth: newLLMHealthRegistry(m.pg),
 		taskAgents: map[string]*taskAgentBundle{}, archiveWake: make(chan struct{}, 1)}
+	if s.authDisabled {
+		log.Printf("[auth] 密码认证已关闭（默认）：所有接口免登录。要恢复登录请在 config.json 设 \"auth\": {\"disabled\": false}，或设 ARTEX_AUTH_DISABLED=0")
+	} else {
+		log.Printf("[auth] 密码认证已开启：访问页面前需要登录")
+	}
 	s.initSideQuestions()
 	// 熔断阈值/冷却是失败路径上的热参数，启动时把全局重试策略推给 Registry 一次；
 	// 之后每次保存策略再推一次（saveLLMRetryPolicy）。
@@ -676,6 +688,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/task-categories", s.pgCreateTaskCategory)
 	mux.HandleFunc("PATCH /api/task-categories/{id}", s.pgRenameTaskCategory)
 	mux.HandleFunc("DELETE /api/task-categories/{id}", s.pgDeleteTaskCategory)
+
+	// Team task board: a shared work list agents claim from and the UI renders.
+	mux.HandleFunc("GET /api/tasks/{id}/team", s.pgListTeamTasks)
+	mux.HandleFunc("POST /api/tasks/{id}/team", s.pgCreateTeamTask)
+	mux.HandleFunc("POST /api/team-tasks/{id}/claim", s.pgClaimTeamTask)
+	mux.HandleFunc("POST /api/team-tasks/{id}/complete", s.pgCompleteTeamTask)
+	mux.HandleFunc("POST /api/team-tasks/{id}/dispatch", s.pgDispatchTeamTask)
+	mux.HandleFunc("DELETE /api/team-tasks/{id}", s.pgDeleteTeamTask)
 	mux.HandleFunc("POST /api/tasks/category/batch", s.updateTasksCategoryBatch)
 	mux.HandleFunc("GET /api/task-templates", s.pgListTaskTemplates)
 	mux.HandleFunc("POST /api/task-templates", s.pgCreateTaskTemplate)
@@ -1732,6 +1752,30 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dto := taskDTO(t, s.resolvedTaskStatus(t))
+	// Whole-task aggregates. taskDTO is a pure mapper, and the bulk aggregate in
+	// listTasks is keyed by exploration id, so a single-task response has to read
+	// them itself — otherwise GET /api/tasks/{id} reports tokens/goals/findings
+	// all-zero even when the list is correct (detail page and right panel showed 0).
+	if t.Store != nil {
+		if usage, err := t.Store.TokenTotal(); err == nil {
+			dto.Tokens = tokenTotalDTO(usage)
+		}
+	}
+	if metrics, err := s.m.PG().TaskListMetricsOne(t.ExpID); err == nil {
+		dto.GoalsTotal = metrics.Goals.Total
+		dto.GoalsMet = metrics.Goals.Met
+		dto.InFlight = metrics.RunningIntents
+		dto.Findings = FindingSeverityDTO{
+			Critical: metrics.Findings.Critical,
+			High:     metrics.Findings.High,
+			Medium:   metrics.Findings.Medium,
+			Low:      metrics.Findings.Low,
+		}
+		dto.LastActivity = metrics.LastActivity
+		if live := s.engine.LastActivity(t.ID); live > dto.LastActivity {
+			dto.LastActivity = live
+		}
+	}
 	archiveBlockers, _ := s.m.PG().TaskArchiveBlockers()
 	applyTaskArchiveBlocker(&dto, archiveBlockers)
 	writeJSON(w, 200, dto)
@@ -3672,6 +3716,9 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		Message     string           `json:"message"`
 		Attachments []chatAttachment `json:"attachments,omitempty"` // 方式1 上传的文件(路径相对任务工作目录)
 		Seg         *int             `json:"seg,omitempty"`         // 目标主会话分段;缺省=最新段
+		// ReasoningEffort 是本轮的推理强度覆盖（""=沿用 profile）：
+		// low/medium/high/xhigh/max。只作用于这一轮的主 Agent 调用。
+		ReasoningEffort string `json:"reasoning_effort,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, 400, err.Error())
@@ -3712,6 +3759,18 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		mainSeg, _ = t.Store.CurrentMainSeg()
 	}
 	segPtr := &mainSeg
+	// The chat turn runs under the task's intercept context so an "ask" rule can
+	// write its approval card into THIS conversation's stream. Workers get the same
+	// via the engine; the main agent used to get nothing, so a pending approval had
+	// no card to click and could only be decided through the API.
+	chatEmit := func(rec db.Activity) {
+		if rec.Worker == "" {
+			rec.Worker = "mainagent" // session lanes filter by worker; an unstamped row is invisible
+		}
+		rec.MainSeg = segPtr
+		s.engine.emitActivity(t, rec)
+	}
+	ctx = intercept.WithTaskContext(ctx, t.ID, "mainagent", chatEmit)
 
 	// Persist + broadcast the human turn so the 主 Agent 编排会话 survives page
 	// reloads and updates live: the conversation lives in the activity stream as
@@ -3722,10 +3781,18 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	humanTurn.MainSeg = segPtr
 	s.engine.emitActivity(t, humanTurn)
 	var ma *agent.MainAgent
+	var bundle *taskAgentBundle
 	if s.taskRuntimeAvailable(t, "mainagent") {
-		ma = s.agentsForTask(t).main
+		bundle = s.agentsForTask(t)
+		ma = bundle.main
 	}
 	if ma != nil {
+		// Per-turn reasoning-effort override from the composer. It applies only to
+		// this turn's main-agent calls and is cleared when the turn ends; the
+		// planner/worker runtimes are untouched. Empty = inherit the profile.
+		if bundle != nil && bundle.mainRuntime != nil && req.ReasoningEffort != "" {
+			bundle.mainRuntime.setEffortOverride(req.ReasoningEffort)
+		}
 		// Run the agent on a per-turn cancellable ctx (NOT r.Context()): the turn can
 		// take minutes (multi-tool loop), and binding it to the request lifecycle meant
 		// a page reload / proxy timeout cancelled it mid-run ("context canceled"). The
@@ -3733,15 +3800,15 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		// handler returns immediately and the browser never needs to hold the request.
 		go func() {
 			defer func() {
+				if bundle != nil && bundle.mainRuntime != nil {
+					bundle.mainRuntime.setEffortOverride("") // never leak into the next turn
+				}
 				s.finishTaskChat(t.ID, cancel)
 			}()
 			// emit every step (thinking/tool_use/tool_result/text/result) so the main
 			// agent session shows its work live, like worker/planner. The final answer
 			// is the captured "result" step — no separate reply emit (would duplicate).
-			emit := func(rec db.Activity) {
-				rec.MainSeg = segPtr
-				s.engine.emitActivity(t, rec)
-			}
+			emit := chatEmit // same closure the intercept context carries
 			maTaskID, _ := strconv.ParseInt(t.ID, 10, 64)
 			resume := func() { s.reviveTask(t) } // set_goals 新增目标 → 把任务拉回 running
 			// 把上传附件的【绝对路径】清单拼进发给 agent 的消息,它据此用 Read/Bash 打开文件。

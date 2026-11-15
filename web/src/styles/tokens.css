@@ -1,0 +1,112 @@
+/*
+ * mioX UI Upgrade — design tokens (`--ax-*`)
+ * Source of truth: 项目分析/07-UI升级总体方案.md §7
+ * Imported by app/layout.tsx; consumed by the Phase 0 layout shell.
+ */
+
+:root {
+  /* surfaces */
+  --ax-bg-canvas: #ffffff;
+  --ax-bg-subtle: #f7f8fa;
+  --ax-bg-surface: #ffffff;
+  --ax-bg-elevated: #ffffff;
+  --ax-bg-inset: #f1f3f5;
+  --ax-bg-hover: rgba(15, 17, 21, 0.04);
+  --ax-bg-active: rgba(15, 17, 21, 0.08);
+
+  /* borders */
+  --ax-border-subtle: rgba(15, 17, 21, 0.06);
+  --ax-border: rgba(15, 17, 21, 0.10);
+  --ax-border-strong: rgba(15, 17, 21, 0.16);
+
+  /* text */
+  --ax-text-primary: #0f1013;
+  --ax-text-secondary: #5f636b;
+  --ax-text-tertiary: #8a8d95;
+  --ax-text-inverse: #ffffff;
+
+  /* brand / semantic */
+  --ax-brand: #111318;
+  --ax-brand-hover: #2a2b31;
+  --ax-brand-soft: #f1f3f5;
+  --ax-accent: #4176e6;
+  --ax-success: #22c55e;
+  --ax-warning: #f59e0b;
+  --ax-danger: #ef4444;
+  --ax-info: #3b82f6;
+  --ax-done: #6b7280;
+
+  /* radius */
+  --ax-radius-xs: 4px;
+  --ax-radius-sm: 8px;
+  --ax-radius-md: 12px;
+  --ax-radius-lg: 16px;
+  --ax-radius-xl: 20px;
+  --ax-radius-panel: 24px;
+
+  /* typography */
+  --ax-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --ax-font-family-code: "SF Mono", "JetBrains Mono", "Fira Code", Consolas,
+    "Liberation Mono", Menlo, Courier, "PingFang SC", "Microsoft YaHei";
+  --ax-font-size-body: 14px;
+  --ax-line-height-body: 24px;
+  --ax-font-size-secondary: 13px;
+  --ax-line-height-secondary: 20px;
+  --ax-font-size-caption: 12px;
+  --ax-line-height-caption: 18px;
+  --ax-font-size-code: 12px;
+  --ax-line-height-code: 19px;
+  --ax-font-size-code-block: 11px;
+
+  /* elevation */
+  --ax-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ax-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --ax-shadow-panel: 0 0 0 0.5px var(--ax-border), 0 8px 24px rgba(0, 0, 0, 0.06);
+
+  /* motion */
+  --ax-duration-fast: 120ms;
+  --ax-duration: 200ms;
+  --ax-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* layout */
+  --ax-sidebar-width: 280px;
+  --ax-sidebar-width-min: 264px;
+  --ax-sidebar-width-max: 420px;
+  --ax-sidebar-width-collapsed: 56px;
+  --ax-right-panel-width: 45vw;
+  --ax-right-panel-width-max: 70vw;
+  --ax-content-min: 400px;
+  --ax-content-max: 880px;
+  --ax-header-height: 48px;
+}
+
+.dark,
+[data-theme="dark"] {
+  --ax-bg-canvas: #151517;
+  --ax-bg-subtle: #1b1b1e;
+  --ax-bg-surface: #1b1b1e;
+  --ax-bg-elevated: #232327;
+  --ax-bg-inset: #101113;
+  --ax-bg-hover: rgba(255, 255, 255, 0.06);
+  --ax-bg-active: rgba(255, 255, 255, 0.10);
+
+  --ax-border-subtle: rgba(255, 255, 255, 0.08);
+  --ax-border: rgba(255, 255, 255, 0.12);
+  --ax-border-strong: rgba(255, 255, 255, 0.20);
+
+  --ax-text-primary: #f5f6f7;
+  --ax-text-secondary: #b8bbc2;
+  --ax-text-tertiary: #8a8d95;
+  --ax-text-inverse: #0f1013;
+
+  --ax-brand: #f5f6f7;
+  --ax-brand-hover: #e5e7eb;
+  --ax-brand-soft: rgba(255, 255, 255, 0.06);
+  --ax-accent: #7aaaFF;
+  --ax-success: #4ade80;
+  --ax-warning: #fbbf24;
+  --ax-danger: #f87171;
+  --ax-info: #60a5fa;
+  --ax-done: #9ca3af;
+}

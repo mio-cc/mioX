@@ -1,0 +1,666 @@
+/*
+ * New-task hero (one screen). Geometry follows DSH HeroShell: a centered
+ * stack capped at the composer width, headline above a single input card.
+ * Monochrome only — every colour is an --ax-* token (no gradients, no purple).
+ */
+
+.root {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 100%;
+  padding: 40px 24px;
+  overflow-y: auto;
+  background: var(--ax-bg-canvas);
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  max-width: 720px;
+  min-width: 0;
+}
+
+/* ── Headline ─────────────────────────────────────────────────────────── */
+
+.headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: 10px;
+  row-gap: 12px;
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 500;
+  color: var(--ax-text-primary);
+}
+
+.mark {
+  display: block;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  color: var(--ax-text-primary);
+}
+
+.titleGroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: 7px;
+  row-gap: 4px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font: inherit;
+  letter-spacing: -0.01em;
+}
+
+.badge {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 1px 7px 0;
+  border: 0.5px solid var(--ax-border);
+  border-radius: 999px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.subtitle {
+  margin: -4px 0 4px;
+  text-align: center;
+  color: var(--ax-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ── Input card ───────────────────────────────────────────────────────── */
+
+.card {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+  border: 0.5px solid var(--ax-border);
+  border-radius: var(--ax-radius-xl);
+  background: var(--ax-bg-surface);
+  box-shadow: var(--ax-shadow-2);
+  transition:
+    border-color var(--ax-duration-fast) var(--ax-ease),
+    box-shadow var(--ax-duration-fast) var(--ax-ease);
+}
+
+.card:focus-within {
+  border-color: var(--ax-border-strong);
+  box-shadow:
+    var(--ax-shadow-2),
+    0 0 0 3px var(--ax-bg-active);
+}
+
+.draft {
+  display: block;
+  padding: 16px 16px 0;
+}
+
+.textarea {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  max-height: 200px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+  font-size: 14px;
+  line-height: 24px;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.textarea::placeholder {
+  color: var(--ax-text-tertiary);
+}
+
+.textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.textarea::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+  background-color: var(--ax-border-strong);
+}
+
+.textarea::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ax-text-tertiary);
+}
+
+/* ── Chip row ─────────────────────────────────────────────────────────── */
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 0;
+  min-width: 0;
+}
+
+.chipWrap {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.chip,
+.toggleChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0.5px solid var(--ax-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    border-color var(--ax-duration-fast) var(--ax-ease),
+    color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.chip:hover:not(:disabled),
+.toggleChip:hover {
+  border-color: var(--ax-border-strong);
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.chip:active:not(:disabled),
+.toggleChip:active {
+  background: var(--ax-bg-active);
+}
+
+.chip[aria-expanded="true"] {
+  border-color: var(--ax-border-strong);
+  background: var(--ax-bg-inset);
+  color: var(--ax-text-primary);
+}
+
+.chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.chipIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--ax-text-tertiary);
+}
+
+.chipCaption {
+  flex: none;
+  color: var(--ax-text-tertiary);
+  font-weight: 400;
+}
+
+.chipValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ax-text-primary);
+}
+
+.chipChevron {
+  flex: none;
+  color: var(--ax-text-tertiary);
+  transition: transform var(--ax-duration-fast) var(--ax-ease);
+}
+
+.chip[aria-expanded="true"] .chipChevron {
+  transform: rotate(180deg);
+}
+
+.toggleState {
+  flex: none;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--ax-bg-active);
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.toggleChip[aria-pressed="true"] {
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-primary);
+}
+
+.toggleChip[aria-pressed="true"] .toggleState {
+  background: var(--ax-brand);
+  color: var(--ax-text-inverse);
+}
+
+/* ── Chip popover ─────────────────────────────────────────────────────── */
+
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+  min-width: 240px;
+  max-width: 320px;
+  max-height: 280px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 0.5px solid var(--ax-border);
+  border-radius: var(--ax-radius-md);
+  background: var(--ax-bg-elevated);
+  box-shadow: var(--ax-shadow-panel);
+  outline: none;
+  scrollbar-width: thin;
+}
+
+.menu:focus-visible {
+  box-shadow:
+    var(--ax-shadow-panel),
+    0 0 0 2px var(--ax-bg-active);
+}
+
+.menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.menu::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+  background-color: var(--ax-border-strong);
+}
+
+.menuOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--ax-radius-sm);
+  background: transparent;
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuOption:hover,
+.menuOption[data-active="true"] {
+  background: var(--ax-bg-hover);
+}
+
+.menuOption[aria-selected="true"] {
+  background: var(--ax-bg-inset);
+}
+
+.menuOption:active {
+  background: var(--ax-bg-active);
+}
+
+.menuOptionMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.menuOptionLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuOptionMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.menuCheck {
+  flex: none;
+  color: var(--ax-text-primary);
+}
+
+/* ── Actions ──────────────────────────────────────────────────────────── */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.hintDivider {
+  margin: 0 2px;
+}
+
+.hintPlus {
+  color: var(--ax-text-tertiary);
+}
+
+.kbd {
+  padding: 1px 5px;
+  border: 0.5px solid var(--ax-border);
+  border-bottom-width: 1px;
+  border-radius: var(--ax-radius-xs);
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family-code);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.secondary,
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--ax-radius-sm);
+  font-family: var(--ax-font-family);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    border-color var(--ax-duration-fast) var(--ax-ease),
+    color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.secondary {
+  border: 0.5px solid var(--ax-border-strong);
+  background: var(--ax-bg-surface);
+  color: var(--ax-text-primary);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--ax-bg-hover);
+}
+
+.secondary:active:not(:disabled) {
+  background: var(--ax-bg-active);
+}
+
+.primary {
+  border: 0.5px solid transparent;
+  padding: 0 16px;
+  background: var(--ax-brand);
+  color: var(--ax-text-inverse);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--ax-brand-hover);
+}
+
+.primary:active:not(:disabled) {
+  opacity: 0.88;
+}
+
+.secondary:disabled {
+  border-color: var(--ax-border-subtle);
+  background: var(--ax-bg-inset);
+  color: var(--ax-text-tertiary);
+  cursor: default;
+}
+
+/* The primary keeps its ink fill while disabled (faded, not repainted gray) so
+   the action hierarchy survives an empty draft. */
+.primary:disabled {
+  border-color: transparent;
+  background: var(--ax-brand);
+  color: var(--ax-text-inverse);
+  opacity: 0.32;
+  cursor: default;
+}
+
+.chip:focus-visible,
+.toggleChip:focus-visible,
+.menuOption:focus-visible,
+.secondary:focus-visible,
+.primary:focus-visible {
+  outline: 2px solid var(--ax-text-primary);
+  outline-offset: 2px;
+}
+
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: newtask-spin 700ms linear infinite;
+}
+
+@keyframes newtask-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2400ms;
+  }
+
+  .chipChevron {
+    transition: none;
+  }
+}
+
+.footnote {
+  margin: 0;
+  text-align: center;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 640px) {
+  .root {
+    padding: 24px 16px;
+  }
+
+  .headline {
+    font-size: 22px;
+    line-height: 28px;
+  }
+
+  .mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .hint {
+    display: none;
+  }
+
+  .actions {
+    justify-content: stretch;
+  }
+
+  .secondary,
+  .primary {
+    flex: 1;
+  }
+
+  .menu {
+    min-width: 200px;
+    max-width: min(320px, calc(100vw - 48px));
+  }
+}
+/* Explains why the create buttons are disabled; sits next to them, not as a tooltip. */
+.disabledReason {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+/* Inline create row: a picker with an empty list must still be usable, so the
+   menu footer creates the missing entry on the spot. */
+.menuFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--ax-border-subtle);
+}
+
+.menuCreateTrigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuCreateTrigger:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.menuCreateRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menuCreateInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--ax-border-strong);
+  border-radius: 6px;
+  background: var(--ax-bg-base);
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  outline: none;
+}
+
+.menuCreateInput:focus {
+  border-color: var(--ax-accent);
+}
+
+.menuCreateConfirm {
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.menuCreateConfirm:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.menuCreateError {
+  color: var(--ax-danger);
+  font-size: 11px;
+  line-height: 16px;
+}

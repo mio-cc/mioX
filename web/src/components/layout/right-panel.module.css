@@ -1,0 +1,709 @@
+.root {
+  --right-panel-gutter: 18px;
+
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ax-bg-surface);
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+}
+
+.rootFullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  width: 100vw;
+  height: 100dvh;
+  box-shadow: var(--ax-shadow-panel);
+}
+
+/* ------------------------------------------------------------------ */
+/* Tab strip                                                          */
+/* ------------------------------------------------------------------ */
+
+.tabStrip {
+  flex: 0 0 46px;
+  height: 46px;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--ax-border-subtle);
+  background: var(--ax-bg-surface);
+}
+
+.tabViewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-x: contain;
+}
+
+.tabViewport::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  width: max-content;
+  min-width: 100%;
+  height: 100%;
+}
+
+.tab {
+  position: relative;
+  z-index: 0;
+  flex: 0 0 auto;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.tab::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 8px 2px;
+  border-radius: 6px;
+  background: transparent;
+  transition: background-color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.tab:hover {
+  color: var(--ax-text-secondary);
+}
+
+.tab:hover::before {
+  background: var(--ax-bg-hover);
+}
+
+.tab:active::before {
+  background: var(--ax-bg-active);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: -3px;
+  border-radius: 6px;
+}
+
+.tabLabel {
+  display: inline-flex;
+  align-items: center;
+  line-height: 16px;
+}
+
+.tabActive {
+  color: var(--ax-text-primary);
+  font-weight: 600;
+}
+
+.tabActive::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--ax-text-primary);
+}
+
+.count {
+  min-width: 17px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ax-warning) 15%, transparent);
+  color: color-mix(in srgb, var(--ax-warning) 52%, var(--ax-text-primary));
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolGroup {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  align-self: center;
+  height: 28px;
+}
+
+.toolButton,
+.closeButton {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  cursor: pointer;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.toolButton:hover,
+.closeButton:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.toolButton:active,
+.closeButton:active {
+  background: var(--ax-bg-active);
+}
+
+.toolButton:focus-visible,
+.closeButton:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: 1px;
+}
+
+.toolButton[aria-pressed="true"] {
+  background: var(--ax-bg-active);
+  color: var(--ax-text-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Scrollable body                                                    */
+/* ------------------------------------------------------------------ */
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ax-text-tertiary) 42%, transparent) transparent;
+  padding: 16px var(--right-panel-gutter) 28px;
+}
+
+.body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.body::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ax-text-tertiary) 40%, transparent);
+  background-clip: padding-box;
+}
+
+.body::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--ax-text-tertiary) 58%, transparent);
+  background-clip: padding-box;
+}
+
+.tabPanel {
+  display: block;
+}
+
+.tabPanel[hidden] {
+  display: none;
+}
+
+.rootFullscreen .tabStrip {
+  padding-left: max(18px, calc((100vw - 1040px) / 2));
+  padding-right: max(18px, calc((100vw - 1040px) / 2));
+}
+
+.rootFullscreen .tabPanel {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* Content                                                            */
+/* ------------------------------------------------------------------ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.section {
+  padding: 14px 16px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: var(--ax-radius-md);
+  background: var(--ax-bg-surface);
+  transition:
+    border-color var(--ax-duration-fast) var(--ax-ease),
+    box-shadow var(--ax-duration-fast) var(--ax-ease);
+}
+
+.section:hover {
+  border-color: var(--ax-border);
+  box-shadow: var(--ax-shadow-1);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 10px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--ax-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 0.01em;
+}
+
+.sectionMeta {
+  margin-left: auto;
+  flex: 0 0 auto;
+  overflow: hidden;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill {
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.pillLive {
+  background: color-mix(in srgb, var(--ax-info) 10%, transparent);
+  color: var(--ax-accent);
+}
+
+.pillSuccess {
+  background: color-mix(in srgb, var(--ax-success) 12%, transparent);
+  color: color-mix(in srgb, var(--ax-success) 52%, var(--ax-text-primary));
+}
+
+.pillWarn {
+  background: color-mix(in srgb, var(--ax-warning) 15%, transparent);
+  color: color-mix(in srgb, var(--ax-warning) 52%, var(--ax-text-primary));
+}
+
+.pillMuted {
+  background: var(--ax-bg-inset);
+  color: var(--ax-text-tertiary);
+}
+
+.statusDot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 7px 12px;
+  margin: 0;
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.kv dt {
+  margin: 0;
+  color: var(--ax-text-tertiary);
+}
+
+.kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.progress {
+  position: relative;
+  height: 6px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ax-bg-inset);
+}
+
+.progressBar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--ax-accent), color-mix(in srgb, var(--ax-accent) 58%, var(--ax-info)));
+  transition: width var(--ax-duration) var(--ax-ease);
+}
+
+.progressMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -8px;
+}
+
+.pendingRow,
+.assetRow,
+.evidenceRow,
+.approvalRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background-color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.pendingRow:hover,
+.assetRow:hover,
+.evidenceRow:hover,
+.approvalRow:hover {
+  background: var(--ax-bg-hover);
+}
+
+.pendingDot {
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--ax-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ax-warning) 14%, transparent);
+}
+
+.rowMain {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.rowTitle {
+  overflow: hidden;
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+  letter-spacing: -0.01em;
+}
+
+.rowSub {
+  margin-top: 1px;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.rowTime {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowIcon {
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  flex: 0 0 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: var(--ax-brand-soft);
+  color: var(--ax-text-secondary);
+}
+
+.assetRow {
+  align-items: center;
+}
+
+.assetIcon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--ax-brand-soft);
+  color: var(--ax-accent);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+.assetName {
+  overflow: hidden;
+  color: var(--ax-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assetMeta {
+  margin-top: 1px;
+  overflow: hidden;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* File tree                                                          */
+/* ------------------------------------------------------------------ */
+
+.fileTree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.treeGroup + .treeGroup {
+  margin-top: 6px;
+}
+
+.treeGroupTitle {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.treeRow {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 8px 0 24px;
+  border-radius: 6px;
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.treeRow:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.fileType {
+  width: 28px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  border-radius: 4px;
+  background: var(--ax-bg-inset);
+  color: var(--ax-text-tertiary);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.fileName {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileSize {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty state / note                                                 */
+/* ------------------------------------------------------------------ */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 30px 20px;
+  border: 1px dashed var(--ax-border);
+  border-radius: var(--ax-radius-md);
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--ax-bg-inset);
+  color: var(--ax-text-tertiary);
+}
+
+.emptyTitle {
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.emptyText {
+  max-width: 280px;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.note {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .tab::before,
+  .toolButton,
+  .closeButton,
+  .pendingRow,
+  .assetRow,
+  .evidenceRow,
+  .approvalRow,
+  .treeRow,
+  .progressBar {
+    transition: none;
+  }
+}
+/* ---- Aside child session (reference: right-sidebar subagent chat) ---- */
+.asideList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 16px;
+}
+
+.asideHead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin-bottom: 6px;
+  padding: 4px 0;
+  background: var(--ax-bg-base);
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+}
+
+.asideRow {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--ax-border-subtle);
+}
+
+.asideKind {
+  flex: 0 0 72px;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.asideText {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

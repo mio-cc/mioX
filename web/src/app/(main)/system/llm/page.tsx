@@ -9,6 +9,7 @@ import {
   RefreshCwIcon,
   RotateCcwIcon,
   SaveIcon,
+  SparklesIcon,
   StarIcon,
   Trash2Icon,
   ZapIcon,
@@ -20,13 +21,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
+import {
+  clearLLMModelCache,
+  formatModelCacheTime,
+  loadLLMModelCache,
+  saveLLMModelCache,
+} from "@/lib/llm-model-cache";
 import type { LLMPoolMember, LLMPoolStatus, LLMProfile, LLMRetryOverride } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +46,18 @@ import { ProfileRetryFields, RetryPolicyPanel, ZERO_OVERRIDE } from "./_componen
 const NONE = "none";
 const fromStore = (v?: string) => (v ? v : NONE);
 const toStore = (v: string) => (v === NONE ? "" : v);
+
+// OpenCode Zen 公开免费档：不登录、不申请 Key，固定使用公开密钥 public。
+// space-bunny-free 支持工具调用、推理和 1M 上下文，适合直接作为 mioX 的 Agent 模型。
+const OPENCODE_PUBLIC_PRESET = {
+  name: "OpenCode 公开免费",
+  format: "openai" as const,
+  model: "space-bunny-free",
+  baseUrl: "https://opencode.ai/zen/v1",
+  apiKey: "public",
+  sessionHeaderKey: "x-opencode-session",
+  contextWindowK: "512",
+};
 const THINKING_TYPES: { value: string; label: string }[] = [
   { value: NONE, label: "不发送（默认）" },
   { value: "disabled", label: "关闭" },
@@ -303,11 +322,13 @@ function ProfileSheet({
   open,
   onOpenChange,
   onSaved,
+  preset,
 }: {
   profile: LLMProfile | null; // null = 新建
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSaved: (id: string) => void;
+  preset: "opencode" | null;
 }) {
   const isNew = !profile;
   const [name, setName] = React.useState("");
@@ -332,16 +353,33 @@ function ProfileSheet({
   const [testing, setTesting] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [models, setModels] = React.useState<string[]>([]);
+  const [modelFilter, setModelFilter] = React.useState(""); // 只描述"用户正在搜什么"，与 model 的值解耦
   const [loadingModels, setLoadingModels] = React.useState(false);
   const [modelsOpen, setModelsOpen] = React.useState(false);
+  const [modelsUpdatedAt, setModelsUpdatedAt] = React.useState<number | null>(null);
+  const [modelsError, setModelsError] = React.useState("");
+  const autoFetchRef = React.useRef<string | null>(null);
+
+  const applyOpencodePreset = React.useCallback(() => {
+    setName(OPENCODE_PUBLIC_PRESET.name);
+    setFormat(OPENCODE_PUBLIC_PRESET.format);
+    setModel(OPENCODE_PUBLIC_PRESET.model);
+    setBaseUrl(OPENCODE_PUBLIC_PRESET.baseUrl);
+    setApiKey(OPENCODE_PUBLIC_PRESET.apiKey);
+    setSessionHeaderKey(OPENCODE_PUBLIC_PRESET.sessionHeaderKey);
+    setCw(OPENCODE_PUBLIC_PRESET.contextWindowK);
+    setKeyHint("public");
+  }, []);
 
   // 每次打开时从传入的 profile 灌一遍表单（新建则重置为默认值）。抽屉关掉再打开
   // 就是一次干净的开始，不会留下上一个配置的残影。
   React.useEffect(() => {
     if (!open) return;
+    autoFetchRef.current = null;
     setName(profile?.name ?? "");
     setFormat(profile?.format === "openai" || profile?.format === "openai-responses" ? profile.format : "anthropic");
     setModel(profile?.model ?? "");
+    setModelFilter("");
     setBaseUrl(profile?.base_url ?? "");
     setProxy(profile?.proxy ?? "");
     setRps(String(profile?.rate_per_second ?? 0));
@@ -358,31 +396,95 @@ function ProfileSheet({
     setRetry(profile?.retry ?? ZERO_OVERRIDE);
     setApiKey("");
     setKeyHint(profile?.api_key_hint ?? "");
-    setModels([]);
-    setModelsOpen(false);
-  }, [open, profile]);
+    if (preset === "opencode") applyOpencodePreset();
+  }, [open, profile, preset, applyOpencodePreset]);
 
   const profileId = profile ? Number(profile.id) : undefined;
 
-  async function loadModels() {
+  async function loadModels(options: { silent?: boolean; open?: boolean } = {}) {
     if (loadingModels) return;
+    const { silent = false, open: openList = true } = options;
     setLoadingModels(true);
-    setModels([]);
+    setModelsError("");
     try {
       const r = await api.fetchLLMModels(format, baseUrl, apiKey, proxy, profileId);
       if (r.ok && r.models && r.models.length > 0) {
-        setModels(r.models);
-        setModelsOpen(true);
-        toast.success(`已加载 ${r.models.length} 个模型`);
-      } else {
-        toast.error(`加载模型失败：${r.error ?? "未获取到模型"}`);
+        const list = Array.from(new Set(r.models)).sort((a, b) => a.localeCompare(b));
+        setModels(list);
+        const cached = saveLLMModelCache(format, baseUrl, list);
+        setModelsUpdatedAt(cached?.updatedAt ?? Date.now());
+        if (openList) setModelsOpen(true);
+        if (!silent) toast.success(`已拉取并记忆 ${list.length} 个模型`);
+        return;
       }
+      const message = r.error ?? (r.ok ? "API 返回了空模型列表" : "未获取到模型");
+      setModelsError(message);
+      if (!silent) toast.error(`拉取模型失败：${message}`);
     } catch (e) {
-      toast.error(`加载模型出错：${(e as Error).message}`);
+      const message = (e as Error).message;
+      setModelsError(message);
+      if (!silent) toast.error(`拉取模型出错：${message}`);
     } finally {
       setLoadingModels(false);
     }
   }
+
+  const loadModelsRef = React.useRef(loadModels);
+  loadModelsRef.current = loadModels;
+
+  // 打开抽屉或切换端点时：先读本地记忆；有可用 Key/已存配置时静默刷新一次。
+  React.useEffect(() => {
+    if (!open) return;
+    const cached = loadLLMModelCache(format, baseUrl);
+    setModels(cached?.models ?? []);
+    setModelsUpdatedAt(cached?.updatedAt ?? null);
+    setModelsError("");
+    setModelsOpen(false);
+
+    const endpointKey = `${format}|${baseUrl}|${apiKey}|${profile?.id ?? ""}`;
+    const canAutoFetch = Boolean(profile) || (preset === "opencode" && baseUrl.trim() !== "") || apiKey.trim() !== "";
+    if (!canAutoFetch || autoFetchRef.current === endpointKey) return;
+    autoFetchRef.current = endpointKey;
+    const timer = window.setTimeout(() => {
+      void loadModelsRef.current({ silent: true, open: false });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [open, format, baseUrl, apiKey, profile, preset]);
+
+  function clearModelMemory() {
+    clearLLMModelCache(format, baseUrl);
+    setModels([]);
+    setModelFilter("");
+    setModelsUpdatedAt(null);
+    setModelsError("");
+    setModelsOpen(false);
+    toast.success("已清除模型列表记忆");
+  }
+
+  function handleModelsOpenChange(next: boolean) {
+    if (!next) {
+      setModelsOpen(false);
+      return;
+    }
+    // 用户主动打开（点刷新按钮 / 聚焦输入框）时清掉搜索词，先把完整列表摆出来；
+    // 只有真的在输入框里打字才过滤。
+    setModelFilter("");
+    setModelsOpen(true);
+    if (!loadingModels && models.length === 0) {
+      void loadModelsRef.current({ silent: true, open: false });
+    }
+  }
+
+  const canFetchModels = Boolean(profile) || apiKey.trim() !== "" || baseUrl.trim() !== "";
+
+  // 过滤用什么词是独立的一路状态：早先直接用 model 的值当查询词，字段里已经填着
+  // "glm-5.3-flash" 时列表会被过滤成空（同名项还被刻意排除），表现就是“拉取成功
+  // 但一个都不显示”。现在只要没在打字，就展示全部。
+  const filteredModels = React.useMemo(() => {
+    const q = modelFilter.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter((item) => item.toLowerCase().includes(q));
+  }, [modelFilter, models]);
 
   async function testConnection() {
     if (testing) return;
@@ -446,8 +548,14 @@ function ProfileSheet({
         session_header_key: sessionHeaderKey.trim(),
         retry,
       });
-      if (isNew) toast.success(`已新建：${name.trim()}（在卡片上「设为激活」以启用）`);
-      else toast.success(profile?.is_default ? "已保存，激活配置即时生效，无需重启" : "已保存");
+      if (isNew && preset === "opencode") {
+        await api.activateLLMProfile(String(id));
+        toast.success("已创建并激活 OpenCode 公开免费 API");
+      } else if (isNew) {
+        toast.success(`已新建：${name.trim()}（在卡片上「设为激活」以启用）`);
+      } else {
+        toast.success(profile?.is_default ? "已保存，激活配置即时生效，无需重启" : "已保存");
+      }
       onSaved(String(id));
       onOpenChange(false);
     } catch (e) {
@@ -473,11 +581,27 @@ function ProfileSheet({
             )}
           </SheetTitle>
           <SheetDescription>
-            {isNew
-              ? "新建后不会自动激活，请在卡片上「设为激活」以启用。"
-              : "修改后点击保存；激活配置保存后对全部 Agent 立即生效。"}
+            {preset === "opencode"
+              ? "已预填 OpenCode 公开免费 API（固定密钥 public），保存后会创建并自动激活。"
+              : isNew
+                ? "新建后不会自动激活，请在卡片上「设为激活」以启用。"
+                : "修改后点击保存；激活配置保存后对全部 Agent 立即生效。"}
           </SheetDescription>
         </SheetHeader>
+
+        <div className="px-4 pb-1">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+            <div className="grid gap-0.5">
+              <span className="font-medium text-sm">OpenCode 公开免费 API</span>
+              <span className="text-muted-foreground text-xs">
+                space-bunny-free  Key=public  https://opencode.ai/zen/v1
+              </span>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={applyOpencodePreset}>
+              <SparklesIcon /> 一键填充
+            </Button>
+          </div>
+        </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -506,18 +630,40 @@ function ProfileSheet({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="p-model">模型</Label>
-            <div className="flex gap-2">
-              <Input
-                id="p-model"
-                className="font-mono"
-                placeholder="claude-opus-4-8"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-              />
-              {/* modal: 这个 Popover 的内容被 portal 到 <body>，在 Sheet 的滚动锁之外，
-                  不加 modal 时列表能渲染却滚不动。modal 让它自己持有最上层滚动锁。 */}
-              <Popover open={modelsOpen} onOpenChange={setModelsOpen} modal>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="p-model">模型</Label>
+              <span className="text-[11px] text-muted-foreground">
+                {models.length > 0
+                  ? `已记忆 ${models.length} 个模型${modelsUpdatedAt ? ` / ${formatModelCacheTime(modelsUpdatedAt)}` : ""}`
+                  : canFetchModels
+                    ? "打开列表会自动拉取"
+                    : "填写 API Key / Base URL 后可拉取"}
+              </span>
+            </div>
+            {/* 不用 modal：modal 模式下 Radix 会给页面其余部分加 pointer-events: none
+                并做焦点劫持，输入框恰好是 PopoverAnchor，表现就是"选完模型再也点不进去、
+                也改不了字"。这里弹层只当提示列表，输入框必须一直可编辑。 */}
+            <Popover open={modelsOpen} onOpenChange={handleModelsOpenChange}>
+              <div className="flex items-center gap-2">
+                <PopoverAnchor asChild>
+                  <div className="relative min-w-0 flex-1">
+                    <Input
+                      id="p-model"
+                      className="font-mono"
+                      placeholder="claude-opus-4-8"
+                      value={model}
+                      onFocus={() => {
+                        if (!modelsOpen) handleModelsOpenChange(true);
+                      }}
+                      onChange={(e) => {
+                        setModel(e.target.value);
+                        // 打字才过滤；点开列表时由 handleModelsOpenChange 清空。
+                        setModelFilter(e.target.value);
+                        setModelsOpen(true);
+                      }}
+                    />
+                  </div>
+                </PopoverAnchor>
                 <PopoverTrigger asChild>
                   <Button
                     type="button"
@@ -525,31 +671,97 @@ function ProfileSheet({
                     size="icon"
                     className="shrink-0"
                     disabled={loadingModels}
-                    onClick={loadModels}
-                    title="从 API 加载可用模型"
+                    title="拉取并记忆模型列表"
                   >
                     {loadingModels ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
                   </Button>
                 </PopoverTrigger>
-                {models.length > 0 && (
-                  <PopoverContent className="max-h-72 w-72 gap-0 overflow-y-auto overscroll-contain p-1" align="end">
-                    {models.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        className="w-full shrink-0 rounded-md px-2 py-1.5 text-left font-mono text-xs hover:bg-accent hover:text-accent-foreground"
-                        onClick={() => {
-                          setModel(m);
-                          setModelsOpen(false);
-                        }}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </PopoverContent>
-                )}
-              </Popover>
-            </div>
+              </div>
+              {modelsOpen && (
+                <PopoverContent className="max-h-80 w-80 gap-0 overflow-hidden overscroll-contain p-0" align="start" sideOffset={4}>
+                  <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-xs">模型列表</p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {models.length > 0 ? `已记忆 ${models.length} 个模型` : "尚未拉取"}
+                        {modelsUpdatedAt ? ` / ${formatModelCacheTime(modelsUpdatedAt)}` : ""}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      disabled={loadingModels}
+                      title="重新拉取"
+                      onClick={() => void loadModels({ silent: false, open: true })}
+                    >
+                      {loadingModels ? (
+                        <Loader2Icon className="size-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCwIcon className="size-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto overscroll-contain p-1">
+                    {loadingModels ? (
+                      <p className="px-2 py-4 text-center text-muted-foreground text-xs">正在拉取模型列表...</p>
+                    ) : filteredModels.length > 0 ? (
+                      filteredModels.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className="w-full shrink-0 rounded-md px-2 py-1.5 text-left font-mono text-xs hover:bg-accent hover:text-accent-foreground"
+                          onClick={() => {
+                            setModel(m);
+                            setModelFilter("");
+                            setModelsOpen(false);
+                          }}
+                        >
+                          {m}
+                        </button>
+                      ))
+                    ) : modelsError ? (
+                      <div className="px-2 py-4 text-center text-xs">
+                        <p className="text-destructive">{modelsError}</p>
+                        <button
+                          type="button"
+                          className="mt-2 underline-offset-2 hover:text-foreground hover:underline"
+                          onClick={() => void loadModels({ silent: false, open: true })}
+                        >
+                          重试
+                        </button>
+                      </div>
+                    ) : models.length > 0 ? (
+                      <p className="px-2 py-4 text-center text-muted-foreground text-xs">没有匹配的模型</p>
+                    ) : (
+                      <div className="px-2 py-4 text-center text-xs">
+                        <p className="text-muted-foreground">暂无模型列表</p>
+                        <button
+                          type="button"
+                          className="mt-2 underline-offset-2 hover:text-foreground hover:underline"
+                          onClick={() => void loadModels({ silent: false, open: true })}
+                        >
+                          拉取模型
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              )}
+            </Popover>
+            {models.length > 0 && (
+              <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span>模型列表按当前 API 自动记忆在本机。</span>
+                <button
+                  type="button"
+                  className="shrink-0 underline-offset-2 hover:text-foreground hover:underline"
+                  onClick={clearModelMemory}
+                >
+                  清空记忆
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="grid gap-2">
@@ -793,8 +1005,10 @@ export default function LLMPage() {
   // 「编辑 X」闪成「新建」。editing = null 表示新建。
   const [editOpen, setEditOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<LLMProfile | null>(null);
-  const openEditor = React.useCallback((p: LLMProfile | null) => {
+  const [preset, setPreset] = React.useState<"opencode" | null>(null);
+  const openEditor = React.useCallback((p: LLMProfile | null, presetKind: "opencode" | null = null) => {
     setEditing(p);
+    setPreset(presetKind);
     setEditOpen(true);
   }, []);
 
@@ -869,6 +1083,9 @@ export default function LLMPage() {
                 已开启
               </Badge>
             )}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => openEditor(null, "opencode")}>
+            <SparklesIcon /> OpenCode 免费
           </Button>
           <Button size="sm" variant="outline" onClick={() => openEditor(null)}>
             <PlusIcon /> 新建
@@ -971,8 +1188,11 @@ export default function LLMPage() {
               );
             })}
             {profiles.length === 0 && (
-              <div className="col-span-full rounded-lg border border-dashed p-10 text-center text-muted-foreground text-sm">
-                还没有模型配置，点击右上角「新建」创建第一个。
+              <div className="col-span-full flex flex-col items-center gap-3 rounded-lg border border-dashed p-10 text-center text-muted-foreground text-sm">
+                <p>还没有模型配置，点击右上角「新建」创建第一个，或者直接启用 OpenCode 公开免费 API。</p>
+                <Button size="sm" variant="outline" onClick={() => openEditor(null, "opencode")}>
+                  <SparklesIcon /> OpenCode 公开免费
+                </Button>
               </div>
             )}
           </div>
@@ -983,7 +1203,13 @@ export default function LLMPage() {
         </TabsContent>
       </Tabs>
 
-      <ProfileSheet profile={editing} open={editOpen} onOpenChange={setEditOpen} onSaved={() => void load()} />
+      <ProfileSheet
+        profile={editing}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={() => void load()}
+        preset={preset}
+      />
       <PoolSheet open={poolOpen} onOpenChange={setPoolOpen} pool={pool} onReload={loadPool} />
     </div>
   );

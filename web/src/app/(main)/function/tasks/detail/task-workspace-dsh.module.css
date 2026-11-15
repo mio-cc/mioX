@@ -1,0 +1,2638 @@
+.root {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ax-bg-canvas);
+  color: var(--ax-text-primary);
+}
+
+.header {
+  flex: 0 0 auto;
+  min-height: 76px;
+  padding: 10px 20px 0;
+  border-bottom: 0.5px solid var(--ax-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--ax-bg-canvas);
+}
+
+.titleRow {
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  min-width: 0;
+}
+
+.titleZone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.backButton {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--ax-duration-fast) var(--ax-ease), color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.backButton:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.backButton:active {
+  background: var(--ax-bg-active);
+}
+
+.backButton:focus-visible,
+.action:focus-visible,
+.send:focus-visible,
+.attach:focus-visible,
+.stop:focus-visible,
+.attachmentRemove:focus-visible,
+.sessionTrigger:focus-visible,
+.chipButton:focus-visible,
+.modelOption:focus-visible,
+.modelManage:focus-visible,
+.commandRow:focus-visible,
+.tab:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: 1px;
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ax-text-primary);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 96px;
+  height: 22px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ax-info) 10%, transparent);
+  color: var(--ax-accent);
+  font-size: 10px;
+  line-height: 22px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.statusDone {
+  background: color-mix(in srgb, var(--ax-success) 10%, transparent);
+  color: var(--ax-success);
+}
+
+.statusPaused {
+  background: var(--ax-bg-inset);
+  color: var(--ax-text-secondary);
+}
+
+.statusDot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.meta {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Live-feed indicator: green while SSE is connected, muted while polling. */
+.feedState {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 5px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.feedDot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.feedState[data-tone="live"] {
+  background: color-mix(in srgb, var(--ax-success) 12%, transparent);
+  color: var(--ax-success);
+}
+
+.feedState[data-tone="retry"] {
+  background: color-mix(in srgb, var(--ax-warning) 14%, transparent);
+  color: var(--ax-warning);
+}
+
+/* ---- Session dropdown (button + listbox popover) ---- */
+.sessionTrigger {
+  height: 26px;
+  max-width: 208px;
+  padding: 0 7px 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--ax-border);
+  border-radius: 6px;
+  background: var(--ax-bg-surface);
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    border-color var(--ax-duration-fast) var(--ax-ease),
+    color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.sessionTrigger:hover {
+  background: var(--ax-bg-hover);
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-primary);
+}
+
+.sessionTrigger:active {
+  background: var(--ax-bg-active);
+}
+
+.sessionTrigger[data-state="open"] {
+  border-color: color-mix(in srgb, var(--ax-accent) 55%, var(--ax-border));
+  color: var(--ax-text-primary);
+}
+
+.sessionCaption {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+}
+
+.sessionValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sessionChevron {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  transition: transform var(--ax-duration-fast) var(--ax-ease);
+}
+
+.sessionTrigger[data-state="open"] .sessionChevron {
+  transform: rotate(180deg);
+}
+
+.sessionMenu {
+  width: 260px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--ax-bg-elevated);
+  box-shadow: var(--ax-shadow-panel);
+}
+
+/* Lane group heading inside the listbox; non-selectable, so it stays out of the
+   roving index (the rows keep one flat keyboard cursor each). */
+.sessionGroup {
+  padding: 6px 8px 3px;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.sessionGroup:not(:first-child) {
+  margin-top: 2px;
+  border-top: 1px solid var(--ax-border-subtle);
+}
+
+.sessionLiveDot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--ax-success);
+}
+
+.sessionList {
+  max-height: 272px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  border-radius: 7px;
+  outline: none;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ax-border-strong) transparent;
+}
+
+.sessionList:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: -2px;
+}
+
+.sessionList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sessionList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sessionList::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: var(--ax-border-strong);
+  background-clip: content-box;
+}
+
+.sessionOption {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sessionOption[data-active="true"] {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.sessionOption:active {
+  background: var(--ax-bg-active);
+}
+
+.sessionOption[aria-selected="true"] {
+  color: var(--ax-accent);
+}
+
+.sessionOption[data-active="true"][aria-selected="true"] {
+  background: color-mix(in srgb, var(--ax-accent) 9%, transparent);
+}
+
+.sessionOptionMain {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionOptionMeta {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sessionCheck {
+  flex: 0 0 auto;
+  color: var(--ax-accent);
+}
+
+.action {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--ax-border);
+  border-radius: 7px;
+  background: var(--ax-bg-surface);
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    border-color var(--ax-duration-fast) var(--ax-ease),
+    color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.action:hover:not(:disabled) {
+  background: var(--ax-bg-hover);
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-primary);
+}
+
+.action:active:not(:disabled) {
+  background: var(--ax-bg-active);
+}
+
+.action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.action svg {
+  flex: 0 0 auto;
+}
+
+.actionIcon {
+  width: 28px;
+  padding: 0;
+  font-size: 15px;
+}
+
+.tabs {
+  height: 32px;
+  display: flex;
+  align-items: flex-end;
+  gap: 22px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.tab:hover {
+  color: var(--ax-text-secondary);
+}
+
+.tab:active {
+  color: var(--ax-text-primary);
+}
+
+.tabActive {
+  color: var(--ax-accent);
+  font-weight: 500;
+}
+
+.tabActive:hover {
+  color: var(--ax-accent);
+}
+
+.tabActive::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ax-accent);
+}
+
+.body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.loadOlder {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 0 6px;
+}
+
+.loadOlderBusy,
+.loadOlderButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 11px;
+}
+
+.loadOlderButton {
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.loadOlderButton:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-secondary);
+}
+
+.loadOlderButton:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: 1px;
+}
+
+.jumpBottom {
+  position: absolute;
+  left: 50%;
+  bottom: 128px;
+  z-index: 6;
+  width: 30px;
+  height: 30px;
+  margin-left: -15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ax-border);
+  border-radius: 50%;
+  background: var(--ax-bg-surface);
+  color: var(--ax-text-secondary);
+  box-shadow: var(--ax-shadow-1, 0 2px 8px rgba(0, 0, 0, 0.08));
+  cursor: pointer;
+  transition:
+    background 120ms var(--ax-ease),
+    color 120ms var(--ax-ease),
+    transform 120ms var(--ax-ease);
+}
+
+.jumpBottom:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+  transform: translateY(-1px);
+}
+
+.jumpBottom:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: 2px;
+}
+
+.chatScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 28px 0;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ax-border-strong) transparent;
+}
+
+.chatScroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.chatScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chatScroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: var(--ax-border-strong);
+  background-clip: content-box;
+}
+
+.chatScroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ax-text-tertiary);
+}
+
+.chatColumn {
+  width: 100%;
+  max-width: 748px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.userRow {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0 12px;
+}
+
+.bubble {
+  max-width: 82%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ax-info) 10%, var(--ax-bg-surface));
+  color: var(--ax-text-primary);
+  font-size: 13px;
+  line-height: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.assistant {
+  margin: 0 0 12px;
+  color: var(--ax-text-primary);
+  font-size: 14px;
+  line-height: 24px;
+}
+
+.assistant :global(p) {
+  margin: 0 0 8px;
+}
+
+.reasoning {
+  margin: 2px 0;
+  color: var(--ax-text-tertiary);
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.round {
+  margin: 14px 0 6px;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.process {
+  margin: 8px 0 12px;
+  border-top: 0.5px solid var(--ax-border-subtle);
+}
+
+/* Tool row: 24px single line, per the reference ToolRow
+   [16 leading] gap6 [title 13/24] gap8 [2x2 dot] gap8 [summary fills + truncates]. */
+.toolRoot {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.toolRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 13px;
+  line-height: 24px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toolRow:hover {
+  color: var(--ax-text-secondary);
+}
+
+.toolRow:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+.toolIcon {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ax-text-tertiary);
+}
+
+.toolRoot[data-state="pending"] .toolIcon {
+  color: var(--ax-warning);
+}
+
+.toolRoot[data-state="error"] .toolIcon {
+  color: var(--ax-danger);
+}
+
+.toolName {
+  flex: 0 0 auto;
+  color: var(--ax-text-primary);
+  font-weight: 400;
+}
+
+/* 2x2 dot separator, caption tone (reference: .sep). */
+.toolSep {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  margin: 0 8px;
+  border-radius: 1px;
+  background: var(--ax-text-tertiary);
+}
+
+.toolSummary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 24px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.toolErrorMark {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: var(--ax-danger);
+  font-size: 12px;
+}
+
+.toolChevron {
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 120ms var(--ax-ease, ease);
+}
+
+.toolRow:hover .toolChevron,
+.toolRow:focus-visible .toolChevron {
+  opacity: 1;
+}
+
+.toolRoot:has(.toolRow[aria-expanded="true"]) .toolChevron {
+  opacity: 1;
+  transform: rotate(180deg);
+}
+
+.toolBody {
+  margin: 4px 0 8px 22px;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 8px;
+  background: var(--ax-bg-subtle);
+}
+
+.toolSectionLabel {
+  margin: 0 0 4px;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.toolPre {
+  margin: 0 0 8px;
+  max-height: 320px;
+  overflow: auto;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.toolPre:last-child {
+  margin-bottom: 0;
+}
+
+.toolPre[data-error] {
+  color: var(--ax-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolChevron {
+    transition: none;
+  }
+}
+
+.approval {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid #eadfca;
+  border-radius: 12px;
+  background: #fffdf8;
+}
+
+.approvalTitle {
+  color: #6b4e16;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.approvalHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.approvalDot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: #d99a2b;
+}
+
+.approvalId {
+  color: #a98545;
+  font-family: var(--ax-font-family-code);
+  font-size: 10px;
+}
+
+.approvalTag {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(107, 78, 22, 0.08);
+  color: #8a6b35;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.approvalTag[data-tone="allowed"] {
+  background: color-mix(in srgb, var(--ax-success) 14%, transparent);
+  color: var(--ax-success);
+}
+
+.approvalTag[data-tone="denied"] {
+  background: color-mix(in srgb, var(--ax-danger) 12%, transparent);
+  color: var(--ax-danger);
+}
+
+.approvalActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.approvalAllow,
+.approvalDeny {
+  height: 26px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 7px;
+  font-family: var(--ax-font-family);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms var(--ax-ease), border-color 120ms var(--ax-ease);
+}
+
+.approvalAllow {
+  border: 1px solid transparent;
+  background: var(--ax-brand);
+  color: var(--ax-text-inverse);
+}
+
+.approvalAllow:hover:not(:disabled) {
+  background: var(--ax-brand-hover);
+}
+
+.approvalDeny {
+  border: 1px solid var(--ax-border-strong);
+  background: var(--ax-bg-surface);
+  color: var(--ax-text-secondary);
+}
+
+.approvalDeny:hover:not(:disabled) {
+  border-color: var(--ax-danger);
+  color: var(--ax-danger);
+}
+
+.approvalAllow:focus-visible,
+.approvalDeny:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: 1px;
+}
+
+.approvalAllow:disabled,
+.approvalDeny:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.approvalBody {
+  color: #8a6b35;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.footer {
+  margin: 6px 0 18px;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.composerWrap {
+  flex: 0 0 auto;
+  padding: 10px 28px 18px;
+  background: var(--ax-bg-canvas);
+}
+
+.composer {
+  position: relative; /* anchors the slash-command palette above the card */
+  max-width: 764px;
+  margin: 0 auto;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 24px;
+  background: var(--ax-bg-surface);
+  box-shadow:
+    0 0 0 1px var(--ax-border-subtle),
+    0 6px 20px rgba(0, 0, 0, 0.04);
+  transition:
+    border-color var(--ax-duration-fast) var(--ax-ease),
+    box-shadow var(--ax-duration-fast) var(--ax-ease);
+}
+
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--ax-accent) 45%, var(--ax-border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ax-accent) 24%, var(--ax-border)),
+    0 6px 20px rgba(0, 0, 0, 0.05);
+}
+
+.composerBusy {
+  opacity: 0.88;
+}
+
+.composer textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  max-height: 180px;
+  padding: 12px 16px 4px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow-y: hidden;
+  background: transparent;
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+  font-size: 14px;
+  line-height: 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ax-border-strong) transparent;
+}
+
+.composer textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.composer textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.composer textarea::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: var(--ax-border-strong);
+  background-clip: content-box;
+}
+
+.composer textarea::placeholder {
+  color: var(--ax-text-tertiary);
+}
+
+.composer textarea:disabled {
+  color: var(--ax-text-tertiary);
+  cursor: progress;
+}
+
+.fileInput {
+  display: none;
+}
+
+.attachmentRow {
+  padding: 0 14px 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attachmentChip {
+  max-width: 190px;
+  height: 22px;
+  padding: 0 4px 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 999px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-secondary);
+  font-size: 10px;
+}
+
+.attachmentName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachmentIcon {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+}
+
+.attachmentChip[data-uploading="true"] {
+  border-style: dashed;
+  color: var(--ax-text-tertiary);
+}
+
+.attachmentRemove {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  cursor: pointer;
+}
+
+.attachmentRemove:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.attachmentRemove:active {
+  background: var(--ax-bg-active);
+}
+
+.composerBar {
+  min-height: 38px;
+  padding: 2px 10px 8px 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+}
+
+/* ---- composer seats: model / reasoning / approval chips ---- */
+.chipWrap {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: inline-flex;
+}
+
+/* Narrow-viewport hooks: the two read-only seats collapse before the model
+   trigger does, so the live control always keeps its room. */
+.chipWrapApproval,
+.chipWrapReasoning {
+  flex: 0 1 auto;
+}
+
+/* Chip chrome shared by the live model trigger and the two explicitly-disabled
+   seats, so the bar reads as one control family. */
+.chipButton {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 168px;
+  height: 24px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 999px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 10px;
+  line-height: 22px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    border-color var(--ax-duration-fast) var(--ax-ease),
+    color var(--ax-duration-fast) var(--ax-ease);
+}
+
+.chipButton:hover:not(:disabled) {
+  background: var(--ax-bg-hover);
+  border-color: var(--ax-border);
+  color: var(--ax-text-primary);
+}
+
+.chipButton:active:not(:disabled) {
+  background: var(--ax-bg-active);
+}
+
+/* A seat the backend cannot honour: dashed hairline + dimmed label + not-allowed
+   cursor. The explanation lives on the wrapper's title (a disabled button
+   swallows its own tooltip in Chromium). */
+.chipButton.chipDisabled,
+.chipButton.chipDisabled:disabled {
+  border-style: dashed;
+  border-color: var(--ax-border);
+  color: var(--ax-text-tertiary);
+  cursor: not-allowed;
+}
+
+.chipLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chipChevron {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  transition: transform var(--ax-duration-fast) var(--ax-ease);
+}
+
+.chipChevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+/* ---- model popover (custom, no native select) ---- */
+.modelRoot {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  display: inline-flex;
+}
+
+.modelMenu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  width: 288px;
+  max-height: 320px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--ax-border);
+  border-radius: 10px;
+  background: var(--ax-bg-elevated);
+  box-shadow: var(--ax-shadow-panel);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ax-border-strong) transparent;
+}
+
+.modelMenu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modelMenu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modelMenu::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: var(--ax-border-strong);
+  background-clip: content-box;
+}
+
+.modelGroup + .modelGroup {
+  margin-top: 2px;
+  border-top: 1px solid var(--ax-border-subtle);
+}
+
+.modelGroupTitle {
+  padding: 6px 8px 3px;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.modelOption {
+  width: 100%;
+  min-height: 40px;
+  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  text-align: left;
+  cursor: pointer;
+}
+
+.modelOption:hover:not(:disabled) {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.modelOption:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: -2px;
+}
+
+.modelOption[data-active="true"] {
+  color: var(--ax-text-primary);
+}
+
+.modelOption:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.modelOptionCopy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.modelOptionLabel {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelOptionMeta {
+  overflow: hidden;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelCheck {
+  flex: 0 0 auto;
+  color: var(--ax-accent);
+}
+
+.modelManage {
+  display: block;
+  margin-top: 2px;
+  padding: 7px 8px;
+  border-top: 1px solid var(--ax-border-subtle);
+  border-radius: 0 0 7px 7px;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 18px;
+  text-decoration: none;
+}
+
+.modelManage:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.modelManage:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: -2px;
+}
+
+/* ---- slash-command palette (anchored above the card) ---- */
+.commandPanel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 25;
+  max-height: 320px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--ax-border);
+  border-radius: 12px;
+  background: var(--ax-bg-elevated);
+  box-shadow: var(--ax-shadow-panel);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ax-border-strong) transparent;
+}
+
+.commandPanel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.commandPanel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.commandPanel::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: var(--ax-border-strong);
+  background-clip: content-box;
+}
+
+.commandHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 4px;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.commandCount {
+  font-variant-numeric: tabular-nums;
+}
+
+.commandEmpty {
+  padding: 10px 8px;
+  color: var(--ax-text-tertiary);
+  font-size: 12px;
+}
+
+.commandRow {
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.commandRow[data-active="true"] {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.commandRow[aria-disabled="true"] {
+  color: var(--ax-text-tertiary);
+}
+
+.commandRow[aria-disabled="true"] .commandName {
+  color: var(--ax-text-tertiary);
+}
+
+.commandName {
+  flex: 0 0 auto;
+  min-width: 68px;
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+}
+
+.commandTitle {
+  flex: 0 0 auto;
+  color: inherit;
+}
+
+.commandHint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composerMeta {
+  flex: 0 0 auto;
+  overflow: hidden;
+  color: var(--ax-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composerGrow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.attach {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  cursor: pointer;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    color var(--ax-duration-fast) var(--ax-ease),
+    transform var(--ax-duration-fast) var(--ax-ease);
+}
+
+.attach:hover:not(:disabled) {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.attach:active:not(:disabled) {
+  background: var(--ax-bg-active);
+  transform: scale(0.95);
+}
+
+.attach:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stop {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--ax-danger) 28%, var(--ax-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ax-danger) 10%, transparent);
+  color: var(--ax-danger);
+  cursor: pointer;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    transform var(--ax-duration-fast) var(--ax-ease);
+}
+
+.stop:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ax-danger) 18%, transparent);
+}
+
+.stop:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.stop:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.send {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9px;
+  background: var(--ax-brand);
+  color: var(--ax-text-inverse);
+  cursor: pointer;
+  transition:
+    background-color var(--ax-duration-fast) var(--ax-ease),
+    transform var(--ax-duration-fast) var(--ax-ease),
+    opacity var(--ax-duration-fast) var(--ax-ease);
+}
+
+.send:hover:not(:disabled) {
+  background: var(--ax-brand-hover);
+}
+
+.send:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.spinner {
+  animation: composerSpin 0.9s linear infinite;
+}
+
+@keyframes composerSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading,
+.empty,
+.error {
+  padding: 24px;
+  color: var(--ax-text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.error { color: var(--ax-danger); }
+
+.panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 28px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ax-border-strong) transparent;
+}
+
+.panel::-webkit-scrollbar,
+.toolDetail::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.panel::-webkit-scrollbar-track,
+.toolDetail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel::-webkit-scrollbar-thumb,
+.toolDetail::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: var(--ax-border-strong);
+  background-clip: content-box;
+}
+
+.panel::-webkit-scrollbar-thumb:hover,
+.toolDetail::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ax-text-tertiary);
+}
+
+.toolDetail {
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ax-border-strong) transparent;
+}
+
+@media (max-width: 1280px) {
+  .meta {
+    display: none;
+  }
+
+  .sessionTrigger {
+    max-width: 180px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sessionCaption {
+    display: none;
+  }
+
+  .sessionTrigger {
+    max-width: 168px;
+  }
+
+  .chipWrapApproval {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .header {
+    padding: 10px 12px 0;
+  }
+
+  .chatScroll {
+    padding: 16px 12px 0;
+  }
+
+  .composerWrap {
+    padding: 10px 12px 14px;
+  }
+
+  .meta,
+  .composerMeta {
+    display: none;
+  }
+
+  .chipWrapReasoning {
+    display: none;
+  }
+
+  .action:not(.actionIcon) {
+    display: none;
+  }
+
+  .sessionTrigger {
+    max-width: 138px;
+  }
+
+  .status {
+    max-width: 72px;
+  }
+}
+/* Popover content for composer chips whose setting lives elsewhere (reasoning
+   effort / approval mode). Explains the constraint and links to the real control. */
+.constraintText {
+  margin: 0;
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.constraintLink {
+  color: var(--ax-accent);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.constraintLink:hover {
+  text-decoration: underline;
+}
+/* Menu row for the composer reasoning-effort picker. */
+.chipMenuItem {
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chipMenuItem:hover,
+.chipMenuItem[data-active="true"] {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.chipMenuItem[aria-selected="true"] {
+  color: var(--ax-accent);
+}
+/* Reasoning menu: fixed-width check gutter so labels line up. */
+.chipMenuCheck {
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ax-accent);
+}
+
+.chipMenuMeta {
+  margin-left: auto;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+}
+/* Model seat: one chip showing `model · effort`, 28px like the sibling chips.
+   Matches the reference harness's composer seat (13/20 regular, secondary tone,
+   effort in the dimmer caption tone and shrinking first). */
+.modelSeat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 360px;
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border: none;
+  border-radius: var(--ax-radius-sm, 6px);
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.modelSeat:hover {
+  background: var(--ax-bg-hover);
+}
+
+.modelSeat:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: 1px;
+}
+
+.modelSeatLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelSeatEffort {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ax-text-tertiary);
+  font-size: 12px;
+}
+
+/* Root pane: the Model / Effort row pair. */
+.modelCells {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+}
+
+.modelCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.modelCell:hover,
+.modelCell:focus-visible {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+  outline: none;
+}
+
+.modelCellLabel {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 12px;
+}
+
+.modelCellValue {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.modelCellChevron {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+}
+/* ---- Reasoning disclosure (ported from the reference ReasoningRow) ---- */
+.thinkRow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Collapsed row is exactly one text line tall (24px), like the reference. */
+.thinkRow:not([data-expanded]) {
+  height: 24px;
+  contain: size layout;
+}
+
+.thinkHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.thinkHead:hover {
+  color: var(--ax-text-secondary);
+}
+
+.thinkHead:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+.thinkIcon {
+  flex: 0 0 auto;
+}
+
+.thinkLabel {
+  flex: 0 0 auto;
+  font-weight: 400;
+}
+
+/* 2x2 dot separator, caption tone (reference: .separator). */
+.thinkDot {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  margin: 0 8px;
+  border-radius: 1px;
+  background: var(--ax-text-tertiary);
+}
+
+.thinkSummary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Streaming: fade the right edge instead of clipping a glyph in half. */
+.thinkRow[data-streaming] .thinkSummary {
+  mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 48px), transparent);
+}
+
+.thinkChevron {
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 120ms var(--ax-ease, ease);
+}
+
+.thinkHead:hover .thinkChevron,
+.thinkHead:focus-visible .thinkChevron,
+.thinkRow[data-expanded] .thinkChevron {
+  opacity: 1;
+}
+
+.thinkRow[data-expanded] .thinkChevron {
+  transform: rotate(180deg);
+}
+
+.thinkBody {
+  padding: 4px 0 8px 20px;
+  color: var(--ax-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinkChevron {
+    transition: none;
+  }
+}
+/* ---- Attachment cards + drop overlay (ported from ComposerAttachments) ---- */
+.attachmentCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  height: 34px;
+  padding: 0 6px 0 8px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 8px;
+  background: var(--ax-bg-surface);
+}
+
+.attachmentCard[data-uploading="true"] {
+  border-style: dashed;
+  color: var(--ax-text-tertiary);
+}
+
+.attachmentGlyph {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.attachmentCopy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.attachmentMeta {
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.dropOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--ax-bg-base) 72%, transparent);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.dropOverlayCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 26px;
+  border: 1.5px dashed var(--ax-border-strong);
+  border-radius: 12px;
+  background: var(--ax-bg-surface);
+  color: var(--ax-text-secondary);
+  font-size: 13px;
+}
+/* ---- Turn rail (ported from TurnNavigator) ----
+   Right-edge rail, one tick per turn: 28px frame, fixed 10px pitch, each tick a
+   20x2 bar scaled to 0.6 at rest and 1.0 when active. */
+.turnRail {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  z-index: 5;
+  width: 28px;
+  max-height: min(420px, 60%);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.turnRailScroller {
+  position: relative;
+  max-height: inherit;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  pointer-events: auto;
+  /* Fade both ends: marks keep scrolling under a soft edge instead of clipping. */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%);
+}
+
+.turnRailScroller::-webkit-scrollbar {
+  display: none;
+}
+
+.turnMark {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.turnMark::before {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ax-border-strong);
+  content: "";
+  transform: translateY(-50%) scaleX(0.6);
+  transform-origin: right center;
+  transition: transform 140ms ease, background-color 140ms ease;
+}
+
+.turnMark:hover::before {
+  transform: translateY(-50%) scaleX(0.9);
+  background: var(--ax-text-tertiary);
+}
+
+.turnMark:focus-visible {
+  outline: none;
+}
+
+.turnMark:focus-visible::before {
+  transform: translateY(-50%) scaleX(1);
+  background: var(--ax-accent);
+  box-shadow: 0 0 0 2px var(--ax-bg-base), 0 0 0 3px var(--ax-accent);
+}
+
+.turnMark[data-active="true"]::before {
+  transform: translateY(-50%) scaleX(1);
+  background: var(--ax-text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turnMark::before {
+    transition: none;
+  }
+}
+
+/* Narrow viewports drop the rail: the transcript needs the width. */
+@media (max-width: 900px) {
+  .turnRail {
+    display: none;
+  }
+}
+/* ---- Empty hero (ported from EmptyHero / HeroShell) ----
+   Centered stack: mark + 26/32 headline, 12px gap, hint, starter chips. */
+.heroRoot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: 24px;
+}
+
+.heroStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+  text-align: center;
+}
+
+.heroHeadline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--ax-text-primary);
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 500;
+}
+
+/* Monochrome mark: a rounded square with a notch, no gradient, no mascot art. */
+.heroMark {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--ax-text-primary);
+  -webkit-mask-image: radial-gradient(circle at 72% 30%, transparent 5px, #000 5.5px);
+  mask-image: radial-gradient(circle at 72% 30%, transparent 5px, #000 5.5px);
+}
+
+.heroHint {
+  margin: 0;
+  color: var(--ax-text-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.heroStarters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.heroStarter {
+  padding: 6px 12px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  transition: background-color 120ms var(--ax-ease, ease), border-color 120ms var(--ax-ease, ease);
+}
+
+.heroStarter:hover {
+  background: var(--ax-bg-hover);
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-primary);
+}
+
+.heroStarter:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: 1px;
+}
+
+/* ---- Running row at the transcript tail (ported from RunningStatus) ---- */
+.running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 2px;
+  color: var(--ax-text-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.runningDivider {
+  width: 2px;
+  height: 2px;
+  margin-right: 2px;
+  border-radius: 1px;
+  background: var(--ax-text-tertiary);
+}
+
+.runningDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ax-accent);
+  animation: axRunningPulse 1.1s ease-in-out infinite;
+}
+
+.runningText {
+  /* Shimmer sweeps left to right over the label while the turn is live. */
+  background-image: linear-gradient(90deg, currentColor 0%, var(--ax-text-primary) 45%, currentColor 90%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: axRunningShimmer 1.8s linear infinite;
+}
+
+@keyframes axRunningPulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+@keyframes axRunningShimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runningDot,
+  .runningText {
+    animation: none;
+  }
+  .runningText {
+    background-image: none;
+    color: var(--ax-text-tertiary);
+  }
+}
+
+/* ---- Loading / error states ---- */
+.stateRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  color: var(--ax-text-tertiary);
+  font-size: 13px;
+}
+
+.stateError {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ax-border-subtle);
+  border-left: 2px solid var(--ax-danger);
+  border-radius: 8px;
+  background: var(--ax-bg-subtle);
+}
+
+.stateErrorTitle {
+  color: var(--ax-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.stateErrorBody {
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  word-break: break-word;
+}
+
+.stateRetry {
+  margin-top: 2px;
+  padding: 4px 10px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.stateRetry:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+/* ---- Team task board (ported from TeamBoard) ---- */
+.teamWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.teamHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.teamSummary {
+  color: var(--ax-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.teamBlocked {
+  margin-left: 6px;
+  color: var(--ax-warning);
+}
+
+.teamComposer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.teamInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 8px;
+  background: var(--ax-bg-surface);
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+  font-size: 13px;
+  outline: none;
+}
+
+.teamInput:focus {
+  border-color: var(--ax-accent);
+}
+
+.teamAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.teamAdd:hover:not(:disabled) {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.teamAdd:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.teamEmpty {
+  margin: 0;
+  color: var(--ax-text-tertiary);
+  font-size: 13px;
+}
+
+.teamList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teamRow {
+  border-radius: 8px;
+}
+
+.teamRow:hover {
+  background: var(--ax-bg-hover);
+}
+
+.teamRowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.teamRowHead:focus-visible {
+  outline: 2px solid var(--ax-accent);
+  outline-offset: -2px;
+}
+
+.teamDot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ax-text-tertiary);
+}
+
+.teamDot[data-state="in_progress"] {
+  background: var(--ax-accent);
+}
+
+.teamDot[data-state="completed"] {
+  background: var(--ax-success);
+}
+
+.teamDot[data-state="blocked"] {
+  background: var(--ax-warning);
+}
+
+.teamSubject {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ax-text-primary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.teamRow[data-status="completed"] .teamSubject {
+  color: var(--ax-text-tertiary);
+  text-decoration: line-through;
+}
+
+.teamMeta {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+}
+
+.teamChevron {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  transition: transform 120ms var(--ax-ease, ease);
+}
+
+.teamChevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+.teamRowBody {
+  padding: 2px 8px 8px 23px;
+}
+
+.teamDetail {
+  margin: 0 0 8px;
+  color: var(--ax-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
+
+.teamActions {
+  display: flex;
+  gap: 6px;
+}
+
+.teamAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.teamAction:hover:not(:disabled) {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+.teamAction:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.teamActionDanger:hover:not(:disabled) {
+  border-color: var(--ax-danger);
+  color: var(--ax-danger);
+}
+/* ---- Read-only composer for sub-sessions (ported from SubagentReadOnlyComposer) ---- */
+.readOnlyComposer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 24px 20px;
+  min-height: 54px;
+  padding: 10px 16px;
+  border: 0.5px solid var(--ax-border-subtle);
+  border-radius: 12px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.readOnlyComposer strong {
+  color: var(--ax-text-primary);
+  font-weight: 500;
+}
+
+/* Session dropdown state dot: same gutter for every row, running is filled. */
+.sessionLiveDot[data-state="idle"] {
+  background: transparent;
+  border: 1px solid var(--ax-border-strong);
+}
+/* ---- Tool cards (terminal / read / search) ----
+   A card is a header line (what ran) plus a body (what came back), so a terminal
+   command does not read like a file read. */
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.cardPrompt {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+}
+
+.cardCommand {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family-code);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cardLabel {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+}
+
+.cardPath {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family-code);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cardMeta {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+}
+
+.cardExit {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--ax-bg-hover);
+  color: var(--ax-success);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.cardExit[data-failed] {
+  color: var(--ax-danger);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cardExpand {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cardExpand:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-secondary);
+}
+/* "旁开" affordance on a session row: a quiet inline label that opens the lane
+   in the right panel instead of switching to it. */
+.sessionAside {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 999px;
+  color: var(--ax-text-tertiary);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.sessionAside:hover {
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-primary);
+}
+/* ---- Numbered / grouped card bodies (reference: ReadBlock / SearchBlock) ---- */
+.numberedBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.numberedRow {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.numberedGutter {
+  flex: 0 0 34px;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: right;
+  user-select: none;
+}
+
+.numberedText {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.searchFile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.searchFileHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.searchHit {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 8px;
+}
+
+.cardCopy {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.cardCopy:hover {
+  border-color: var(--ax-border-strong);
+  color: var(--ax-text-primary);
+}

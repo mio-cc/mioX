@@ -48,7 +48,9 @@ const components: Components = {
   td: ({ node, ...p }) => <td className="border border-border px-2 py-1 align-top" {...p} />,
 };
 
-export function Markdown({ text }: { text: string }) {
+// Memoized: the transcript re-renders on every SSE frame, and re-parsing all
+// markdown blocks each time dominated keystroke latency in the perf audit.
+export const Markdown = React.memo(function Markdown({ text }: { text: string }) {
   return (
     <div className="min-w-0 space-y-1.5 text-sm [&>*:first-child]:mt-0">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
@@ -56,4 +58,4 @@ export function Markdown({ text }: { text: string }) {
       </ReactMarkdown>
     </div>
   );
-}
+});

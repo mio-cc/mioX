@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -589,6 +590,9 @@ func (i *Interceptor) HandleAsk(ctx context.Context, convID int64, dec Decision,
 	audit := auditFor(ctx, dec, input, "pending")
 	pendingID, err := i.db.CreateInterceptPending(ruleID, convID, taskID, agentName, toolName, input, dec.Message, audit)
 	if err != nil {
+		// Swallowing this used to degrade an "ask" into a hard block with no trace,
+		// which reads to the operator as "approval is broken". Log it instead.
+		log.Printf("[intercept] create pending failed (rule=%d task=%q tool=%s): %v", ruleID, taskID, toolName, err)
 		return false
 	}
 

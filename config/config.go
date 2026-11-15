@@ -24,10 +24,46 @@ type Database struct {
 	SSLMode  string `json:"sslmode"`
 }
 
+// Auth is the login/password switch. Disabled is a pointer so "absent" is
+// distinguishable from an explicit false: with no auth section at all the
+// password gate is OFF (local single-user tool), and only an explicit
+// "disabled": false turns it back on.
+type Auth struct {
+	Disabled *bool `json:"disabled"`
+}
+
 // Config is the on-disk config file shape.
 type Config struct {
 	Database Database `json:"database"`
 	SkillDir string   `json:"skill_dir"`
+	Auth     Auth     `json:"auth"`
+}
+
+// AuthDisabled reports whether the password/JWT gate is turned off. Precedence:
+//
+//	env ARTEX_AUTH_DISABLED  >  config file (auth.disabled)  >  default true
+//
+// The default is OFF (no login) because this is normally a loopback-only,
+// single-operator tool; set "auth": {"disabled": false} or ARTEX_AUTH_DISABLED=0
+// to require the admin password again. Accepted truthy/falsy spellings are the
+// ones strconv.ParseBool understands (1/0, t/f, true/false, on/off are covered
+// by the explicit on/off handling below).
+func AuthDisabled() bool {
+	if v := strings.TrimSpace(os.Getenv("ARTEX_AUTH_DISABLED")); v != "" {
+		switch strings.ToLower(v) {
+		case "on", "yes", "y":
+			return true
+		case "off", "no", "n":
+			return false
+		}
+		if b, err := strconv.ParseBool(strings.ToLower(v)); err == nil {
+			return b
+		}
+	}
+	if a := Load().Auth; a.Disabled != nil {
+		return *a.Disabled
+	}
+	return true
 }
 
 // BaseDir is the directory that anchors all runtime artifacts (config.json and

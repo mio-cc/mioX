@@ -137,15 +137,18 @@ func compactionConfig(windowTokens int) *compaction.Config {
 
 // FromEnv resolves the LLM provider config:
 //
-//	ARTEX_LLM_PROVIDER = anthropic|openai (default: inferred from keys)
+//	ARTEX_LLM_PROVIDER = anthropic|openai|openai-responses|opencode
+//	                     (default: inferred from keys)
 //	ARTEX_LLM_MODEL    = model id        (default: per provider)
 //	ARTEX_LLM_BASE_URL = endpoint        (optional)
 //	ARTEX_LLM_PROXY    = proxy URL        (optional; http/https/socks5)
-//	ANTHROPIC_API_KEY / OPENAI_API_KEY         = credentials
+//	ARTEX_LLM_SESSION_HEADER = custom session header name (optional)
+//	ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENCODE_API_KEY = credentials
 func FromEnv() (Config, bool) {
 	prov := os.Getenv("ARTEX_LLM_PROVIDER")
 	anthKey := os.Getenv("ANTHROPIC_API_KEY")
 	oaiKey := os.Getenv("OPENAI_API_KEY")
+	opencodeKey := os.Getenv("OPENCODE_API_KEY")
 
 	if prov == "" {
 		switch {
@@ -153,6 +156,8 @@ func FromEnv() (Config, bool) {
 			prov = "anthropic"
 		case oaiKey != "":
 			prov = "openai"
+		case opencodeKey != "":
+			prov = "opencode"
 		default:
 			return Config{}, false
 		}
@@ -165,6 +170,7 @@ func FromEnv() (Config, bool) {
 		// 默认流式;ARTEX_LLM_STREAM=false/0/off 显式关闭走非流式。
 		Stream: !isFalsy(os.Getenv("ARTEX_LLM_STREAM")),
 	}
+	c.SessionHeaderKey = strings.TrimSpace(os.Getenv("ARTEX_LLM_SESSION_HEADER"))
 	switch prov {
 	case "openai":
 		c.Format = llm.FormatOpenAI
@@ -177,6 +183,21 @@ func FromEnv() (Config, bool) {
 		c.APIKey = oaiKey
 		if c.Model == "" {
 			c.Model = "gpt-5"
+		}
+	case "opencode":
+		c.Format = llm.FormatOpenAI
+		c.APIKey = opencodeKey
+		if c.APIKey == "" {
+			c.APIKey = "public"
+		}
+		if c.BaseURL == "" {
+			c.BaseURL = "https://opencode.ai/zen/v1"
+		}
+		if c.Model == "" {
+			c.Model = "space-bunny-free"
+		}
+		if c.SessionHeaderKey == "" {
+			c.SessionHeaderKey = "x-opencode-session"
 		}
 	default:
 		c.Format = llm.FormatAnthropic
@@ -217,6 +238,24 @@ func ConfigFrom(provider, model, baseURL, apiKey, proxy string) Config {
 		c.BaseURL = strings.TrimRight(strings.TrimSuffix(c.BaseURL, "/responses"), "/")
 		if c.Model == "" {
 			c.Model = "gpt-5"
+		}
+	case "opencode":
+		// OpenCode Zen public free tier uses the OpenAI Chat Completions wire
+		// format at its /zen/v1 endpoint. The public key is literal "public" and
+		// anonymous free-tier requests must carry x-opencode-session.
+		c.Format = llm.FormatOpenAI
+		c.BaseURL = strings.TrimRight(strings.TrimSuffix(c.BaseURL, "/chat/completions"), "/")
+		if c.BaseURL == "" {
+			c.BaseURL = "https://opencode.ai/zen/v1"
+		}
+		if c.Model == "" {
+			c.Model = "space-bunny-free"
+		}
+		if c.APIKey == "" {
+			c.APIKey = "public"
+		}
+		if c.SessionHeaderKey == "" {
+			c.SessionHeaderKey = "x-opencode-session"
 		}
 	default:
 		c.Format = llm.FormatAnthropic

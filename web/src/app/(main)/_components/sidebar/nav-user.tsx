@@ -14,7 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
-import { auth } from "@/lib/auth";
+import { auth, isAuthDisabled } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { getInitials } from "@/lib/utils";
 
 import { ChangePasswordDialog } from "./change-password-dialog";
@@ -29,6 +30,7 @@ export function NavUser({
   };
 }) {
   const { isMobile } = useSidebar();
+  const { t } = useI18n();
   const [pwOpen, setPwOpen] = React.useState(false);
 
   function handleLogout() {
@@ -77,15 +79,19 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setPwOpen(true)}>
-              <KeyRound />
-              修改密码
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
-              <LogOut />
-              退出登录
-            </DropdownMenuItem>
+            {!isAuthDisabled() && (
+              <>
+                <DropdownMenuItem onClick={() => setPwOpen(true)}>
+                  <KeyRound />
+                  {t("修改密码")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                  <LogOut />
+                  {t("退出登录")}
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

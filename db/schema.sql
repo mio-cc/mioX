@@ -1384,3 +1384,26 @@ CREATE INDEX IF NOT EXISTS idx_notification_deliveries_batch
     ON notification_deliveries(batch_id) WHERE batch_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_notification_deliveries_channel
     ON notification_deliveries(channel_id, id DESC);
+-- Team task board: the shared work list a multi-agent team claims from.
+-- Shape mirrors the reference harness TeamTaskView (subject/status/owner/ready).
+CREATE TABLE IF NOT EXISTS team_tasks (
+    id           BIGSERIAL PRIMARY KEY,
+    task_id      BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    subject      TEXT NOT NULL,
+    detail       TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'pending',
+    owner        TEXT NOT NULL DEFAULT '',
+    depends_on   BIGINT[] NOT NULL DEFAULT '{}'::bigint[],
+    completed_at TIMESTAMPTZ,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Projection link: a board row can be derived from an exploration intent. The
+-- unique index makes projection idempotent (re-projecting never duplicates).
+ALTER TABLE team_tasks ADD COLUMN IF NOT EXISTS source_intent_id BIGINT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_team_tasks_source ON team_tasks(task_id, source_intent_id);
+CREATE INDEX IF NOT EXISTS idx_team_tasks_task ON team_tasks(task_id, id);
+CREATE INDEX IF NOT EXISTS idx_team_tasks_status ON team_tasks(task_id, status);
+DROP TRIGGER IF EXISTS trg_team_tasks_upd ON team_tasks;
+CREATE TRIGGER trg_team_tasks_upd BEFORE UPDATE ON team_tasks
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();

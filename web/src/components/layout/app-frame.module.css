@@ -1,0 +1,180 @@
+.appFrame {
+  --ax-sidebar-current: var(--ax-sidebar-expanded-width, var(--ax-sidebar-width));
+  --ax-right-current: var(--ax-right-width-px, var(--ax-right-panel-width));
+  display: flex;
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ax-bg-canvas);
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+  font-size: var(--ax-font-size-body);
+  line-height: var(--ax-line-height-body);
+}
+
+.sidebar {
+  width: var(--ax-sidebar-current, var(--ax-sidebar-width));
+  flex: 0 0 var(--ax-sidebar-current, var(--ax-sidebar-width));
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ax-bg-subtle);
+  border-right: 1px solid var(--ax-border-subtle);
+  transition:
+    width var(--ax-duration) var(--ax-ease),
+    flex-basis var(--ax-duration) var(--ax-ease);
+}
+
+.main {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ax-bg-canvas);
+}
+
+.right {
+  width: var(--ax-right-current, var(--ax-right-panel-width));
+  flex: 0 0 var(--ax-right-current, var(--ax-right-panel-width));
+  max-width: min(70vw, calc(100vw - var(--ax-sidebar-current, var(--ax-sidebar-width)) - 400px));
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ax-bg-surface);
+  border-left: 1px solid var(--ax-border-subtle);
+  transition:
+    width var(--ax-duration) var(--ax-ease),
+    flex-basis var(--ax-duration) var(--ax-ease);
+}
+
+.sidebarCollapsed {
+  --ax-sidebar-current: var(--ax-sidebar-width-collapsed);
+}
+
+.sidebarCollapsed .sidebar {
+  overflow: visible;
+  position: relative;
+  z-index: 35;
+}
+
+.rightClosed {
+  --ax-right-current: 0px;
+}
+
+.rightClosed .right {
+  max-width: 0;
+  border-left: 0;
+}
+
+.dragging .sidebar,
+.dragging .right {
+  transition: none;
+}
+
+.sidebarResizer,
+.rightResizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  z-index: 30;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebarResizer {
+  left: calc(var(--ax-sidebar-current, var(--ax-sidebar-width)) - 2px);
+}
+
+.rightResizer {
+  right: calc(var(--ax-right-current, var(--ax-right-panel-width)) - 2px);
+}
+
+.sidebarCollapsed .sidebarResizer,
+.rightClosed .rightResizer {
+  display: none;
+}
+
+.sidebarResizer:hover,
+.rightResizer:hover,
+.dragging .sidebarResizer,
+.dragging .rightResizer {
+  background: var(--ax-border);
+}
+
+.scrim {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 55;
+    width: 100%;
+    flex-basis: 100%;
+    max-width: 100vw;
+    border-left: 0;
+    box-shadow: var(--ax-shadow-panel);
+  }
+
+  .rightClosed .right {
+    width: 0;
+    flex-basis: 0;
+    box-shadow: none;
+  }
+
+  .rightResizer {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .appFrame {
+    --ax-sidebar-current: 0px;
+  }
+
+  .sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: min(280px, 86vw);
+    flex-basis: min(280px, 86vw);
+    border-right: 1px solid var(--ax-border);
+    box-shadow: var(--ax-shadow-panel);
+    transform: translateX(-100%);
+    transition: transform var(--ax-duration) var(--ax-ease);
+  }
+
+  .mobileSidebarOpen .sidebar {
+    transform: translateX(0);
+  }
+
+  .mobileSidebarOpen .scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 45;
+    background: rgba(0, 0, 0, 0.24);
+  }
+
+  .sidebarResizer {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .right,
+  .sidebarResizer,
+  .rightResizer {
+    transition: none;
+  }
+}

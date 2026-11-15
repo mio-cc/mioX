@@ -24,7 +24,12 @@ export default function SetupPage() {
   useEffect(() => {
     api
       .authStatus()
-      .then(({ initialized }) => {
+      .then(({ initialized, auth_disabled }) => {
+        // 认证开关关闭时（默认，本地单机）不需要设置密码，直接进主界面。
+        if (auth_disabled) {
+          window.location.replace("/function/tasks");
+          return;
+        }
         if (initialized) router.replace("/login");
       })
       .catch((err) => {
@@ -68,7 +73,7 @@ export default function SetupPage() {
           <div className="absolute size-60 rounded-full border border-primary-foreground/15" />
           <div className="absolute size-40 rounded-full border border-primary-foreground/20" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="ARTEX" width={160} height={160} className="relative brightness-0 invert" />
+          <img src="/logo.png" alt="mioX" width={160} height={160} className="relative brightness-0 invert" />
         </div>
       </div>
 
@@ -80,7 +85,7 @@ export default function SetupPage() {
             <p className="mx-auto max-w-xl text-muted-foreground">
               {unavailable
                 ? "后端或数据库暂时不可用。为避免覆盖实例上已有的密码，初始化入口已临时关闭——请恢复服务后重试。"
-                : "首次使用 ARTEX，请为账户设置一个登录密码（至少 8 位）"}
+                : "首次使用 mioX，请为账户设置一个登录密码（至少 8 位）"}
             </p>
           </div>
           {unavailable ? (

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/guard"
 	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/norma/agentcore"
 	"github.com/Autumn-27/norma/llm"
@@ -18,6 +19,10 @@ import (
 // (→planner) or direct high-priority intents (→frontier). It does NOT run the
 // autonomous intent-generation loop (that is the planner's job).
 type MainAgent struct {
+	// guard applies the user-configured intercept rules (approve / deny / ask) to
+	// this agent's tool calls. nil disables interception.
+	guard *guard.Guard
+
 	findingRecorder FindingRecorder
 	prov            llm.Provider
 	model           string
@@ -34,6 +39,10 @@ type MainAgent struct {
 	noaEnabledFn    func() bool                            // resolver: use experimental noa compaction? (nil = off)
 	maxTokensFn     func() int                             // resolver: per-reply output cap (nil/0 = send no cap)
 }
+
+// SetGuard attaches a guard (with user-configured intercept rules) to this agent,
+// so its tool calls pass through the approve / deny / ask rules like the chat page.
+func (m *MainAgent) SetGuard(g *guard.Guard) { m.guard = g }
 
 // SetNoaEnabled wires a resolver deciding whether runs use the experimental noa
 // context-compression mechanism. nil/unset = off (built-in compaction). Read per
@@ -163,6 +172,9 @@ func (m *MainAgent) Chat(ctx context.Context, taskID int64, mainSeg int, as *db.
 		Settlement:   wrapupSettlement("mainagent", nil),
 		NonStreaming: m.nonStreaming(), // 该 profile 选非流式时走 Provider.Complete
 		MaxTokens:    m.maxTokens(),    // 0 = 不发上限,由服务端默认值决定
+	}
+	if m.guard != nil {
+		opts.Hooks = m.guard.Hooks()
 	}
 	if m.tx != nil { // persist raw human↔AI conversation; one accumulating file per segment
 		opts.Transcript = m.tx

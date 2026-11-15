@@ -1,0 +1,22 @@
+free models=38
+FAIL ling-3.0-flash-fin-free npm=@ai-sdk/openai-compatible status=403 {"type":"error","error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode"}}
+FAIL fledge-alpha-free npm=@ai-sdk/openai-compatible status=403 {"type":"error","error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode"}}
+FAIL qwen3.6-plus-free npm=@ai-sdk/anthropic status=401 {"type":"error","error":{"type":"ModelError","message":"Model qwen3.6-plus-free is not supported"}}
+FAIL mimo-v2-pro-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model mimo-v2-pro-free is not supported"}}
+FAIL muse-spark-1.2-contributor-free npm=@ai-sdk/openai status=403 {"type":"error","error":{"type":"RegionError","message":"This model is not available in your country"}}
+FAIL ling-3.1-flash-free npm=@ai-sdk/openai-compatible status=403 {"type":"error","error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode"}}
+FAIL glm-5-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model glm-5-free is not supported"}}
+FAIL trinity-large-preview-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model trinity-large-preview-free is not supported"}}
+FAIL longcat-2.5-preview-free npm=@ai-sdk/openai-compatible status=403 {"type":"error","error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode"}}
+FAIL ling-3.0-tiny-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model ling-3.0-tiny-free is not supported"}}
+FAIL kimi-k2.5-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model kimi-k2.5-free is not supported"}}
+FAIL glm-4.7-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model glm-4.7-free is not supported"}}
+FAIL laguna-s-2.1-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model laguna-s-2.1-free is not supported"}}
+FAIL minimax-m3-free npm=@ai-sdk/anthropic status=401 {"type":"error","error":{"type":"ModelError","message":"Model minimax-m3-free is not supported"}}
+FAIL exo-free npm=@ai-sdk/openai-compatible status=403 {"type":"error","error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode"}}
+FAIL minimax-m2.5-free npm=@ai-sdk/anthropic status=401 {"type":"error","error":{"type":"ModelError","message":"Model minimax-m2.5-free is not supported"}}
+FAIL ring-2.6-1t-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model ring-2.6-1t-free is not supported"}}
+FAIL longcat-2.0-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model longcat-2.0-free is not supported"}}
+FAIL hy3-preview-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model hy3-preview-free is not supported"}}
+OK space-bunny-free npm=@ai-sdk/openai-compatible status=200 {"id":"0716eb2f1b9252e63823de5abc296a48","object":"chat.completion","created":1791473712,"model":"space-bunny-free","choices":[{"index":0,"finish_reason":"length","message":{"role"
+FAIL nemotron-3-super-free npm=@ai-sdk/openai-compatible status=401 {"type":"error","error":{"type":"ModelError","message":"Model nemotron-3-super-free is not supported"}}

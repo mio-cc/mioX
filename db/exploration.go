@@ -174,6 +174,10 @@ type ExplorationStore struct {
 	expID int64
 }
 
+// DB exposes the underlying handle for callers that need another table
+// (the agent tool set reaches the team board this way).
+func (s *ExplorationStore) DB() *DB { return s.db }
+
 // CreateExploration creates a new exploration root and returns its id.
 func (d *DB) CreateExploration(description, goal string) (int64, error) {
 	var id int64
@@ -221,7 +225,18 @@ func (s *ExplorationStore) AddIntent(payload map[string]any, priority int, ancho
 	if origin == "" {
 		origin = "planner"
 	}
-	return s.AddNode("intent", payload, priority, "open", origin, anchors)
+	id, err := s.AddNode("intent", payload, priority, "open", origin, anchors)
+	if err != nil {
+		return 0, err
+	}
+	// Project onto the team board so the shared work list tracks the queue the
+	// planner actually produces. Best-effort: a projection failure must not lose
+	// the intent itself.
+	summary, _ := payload["summary"].(string)
+	if projectErr := s.db.ProjectIntentCreated(s.expID, id, summary); projectErr != nil {
+		_ = projectErr
+	}
+	return id, nil
 }
 
 // AddGoal writes a goal node (state open).
@@ -354,7 +369,11 @@ func (s *ExplorationStore) SetIntentState(id int64, state string) error {
 	_, err := s.db.Exec(`UPDATE exploration_nodes
 SET state=$1, blocked_reason=NULL, content_version=content_version+1, completed_at = CASE WHEN $4 THEN now() ELSE NULL END
 WHERE id=$2 AND exploration_id=$3 AND kind='intent'`, state, id, s.expID, terminal)
-	return err
+	if err != nil {
+		return err
+	}
+	_ = s.db.ProjectIntentState(s.expID, id, state)
+	return nil
 }
 
 // CompareAndSetIntentState transitions one local intent only when its current
@@ -369,6 +388,9 @@ WHERE id=$2 AND exploration_id=$3 AND kind='intent' AND state=$4`, state, id, s.
 		return false, err
 	}
 	n, err := res.RowsAffected()
+	if n == 1 {
+		_ = s.db.ProjectIntentState(s.expID, id, state)
+	}
 	return n == 1, err
 }
 
@@ -1310,6 +1332,28 @@ type TaskListMetrics struct {
 // The lateral lookups use the per-exploration indexes instead of grouping the
 // complete activity history on every poll.
 func (d *DB) TaskListMetricsAll() (map[int64]TaskListMetrics, error) {
+	return d.taskListMetrics(0)
+}
+
+// TaskListMetricsOne returns the same aggregates for a single exploration.
+// GET /api/tasks/{id} needs goals/findings/tokens for one task; reusing the bulk
+// query keeps one source of truth for how those numbers are derived, and the
+// filter keeps it from aggregating every task on a 5 s detail poll.
+func (d *DB) TaskListMetricsOne(explorationID int64) (TaskListMetrics, error) {
+	all, err := d.taskListMetrics(explorationID)
+	if err != nil {
+		return TaskListMetrics{}, err
+	}
+	return all[explorationID], nil
+}
+
+func (d *DB) taskListMetrics(onlyExploration int64) (map[int64]TaskListMetrics, error) {
+	where := `WHERE task.deleted_at IS NULL`
+	var args []any
+	if onlyExploration > 0 {
+		where += ` AND task.exploration_id=$1`
+		args = append(args, onlyExploration)
+	}
 	rows, err := d.Query(`
 		SELECT task.exploration_id,
 		       COALESCE(token_metrics.input_tokens,0),
@@ -1359,7 +1403,7 @@ func (d *DB) TaskListMetricsAll() (map[int64]TaskListMetrics, error) {
 			FROM findings
 			WHERE task_id=task.id
 		) finding_metrics ON true
-		WHERE task.deleted_at IS NULL`)
+		`+where, args...)
 	if err != nil {
 		return nil, err
 	}

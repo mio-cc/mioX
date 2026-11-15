@@ -1,4 +1,4 @@
-// ARTEX domain model — types used across the UI.
+// mioX domain model — types used across the UI.
 // Derived from the functional spec (section 7: 关键数据形状).
 
 export type TaskStatus = "created" | "queued" | "running" | "paused" | "done" | "failed" | "timeout";
@@ -1609,4 +1609,30 @@ export interface InterceptExecution {
   session: string;
   seq: number;
   items: Activity[];
+}
+/** One row of a task's shared team board (mirrors db.TeamTask). */
+export interface TeamTask {
+  id: number;
+  task_id: number;
+  subject: string;
+  detail: string;
+  status: "pending" | "in_progress" | "completed";
+  owner: string;
+  depends_on: number[];
+  /** Set when projected from an intent, or after a manual row was dispatched. */
+  source_intent_id: number | null;
+  /** pending with every dependency completed. */
+  ready: boolean;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+/** Header summary above the board. */
+export interface TeamTaskProgress {
+  total: number;
+  completed: number;
+  active: number;
+  pending: number;
+  blocked: number;
 }

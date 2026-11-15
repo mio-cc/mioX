@@ -130,8 +130,8 @@ func (d *DB) CreateInterceptPending(ruleID, convID int64, taskID, agentName, too
 	var id int64
 	err := d.QueryRow(`
 INSERT INTO intercept_pending(rule_id, conversation_id, task_id, agent_name, tool_name, tool_input, reason, decision_source, audit)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-		ruleIDPtr, convIDPtr, taskIDPtr, agentName, toolName, raw, reason, interceptSource(ruleID, reason), firstAudit(audits)).Scan(&id)
+VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::jsonb) RETURNING id`,
+		ruleIDPtr, convIDPtr, taskIDPtr, agentName, toolName, string(raw), reason, interceptSource(ruleID, reason), auditText(audits)).Scan(&id)
 	return id, err
 }
 
@@ -371,4 +371,17 @@ func (d *DB) listInterceptsPage(taskID string, page, size int, filter InterceptA
 		out = append(out, r)
 	}
 	return out, total, rows.Err()
+}
+
+// auditText renders the audit payload as JSON text so it can be cast to jsonb in
+// SQL; passing []byte reaches jsonb as bytea under pgx simple-protocol mode.
+func auditText(audits []*InterceptAudit) any {
+	if len(audits) == 0 || audits[0] == nil {
+		return nil
+	}
+	raw, err := json.Marshal(audits[0])
+	if err != nil {
+		return nil
+	}
+	return string(raw)
 }

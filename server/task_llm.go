@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Autumn-27/artex/agent"
@@ -51,6 +52,51 @@ type taskLLMRuntime struct {
 	s        *Server
 	taskID   string
 	agentKey string
+	// effortOverride is a per-runtime, per-turn reasoning-effort override ("" =
+	// inherit the resolved profile). It exists because `norma/llm` only exposes
+	// ReasoningEffort on the provider Config, not per request: the only way to
+	// honour a composer choice for one turn is to rebuild the provider for that
+	// turn. Cleared by the chat handler when the turn ends.
+	effortOverride atomic.Value // string
+}
+
+// setEffortOverride applies a reasoning-effort override for subsequent LLM calls
+// on this runtime. An empty string clears it (back to the profile's own value).
+func (r *taskLLMRuntime) setEffortOverride(effort string) {
+	r.effortOverride.Store(effort)
+}
+
+func (r *taskLLMRuntime) effortOverrideValue() string {
+	if v, ok := r.effortOverride.Load().(string); ok {
+		return v
+	}
+	return ""
+}
+
+// withEffort returns a provider honouring the turn's effort override.
+//
+// It never fails the turn: if the override cannot be applied (unknown value,
+// provider construction error) the resolved provider is returned unchanged, so a
+// bad optional parameter degrades to "no override" instead of breaking chat.
+func (r *taskLLMRuntime) withEffort(base llm.Provider, cfg agent.Config) llm.Provider {
+	want := r.effortOverrideValue()
+	if want == "" || want == cfg.ReasoningEffort {
+		return base
+	}
+	cfg.ReasoningEffort = want
+	p, err := cfg.NewProvider()
+	if err != nil {
+		log.Printf("[llm] reasoning effort override %q ignored: %v", want, err)
+		return base
+	}
+	// Keep the recorder in the loop: without this the overridden turn would vanish
+	// from /api/llm/records (and from token accounting), and we would have no way to
+	// observe that the override actually reached the provider.
+	if r.s != nil && r.s.m != nil {
+		p = llmrec.Wrap(p, r.s.m.PG(), cfg.Model, "", cfg.ThinkingType, cfg.ReasoningEffort, r.s.m.LLMRecordEnabled)
+	}
+	log.Printf("[llm] reasoning effort override %q applied for this turn", want)
+	return p
 }
 
 type taskLLMError struct {
@@ -123,7 +169,7 @@ func (r *taskLLMRuntime) current() (taskLLMSelection, error) {
 	t, _ := r.s.m.Task(r.taskID)
 	sel := taskLLMSelection{task: t, revision: pt.LLMChainRevision}
 	if prov, cfg, ok := r.s.agentBindingProvider(r.agentKey); ok {
-		sel.provider, sel.retry = prov, cfg.Retry
+	sel.provider, sel.retry = r.withEffort(prov, cfg), cfg.Retry
 		return sel, nil
 	}
 	if len(pt.LLMProfileIDs) > 0 {
@@ -135,14 +181,14 @@ func (r *taskLLMRuntime) current() (taskLLMSelection, error) {
 		if !ok {
 			return sel, fmt.Errorf("LLM profile #%d is missing or invalid", sel.profileID)
 		}
-		sel.provider, sel.retry = prov, cfg.Retry
+	sel.provider, sel.retry = r.withEffort(prov, cfg), cfg.Retry
 		return sel, nil
 	}
 	prov, cfg, ok := r.s.globalProvider()
 	if !ok {
 		return sel, fmt.Errorf("task %s has no available fallback LLM provider", r.taskID)
 	}
-	sel.provider, sel.retry = prov, cfg.Retry
+	sel.provider, sel.retry = r.withEffort(prov, cfg), cfg.Retry
 	return sel, nil
 }
 
@@ -595,6 +641,10 @@ func (s *Server) agentsForTask(t *Task) *taskAgentBundle {
 	main.SetProxy(s.m.ProxyAddr(), s.m.ProxyCACert())
 	main.SetWebSearch(s.webSearchFor("mainagent"))
 	main.SetSteerWork(s.engine.SteerWork) // steer_work：人对运行中 work 实时纠偏
+	// 拦截规则：任务里的主 agent 与 planner 也要过审批/拒绝规则，否则 ask 规则只在
+	// 独立 chat 页与 worker 上生效，任务会话等于没有拦截层。
+	main.SetGuard(s.chatGuard())
+	pl.SetGuard(s.chatGuard())
 	bundle := &taskAgentBundle{
 		runtime: goalRuntime, plannerRuntime: plannerRuntime, workerRuntime: workerRuntime,
 		mainRuntime: mainRuntime, pl: pl, wk: wk, main: main,

@@ -57,6 +57,8 @@ type ToolSet struct {
 	ts              *db.ExplorationStore
 	worker          string
 	taskID          int64 // PG tasks.id; 0 when unknown (tests / orchestrator cross-task reads)
+	// db is the full handle for tables outside the exploration graph (team board).
+	db *db.DB
 	// coverageDisabled mirrors tasks.coverage_enabled=false. Stored inverted so the
 	// zero value (all existing ToolSet constructions) means ENABLED — matching the
 	// DB default (true). When true: graphOverviewData drops the coverage block, the
@@ -2050,5 +2052,7 @@ func (t *ToolSet) PlannerTools() []actool.CoreTool {
 		t.addTaskScope(),
 		// list_untested_assets：按需查本任务范围内未测资产(类型+分页)，自行决定补测。
 		t.listUntestedAssets(),
+		// 团队任务板：planner 把拆解结果写进共享板，worker 从板上认领。
+		t.teamBoardWrite(), t.teamBoardList(),
 	}
 }

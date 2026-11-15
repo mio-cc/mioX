@@ -85,6 +85,8 @@ import type {
   TaskAssetMutation,
   TaskAssetScopeMutation,
   TaskCategory,
+  TeamTask,
+  TeamTaskProgress,
   TaskConstraint,
   TaskGoal,
   TaskLLMResolutions,
@@ -111,8 +113,33 @@ function getToken(): string | null {
   return localStorage.getItem("artex_token");
 }
 
+// GET coalescing: several panels poll the same endpoint on overlapping timers
+// (task list, stats, intents…). Without this, one render pass can fire the same
+// GET three times. Only in-flight duplicates are shared — the next tick always
+// issues a fresh request, so polling freshness is unchanged.
+const inFlightGets = new Map<string, Promise<unknown>>();
+
 export async function http<T>(path: string, init?: RequestInit): Promise<T> {
   if (MOCK) return mockHandle<T>(init?.method ?? "GET", path, init?.body ?? null);
+  const method = (init?.method ?? "GET").toUpperCase();
+  const coalesce = method === "GET" && !init?.signal;
+  if (coalesce) {
+    const existing = inFlightGets.get(path);
+    if (existing) return existing as Promise<T>;
+  }
+  const run = request<T>(path, init);
+  if (coalesce) {
+    inFlightGets.set(path, run as Promise<unknown>);
+    // Clear on settle either way; the map only ever holds live requests.
+    void run.then(
+      () => inFlightGets.delete(path),
+      () => inFlightGets.delete(path),
+    );
+  }
+  return run;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
   const r = await fetch(`/api${path}`, {
     ...init,
@@ -165,7 +192,7 @@ export async function http<T>(path: string, init?: RequestInit): Promise<T> {
 // Token is appended as ?token= because SSE can't carry cookies cross-origin.
 // mockReport returns a canned Markdown report for the demo.
 function mockReport(_task?: string): string {
-  return `# ARTEX 渗透测试报告 — Acme Corp
+  return `# mioX 渗透测试报告 — Acme Corp
 
 ## 概览
 - 范围：acme.com（含 www / admin / api / shop / vpn 子域）
@@ -237,7 +264,7 @@ export const api = {
   health: () => get<{ ok: boolean; service: string; version: string }>("/health"),
 
   // ---- auth ----
-  authStatus: () => get<{ initialized: boolean }>("/auth/status"),
+  authStatus: () => get<{ initialized: boolean; auth_disabled?: boolean }>("/auth/status"),
   login: (username: string, password: string) => post<{ token: string }>("/auth/login", { username, password }),
   initPassword: (password: string) => post<{ token: string }>("/auth/init", { password }),
   changePassword: (oldPassword: string, newPassword: string) =>
@@ -275,6 +302,19 @@ export const api = {
       coverage_enabled: input.coverageEnabled ?? true, // 默认开;false=关闭资产覆盖度功能
       intercept_rules: input.interceptRules ?? [], // 任务级资产拦截规则
     }),
+  // Team task board: a shared work list agents claim from.
+  teamBoard: (taskId: string) =>
+    get<{ tasks: TeamTask[]; progress: TeamTaskProgress }>(`/tasks/${taskId}/team`),
+  createTeamTask: (taskId: string, subject: string, detail?: string, dependsOn?: number[]) =>
+    post<TeamTask>(`/tasks/${taskId}/team`, {
+      subject,
+      ...(detail ? { detail } : {}),
+      ...(dependsOn && dependsOn.length > 0 ? { depends_on: dependsOn } : {}),
+    }),
+  claimTeamTask: (id: number, owner: string) => post<TeamTask>(`/team-tasks/${id}/claim`, { owner }),
+  completeTeamTask: (id: number) => post<TeamTask>(`/team-tasks/${id}/complete`, {}),
+  deleteTeamTask: (id: number) => del<{ status: string }>(`/team-tasks/${id}`),
+  dispatchTeamTask: (id: number) => post<{ intent_id: number; status: string }>(`/team-tasks/${id}/dispatch`, {}),
   taskCategories: () => get<{ categories: TaskCategory[] }>("/task-categories").then((r) => arr(r.categories)),
   updateTask: (id: string, input: { name?: string; pinned?: boolean }) => patch<Task>(`/tasks/${id}`, input),
   renameTask: (id: string, name: string) => patch<Task>(`/tasks/${id}`, { name }),
@@ -877,8 +917,14 @@ export const api = {
       `/chat/mentions?${new URLSearchParams({ kind, q: query, cursor })}`,
       { signal },
     ),
-  chat: (message: string, task?: string, attachments?: ChatAttachment[], seg?: number) =>
-    post<{ reply: string; mode: string }>(`/chat${tq(task)}`, { message, attachments, seg }),
+  chat: (message: string, task?: string, attachments?: ChatAttachment[], seg?: number, reasoningEffort?: string) =>
+    post<{ reply: string; mode: string }>(`/chat${tq(task)}`, {
+      message,
+      attachments,
+      seg,
+      // Per-turn reasoning-effort override ("" / undefined = inherit the profile).
+      reasoning_effort: reasoningEffort || undefined,
+    }),
   chatStatus: (taskId: string) => get<{ running: boolean }>(`/tasks/${taskId}/chat/status`),
   // 方式1 文件上传:落到会话/任务工作目录 uploads/，返回可供 agent Read 的相对路径。
   chatUpload: async (scope: "task" | "session" | "staging", id: string, files: File[]) => {

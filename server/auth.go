@@ -116,9 +116,15 @@ func extractToken(r *http.Request) string {
 }
 
 // requireAuth wraps h with JWT validation.
-// /api/auth/* and /api/health are exempt.
+// /api/auth/* and /api/health are exempt. When the password gate is switched off
+// (see authDisabled / config.AuthDisabled) every route is served as-is — the
+// caller is the local operator, so there is no token to present.
 func (s *Server) requireAuth(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.authDisabled {
+			h.ServeHTTP(w, r)
+			return
+		}
 		p := r.URL.Path
 		if strings.HasPrefix(p, "/api/auth/") || p == "/api/health" {
 			h.ServeHTTP(w, r)
@@ -137,10 +143,10 @@ func (s *Server) requireAuth(h http.Handler) http.Handler {
 	})
 }
 
-// GET /api/auth/status — reports whether the admin password has been initialised.
-// 读失败必须回 503 而不是 initialized:false：前端在 initialized:false 时会把用户
-// 送到 /setup 去设置密码（login/page.tsx），把数据库故障包装成 200 等于把用户往
-// 覆盖已有密码的路上推。
+// GET /api/auth/status — reports whether the admin password has been initialised
+// and whether the password gate is currently disabled. 读失败必须回 503 而不是
+// initialized:false：前端在 initialized:false 时会把用户送到 /setup 去设置密码
+// （login/page.tsx），把数据库故障包装成 200 等于把用户往覆盖已有密码的路上推。
 func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 	pg := s.pg(w)
 	if pg == nil {
@@ -151,7 +157,7 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 503, errDataSourceUnavailable)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"initialized": hash != ""})
+	writeJSON(w, 200, map[string]any{"initialized": hash != "", "auth_disabled": s.authDisabled})
 }
 
 // POST /api/auth/init — sets the password for the first time; rejected if already set.
@@ -207,13 +213,15 @@ func (s *Server) authInit(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/auth/change-password — changes the admin password. Requires a valid
 // token (this route is under /api/auth/* which requireAuth exempts, so the token
-// is validated here) AND the current password.
+// is validated here) AND the current password. When the password gate is off we
+// skip the token check (there is none in local mode) but still require the
+// current password, so a stray browser tab can't silently reset it.
 func (s *Server) authChangePassword(w http.ResponseWriter, r *http.Request) {
 	pg := s.pg(w)
 	if pg == nil {
 		return
 	}
-	if !verifyJWT(extractToken(r), s.jwtKey) {
+	if !s.authDisabled && !verifyJWT(extractToken(r), s.jwtKey) {
 		writeErr(w, 401, "未授权")
 		return
 	}

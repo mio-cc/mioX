@@ -4,6 +4,8 @@ import * as React from "react";
 
 import Link from "next/link";
 
+import { HarnessTaskList } from "./_harness/task-list";
+
 import {
   DndContext,
   type DragEndEvent,
@@ -302,7 +304,7 @@ function compareTasks(left: Task, right: Task, field: TaskSortField, direction: 
   return -compareTaskIDs(left.id, right.id);
 }
 
-export default function TasksPage() {
+function LegacyTasksPage() {
   const [activeTab, setActiveTab] = React.useState("current");
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [categories, setCategories] = React.useState<TaskCategory[]>([]);
@@ -3414,4 +3416,12 @@ function CreateTaskSheet({
       </SheetContent>
     </Sheet>
   );
+}
+
+// The harness task list is the product default; the legacy table (3251 lines,
+// native selects, horizontally scrolling columns) is opt-in. Same inversion as
+// the shell itself: a missing/un-inlined flag must not ship the legacy UI.
+export default function TasksPage() {
+  if (process.env.NEXT_PUBLIC_LEGACY_SHELL === "1") return <LegacyTasksPage />;
+  return <HarnessTaskList />;
 }

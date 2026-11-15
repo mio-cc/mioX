@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/guard"
 	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/norma/agentcore"
 	"github.com/Autumn-27/norma/llm"
@@ -21,6 +22,10 @@ import (
 // assets, judges whether the task goal is met, and emits 0..N exploration intents
 // into the frontier. It is the sole intent generator.
 type Planner struct {
+	// guard applies the user-configured intercept rules (approve / deny / ask) to
+	// this agent's tool calls. nil disables interception.
+	guard *guard.Guard
+
 	findingRecorder   FindingRecorder
 	prov              llm.Provider
 	model             string
@@ -47,6 +52,10 @@ type Planner struct {
 	todoMu sync.Mutex
 	todos  map[int64]*actool.TodoStore
 }
+
+// SetGuard attaches a guard (with user-configured intercept rules) to this agent,
+// so its tool calls pass through the approve / deny / ask rules like the chat page.
+func (p *Planner) SetGuard(g *guard.Guard) { p.guard = g }
 
 func NewPlanner(prov llm.Provider, model, workDir string, tx *transcript.Store, window, maxTurns int) *Planner {
 	return &Planner{prov: prov, model: model, workDir: workDir, tx: tx, window: window, maxTurns: maxTurns, todos: map[int64]*actool.TodoStore{}}
@@ -437,6 +446,9 @@ func (p *Planner) Plan(ctx context.Context, taskID int64, as *db.AssetStore, ts 
 		Settlement:   settle,
 		NonStreaming: p.nonStreaming(), // 该 profile 选非流式时走 Provider.Complete
 		MaxTokens:    p.maxTokens(),    // 0 = 不发上限,由服务端默认值决定
+	}
+	if p.guard != nil {
+		opts.Hooks = p.guard.Hooks()
 	}
 	if p.tx != nil { // persist raw LLM conversation; one accumulating file per task's planner
 		opts.Transcript = p.tx

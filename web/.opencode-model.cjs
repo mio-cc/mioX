@@ -1,0 +1,1 @@
+(async()=>{const d=await(await fetch('https://models.dev/api.json')).json();const m=d.opencode.models['space-bunny-free'];console.log(JSON.stringify(m,null,2));})();
