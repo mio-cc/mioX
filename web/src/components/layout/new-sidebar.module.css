@@ -335,6 +335,29 @@
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  /* Marquee needs its own scroll box; the scrollbar stays invisible. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.taskName::-webkit-scrollbar {
+  display: none;
+}
+
+/* Fade masks driven by the marquee hook: left while scrolled away from the start,
+   right while text remains past the edge (reference: DSH data-scrolled/data-clipped). */
+.taskName[data-scrolled] {
+  mask-image: linear-gradient(to right, transparent 0, #000 14px);
+}
+
+.taskName[data-clipped] {
+  mask-image: linear-gradient(to left, transparent 0, #000 14px);
+}
+
+.taskName[data-scrolled][data-clipped] {
+  mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
 }
 
 .taskPin {

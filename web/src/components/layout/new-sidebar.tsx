@@ -294,6 +294,70 @@ function isActivePath(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/* Overflow this small hides no meaningful tail; scrolling for it reads as an
+   accidental jitter, so the title stays put (reference: DSH MIN_TITLE_REVEAL_PX). */
+const MIN_TITLE_REVEAL_PX = 8;
+/* Marquee travel speed: slow enough to read the text as it passes. */
+const TITLE_MARQUEE_PX_PER_MS = 0.03;
+
+/**
+ * Marquee a title wider than its cell while its row is hovered (reference: DSH
+ * `useTitleMarquee`). The span clips its own text, so entering crawls it at a constant
+ * speed until the far edge is in view, then rests there. Leaving snaps back in one step.
+ * `data-scrolled` / `data-clipped` drive the fade masks so a clipped title never looks
+ * like it just ends.
+ */
+function useTitleMarquee(title: React.RefObject<HTMLSpanElement | null>): {
+  enter: () => void;
+  leave: () => void;
+} {
+  const frame = React.useRef(0);
+  const revealing = React.useRef(false);
+  React.useEffect(() => () => window.cancelAnimationFrame(frame.current), []);
+  return React.useMemo(
+    () => ({
+      enter: () => {
+        const element = title.current;
+        if (element === null || revealing.current) return;
+        revealing.current = true;
+        const range = element.scrollWidth - element.clientWidth;
+        if (range <= MIN_TITLE_REVEAL_PX) return;
+        const place = (left: number) => {
+          element.scrollLeft = left;
+          if (left > 0) element.dataset.scrolled = "";
+          else delete element.dataset.scrolled;
+          if (left < range) element.dataset.clipped = "";
+          else delete element.dataset.clipped;
+        };
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          place(range);
+          return;
+        }
+        window.cancelAnimationFrame(frame.current);
+        let previous: number | undefined;
+        let position = 0;
+        const step = (now: number) => {
+          position += previous === undefined ? 0 : (now - previous) * TITLE_MARQUEE_PX_PER_MS;
+          previous = now;
+          place(Math.min(position, range));
+          if (position < range) frame.current = window.requestAnimationFrame(step);
+        };
+        frame.current = window.requestAnimationFrame(step);
+      },
+      leave: () => {
+        revealing.current = false;
+        window.cancelAnimationFrame(frame.current);
+        const element = title.current;
+        if (element === null) return;
+        element.scrollLeft = 0;
+        delete element.dataset.scrolled;
+        delete element.dataset.clipped;
+      },
+    }),
+    [title],
+  );
+}
+
 function BrandMark({ className = styles.brandMark }: { readonly className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -306,8 +370,56 @@ function BrandMark({ className = styles.brandMark }: { readonly className?: stri
   );
 }
 
-export function NewSidebar() {
-  const pathname = usePathname();
+/** One sidebar task row: status dot, marquee title, pin, relative age. */
+function TaskRowItem({
+  task,
+  active,
+  onHover,
+  onLeave,
+}: {
+  readonly task: Task;
+  readonly active: boolean;
+  readonly onHover: (task: Task, element: HTMLElement) => void;
+  readonly onLeave: () => void;
+}) {
+  const nameRef = React.useRef<HTMLSpanElement>(null);
+  const marquee = useTitleMarquee(nameRef);
+  return (
+    <Link
+      href={`/function/tasks/detail?id=${encodeURIComponent(task.id)}`}
+      className={`${styles.taskRow} ${active ? styles.taskRowActive : ""}`}
+      title={`${taskName(task)} · ${statusLabel(task)}`}
+      aria-current={active ? "page" : undefined}
+      data-task-id={task.id}
+      data-testid="sidebar-task-row"
+      onMouseEnter={(event) => {
+        marquee.enter();
+        onHover(task, event.currentTarget);
+      }}
+      onMouseLeave={() => {
+        marquee.leave();
+        onLeave();
+      }}
+      onFocus={(event) => {
+        marquee.enter();
+        onHover(task, event.currentTarget);
+      }}
+      onBlur={() => {
+        marquee.leave();
+        onLeave();
+      }}
+    >
+      <span className={`${styles.statusDot} ${statusClass(task)}`} />
+      <span className={styles.taskName} ref={nameRef} data-testid="sidebar-task-name">
+        {taskName(task)}
+      </span>
+      {task.pinned ? <Pin size={10} className={styles.taskPin} aria-label="已置顶" /> : null}
+      <span className={styles.taskTime} data-testid="sidebar-task-time">{relTime(task)}</span>
+    </Link>
+  );
+}
+
+export function NewSidebar() {  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { sidebarCollapsed, toggleSidebar, toggleRight } = useAppLayout();
@@ -713,24 +825,13 @@ export function NewSidebar() {
             <div className={styles.emptyTask}>{onlyRunning ? "没有运行中的任务" : "暂无任务"}</div>
           ) : (
             visibleTasks.map((task) => (
-              <Link
+              <TaskRowItem
                 key={task.id}
-                href={`/function/tasks/detail?id=${encodeURIComponent(task.id)}`}
-                className={`${styles.taskRow} ${task.id === activeTaskId ? styles.taskRowActive : ""}`}
-                title={`${taskName(task)} · ${statusLabel(task)}`}
-                aria-current={task.id === activeTaskId ? "page" : undefined}
-                data-task-id={task.id}
-                data-testid="sidebar-task-row"
-                onMouseEnter={(event) => onRowEnter(task, event.currentTarget)}
-                onMouseLeave={onRowLeave}
-                onFocus={(event) => onRowEnter(task, event.currentTarget)}
-                onBlur={onRowLeave}
-              >
-                <span className={`${styles.statusDot} ${statusClass(task)}`} />
-                <span className={styles.taskName}>{taskName(task)}</span>
-                {task.pinned ? <Pin size={10} className={styles.taskPin} aria-label="已置顶" /> : null}
-                <span className={styles.taskTime} data-testid="sidebar-task-time">{relTime(task)}</span>
-              </Link>
+                task={task}
+                active={task.id === activeTaskId}
+                onHover={onRowEnter}
+                onLeave={onRowLeave}
+              />
             ))
           )}
         </div>
