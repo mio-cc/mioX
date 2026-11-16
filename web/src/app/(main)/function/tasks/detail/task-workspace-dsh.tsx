@@ -1440,6 +1440,8 @@ function buildActivityNodes(
   feedback: Readonly<Record<string, MessageFeedback>> = {},
   sessionKey = "main:0",
   onChooseFeedback?: (seq: number, rating: MessageFeedbackRating) => void,
+  // D4-T4: 折叠态下过程行不卸载 DOM，而是 hidden="until-found"（DSH searchable-hidden.ts:32,41）
+  fold?: { hiddenKinds: ReadonlySet<string>; turnSeq: number },
 ): React.ReactNode[] {
   const resultByUse = new Map<string, Activity>();
   for (const activity of activities) {
@@ -1453,8 +1455,11 @@ function buildActivityNodes(
   const flushTools = () => {
     if (!toolGroup.length) return;
     const key = `tools-${groupKey++}`;
+    const hiddenProps = fold?.hiddenKinds.has("tool_use")
+      ? { hidden: "until-found" as unknown as boolean, "data-fold-seq": fold.turnSeq, "data-fold-kind": "tool_use" }
+      : {};
     nodes.push(
-      <div className={styles.process} key={key}>
+      <div className={styles.process} key={key} {...hiddenProps}>
         {toolGroup.map((step) => (
           <ToolRow key={step.seq} step={step} result={step.tool_use_id ? resultByUse.get(step.tool_use_id) : undefined} taskId={taskId} />
         ))}
@@ -1495,13 +1500,17 @@ function buildActivityNodes(
       // Reasoning is a collapsed disclosure (reference: ReasoningRow): one 24px
       // row with icon + label + dot + a one-line summary, expandable to the full
       // text. It is never a wall of thinking dumped into the transcript.
+      const hiddenProps = fold?.hiddenKinds.has(activity.kind)
+        ? { hidden: "until-found" as unknown as boolean, "data-fold-seq": fold.turnSeq, "data-fold-kind": activity.kind }
+        : {};
       nodes.push(
-        <ReasoningRow
-          key={`reason-${activity.seq}`}
-          kind={activity.kind}
-          text={activity.summary ?? ""}
-          streaming={streamingSeq === activity.seq}
-        />,
+        <div key={`reason-${activity.seq}`} {...hiddenProps}>
+          <ReasoningRow
+            kind={activity.kind}
+            text={activity.summary ?? ""}
+            streaming={streamingSeq === activity.seq}
+          />
+        </div>,
       );
       continue;
     }
@@ -2276,6 +2285,23 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     void loadActivity(currentKey);
   }, [currentKey, loadActivity, taskId]);
 
+  // D4-T4: beforematch 展开折叠回合（DSH searchable-hidden.ts:41）。浏览器 Ctrl+F
+  // 命中 hidden="until-found" 的内容时触发 beforematch，自动展开该回合。
+  React.useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const onBeforeMatch = (e: Event) => {
+      const el = e.target as HTMLElement | null;
+      const foldEl = el?.closest?.("[data-fold-seq]");
+      if (!foldEl) return;
+      const seq = Number(foldEl.getAttribute("data-fold-seq"));
+      if (Number.isNaN(seq)) return;
+      setExpandedFolds((prev) => new Set(prev).add(seq));
+    };
+    root.addEventListener("beforematch", onBeforeMatch);
+    return () => root.removeEventListener("beforematch", onBeforeMatch);
+  }, []);
+
   // Composer textarea grows with its content, capped at 180px (then scrolls).
   // biome-ignore lint/correctness/useExhaustiveDependencies: the draft value deliberately drives the height recalculation.
   React.useEffect(() => {
@@ -3024,7 +3050,10 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
                 const isLiveTurn = groupIndex === turnGroups.length - 1;
                 const processCount = group.rows.filter((row) => PROCESS_KINDS.has(row.kind)).length;
                 const folded = compactView && !isLiveTurn && processCount > 0 && !expandedFolds.has(group.startSeq);
-                const rows = folded ? group.rows.filter((row) => !PROCESS_KINDS.has(row.kind)) : group.rows;
+                // D4-T4: 折叠时保留全部行（过程行 hidden="until-found"，Ctrl+F 可命中并自动展开），
+                // 不再从数组剔除（DSH searchable-hidden 语义：折叠内容不卸载 DOM）。
+                const rows = group.rows;
+                const foldState = folded ? { hiddenKinds: PROCESS_KINDS, turnSeq: group.startSeq } : undefined;
                 return (
                   <React.Fragment key={`turn-${group.startSeq}`}>
                     {folded ? (
@@ -3053,6 +3082,7 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
                       (seq, rating) => {
                         void chooseFeedback(currentKey, seq, rating);
                       },
+                      foldState,
                     )}
                     {/* 进行中的回合（还没有 result 行）：改动文件卡挂在当前内容末尾。 */}
                     {isLiveTurn && (turnFiles[0]?.length ?? 0) > 0 ? (
