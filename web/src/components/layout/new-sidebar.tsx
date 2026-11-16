@@ -298,7 +298,8 @@ function isActivePath(pathname: string, href: string): boolean {
    accidental jitter, so the title stays put (reference: DSH MIN_TITLE_REVEAL_PX). */
 const MIN_TITLE_REVEAL_PX = 8;
 /* Folded category groups, persisted per browser. */
-const SIDEBAR_COLLAPSED_KEY = "miox.sidebar.collapsedGroups";/* Marquee travel speed: slow enough to read the text as it passes. */
+const SIDEBAR_COLLAPSED_KEY = "miox.sidebar.collapsedGroups";
+const SIDEBAR_TOUCHED_KEY = "miox.sidebar.touchedGroups";/* Marquee travel speed: slow enough to read the text as it passes. */
 const TITLE_MARQUEE_PX_PER_MS = 0.03;
 
 /**
@@ -624,10 +625,30 @@ export function NewSidebar() {
     }
   });
 
+  // Groups the user has explicitly toggled. Untouched groups default to COLLAPSED
+  // (DSH: root groups default collapsed, ui-sidebar WorkspaceBrowser).
+  const [touchedGroups, setTouchedGroups] = React.useState<ReadonlySet<string>>(() => {
+    if (typeof window === "undefined") return new Set<string>();
+    try {
+      const raw = window.localStorage.getItem(SIDEBAR_TOUCHED_KEY);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : []);
+    } catch {
+      return new Set<string>();
+    }
+  });
+
+  // Watermark: groups show 5 rows by default (DSH SESSION_WATERMARK_BASE=5).
+  const [showAllGroups, setShowAllGroups] = React.useState<ReadonlySet<string>>(() => new Set<string>());
+
   const toggleGroup = React.useCallback((key: string) => {
+    // Render semantics: untouched -> collapsed; touched -> mirror collapsedGroups.
+    // Toggle must flip the RENDERED state, not the raw set membership (otherwise
+    // the first click on an untouched group would collapse it instead of expanding).
+    const currentlyCollapsed = touchedGroups.has(key) ? collapsedGroups.has(key) : true;
     setCollapsedGroups((current) => {
       const next = new Set(current);
-      if (next.has(key)) next.delete(key);
+      if (currentlyCollapsed) next.delete(key);
       else next.add(key);
       try {
         window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, JSON.stringify([...next]));
@@ -636,7 +657,17 @@ export function NewSidebar() {
       }
       return next;
     });
-  }, []);
+    setTouchedGroups((current) => {
+      const next = new Set(current);
+      next.add(key);
+      try {
+        window.localStorage.setItem(SIDEBAR_TOUCHED_KEY, JSON.stringify([...next]));
+      } catch {
+        // storage unavailable: keep the in-memory state
+      }
+      return next;
+    });
+  }, [touchedGroups, collapsedGroups]);
 
   // Row hover card: delayed like DSH's HoverCard so sweeping the list does not flash a
   // card on every row passed over.
@@ -1040,9 +1071,14 @@ export function NewSidebar() {
             <div className={styles.emptyTask}>{onlyRunning ? "没有运行中的任务" : "暂无任务"}</div>
           ) : (
             groups.map((group) => {
-              const collapsed = collapsedGroups.has(group.key);
+              // Untouched groups default to COLLAPSED (DSH root-group semantics).
+              const collapsed = touchedGroups.has(group.key) ? collapsedGroups.has(group.key) : true;
+              const showAll = showAllGroups.has(group.key);
+              const watermark = 5; // DSH SESSION_WATERMARK_BASE
+              const shownTasks = showAll ? group.tasks : group.tasks.slice(0, watermark);
+              const hiddenCount = group.tasks.length - shownTasks.length;
               return (
-                <div className={styles.taskGroup} key={group.key} data-testid="sidebar-group" data-group-key={group.key}>
+                <div className={styles.taskGroup} key={group.key} data-testid="sidebar-group" data-group-key={group.key} data-collapsed={collapsed || undefined}>
                   <button
                     type="button"
                     className={styles.groupRow}
@@ -1056,7 +1092,7 @@ export function NewSidebar() {
                   </button>
                   {collapsed
                     ? null
-                    : group.tasks.map((task) => (
+                    : shownTasks.map((task) => (
                         <TaskRowItem
                           key={task.id}
                           task={task}
@@ -1066,6 +1102,22 @@ export function NewSidebar() {
                           onMenu={openRowMenu}
                         />
                       ))}
+                  {!collapsed && hiddenCount > 0 ? (
+                    <button
+                      type="button"
+                      className={styles.groupExpandMore}
+                      data-testid="sidebar-group-expand-more"
+                      onClick={() =>
+                        setShowAllGroups((current) => {
+                          const next = new Set(current);
+                          next.add(group.key);
+                          return next;
+                        })
+                      }
+                    >
+                      展开其余 {hiddenCount} 个
+                    </button>
+                  ) : null}
                 </div>
               );
             })
@@ -1073,8 +1125,8 @@ export function NewSidebar() {
         </div>
       </div>
 
-      <div className={styles.sectionLabel}>
-        <span>全局面板</span>
+      <div className={styles.sectionLabel} aria-label="全局面板">
+        {/* 视觉标题已去掉（DSH 里「全局面板」只是 aria-label，不是可见标题），省 36px 固定开销 */}
       </div>
 
       <div className={styles.quickList}>

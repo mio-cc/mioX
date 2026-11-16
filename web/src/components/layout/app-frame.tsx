@@ -73,6 +73,10 @@ export function AppFrame({ sidebar, children, rightPanel, defaultRightOpen = fal
   const [dragging, setDragging] = React.useState<"sidebar" | "right" | null>(null);
   const hydrated = React.useRef(false);
   const rightRef = React.useRef<HTMLDivElement>(null);
+  // Preference captured before an automatic narrow-viewport collapse; restored on
+  // return to desktop so responsive rules never rewrite the user's choice (DSH:
+  // "responsive never rewrites user preference", ui-layout AppFrame).
+  const preNarrowCollapsed = React.useRef<boolean | null>(null);
 
   // Restore layout preferences after mount so static-export prerender stays deterministic.
   React.useEffect(() => {
@@ -96,9 +100,15 @@ export function AppFrame({ sidebar, children, rightPanel, defaultRightOpen = fal
     const onResize = () => {
       const nextWidth = window.innerWidth;
       setViewportWidth(nextWidth);
-      // Responsive rule: desktop -> tablet collapses the sidebar; it does not auto-expand again.
+      // Responsive rule: desktop -> tablet collapses the sidebar; returning to
+      // desktop restores the preference that was in effect before (was: collapse
+      // only, so the sidebar never re-expanded and the auto-collapse got persisted).
       if (nextWidth < 1024) {
+        if (preNarrowCollapsed.current === null) preNarrowCollapsed.current = sidebarCollapsed;
         setSidebarCollapsed(true);
+      } else if (preNarrowCollapsed.current !== null) {
+        setSidebarCollapsed(preNarrowCollapsed.current);
+        preNarrowCollapsed.current = null;
       }
     };
     window.addEventListener("resize", onResize);
