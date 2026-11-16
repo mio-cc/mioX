@@ -839,7 +839,9 @@ export const api = {
   // gap-free. hasMore = still-older steps exist (drives scroll-up loading).
   activityHistory: (task: string, session: string, before = 0, limit = 200) => {
     const q = new URLSearchParams({ session, limit: String(limit) });
-    if (task) q.set("task", task);
+    // 总是带 task 参数(即使为空串):不带时后端 ResolveTask("") 会落到
+    // "最近创建的任务",历史就串台了(U1)。
+    q.set("task", task);
     if (before > 0) q.set("before", String(before));
     return get<{ items: Activity[]; snapshot_cursor: number; earliest_cursor: number; has_more: boolean }>(
       `/exploration/activity/history?${q.toString()}`,

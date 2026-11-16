@@ -311,7 +311,10 @@ export function ModelSelect({
         data-model-active={activeRow?.key ?? ""}
       >
         <span className={styles.modelSeatLabel}>{modelLabel}</span>
-        <span className={styles.modelSeatEffort}>{effortLabel}</span>
+        {/* 团队模式常驻指示:开启后 chip 上可见,不再埋在弹层里(U4)。 */}
+        <span className={styles.modelSeatEffort} data-team-mode={teamMode ? "on" : "off"}>
+          {teamMode ? `${effortLabel} · 团队` : effortLabel}
+        </span>
         {pending ? (
           <span className={styles.spinner} aria-hidden="true" />
         ) : (

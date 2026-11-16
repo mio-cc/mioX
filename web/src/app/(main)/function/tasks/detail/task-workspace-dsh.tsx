@@ -65,6 +65,7 @@ import {
 } from "./_composer/model-picker";
 import { GoalBar } from "./_composer/goal-bar";
 import { CommandMenu, type CommandItem } from "./_composer/slash-menu";
+import { WorkspaceSkeleton } from "./workspace-skeleton";
 import styles from "./task-workspace-dsh.module.css";
 
 type TabKey = "chat" | "trajectory" | "team" | "graph" | "findings" | "report";
@@ -1800,6 +1801,11 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
       }),
     [runGoalAction, task?.goal_state?.id, taskId],
   );
+  // GoalBar 空态入口的「设置目标」保存动作:等价于 /goal 命令(U3)。
+  const createGoal = React.useCallback(
+    (objective: string) => runGoalAction(() => api.setTaskGoal(taskId, objective)),
+    [runGoalAction, taskId],
+  );
 
   // A turn ends when its `result` frame lands (that frame carries the answer).
   // Clearing `sending` here - instead of right after the 202 - is what lets the
@@ -1851,6 +1857,9 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     api
       .task(taskId)
       .then((next) => {
+        // 成功即清错误(U1):error 以前只在失败时写、成功永不清除,
+        // 一次瞬时失败就把红条钉死到重新挂载。
+        setError("");
         setTask((current) => {
           if (!current) return next;
           // 目标(revision 单调令牌)与轮询有竞态:一个在 pause/clear 之前发出的
@@ -2145,6 +2154,9 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   }, [activities, sending]);
 
   React.useEffect(() => {
+    // 空 id 守卫(U1):?id= 尚未就绪/缺失时不发任何请求,否则不带 task 的
+    // history 会落到后端的"最近任务"上(串台)。
+    if (taskId === "") return;
     loadTask();
     loadSessions();
     loadIntents();
@@ -2154,7 +2166,7 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
       loadIntents();
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [loadLLM, loadIntents, loadSessions, loadTask]);
+  }, [loadLLM, loadIntents, loadSessions, loadTask, taskId]);
 
   // Live updates: one task-level SSE tails every lane's new activity and routes
   // each frame by session key, so switching lanes never reopens a stream. It
@@ -2168,6 +2180,8 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   // Frames are already routed by session key, so the open stream serves every
   // lane; only the history load below is per-lane.
   React.useEffect(() => {
+    // 空 id 守卫(U1):不给空任务开 SSE/轮询,防串台。
+    if (taskId === "") return;
     let disposed = false;
 
     const stopStream = () => {
@@ -2249,8 +2263,10 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   // effect so switching never tears the stream down.
   React.useEffect(() => {
     activeSessionKeyRef.current = currentKey;
+    // 空 id 守卫(U1):同上面的 loader,不发起无 task 的 history 请求。
+    if (taskId === "") return;
     void loadActivity(currentKey);
-  }, [currentKey, loadActivity]);
+  }, [currentKey, loadActivity, taskId]);
 
   // Composer textarea grows with its content, capped at 180px (then scrolls).
   // biome-ignore lint/correctness/useExhaustiveDependencies: the draft value deliberately drives the height recalculation.
@@ -2431,14 +2447,58 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     }
   }, [loadSessions, taskId]);
 
-  const send = React.useCallback(async () => {
-    const text = input.trim();
-    if (!text || sending) return;
-    // `/goal <objective>` 是**命令**,不是发给模型的消息(DSH goal-command-input.ts:9
-    // `GOAL_COMMAND='goal'`:目标由 /goal 命令创建,输入框只负责把命令发出去)。
-    // 走目标通道而不是 /api/chat:模型不该看见这条命令;服务端会把它记成一条人类
-    // 回合,所以刷新后气泡仍在(GoalCommandInputView.tsx:13-18)。
-    const goalMatch = /^\/goal(?:\s+([\s\S]*))?$/.exec(text);
+  const send = React.useCallback(
+    async (overrideText?: string) => {
+      const text = (overrideText ?? input).trim();
+      if (!text || sending || uploading > 0) return;
+      // `/plan [off|<一句话>]` 三态(DSH plan-mode):`/plan` 进入、`/plan off` 退出、
+      // `/plan <一句话>` 进入计划模式并把这句话作为本轮消息发出。后端已有
+      // PATCH /api/tasks/{id}/plan-mode,此前前端只有退出、没有进入(U3)。
+      const planMatch = /^\/plan(?:\s+([\s\S]*))?$/.exec(text);
+      if (planMatch) {
+        const arg = (planMatch[1] ?? "").trim();
+        setCommandDismissed(false);
+        if (planModeBusy) return;
+        if (arg.toLowerCase() === "off") {
+          setPlanModeBusy(true);
+          try {
+            const res = await api.setTaskPlanMode(taskId, false);
+            setTask((current) => (current ? { ...current, plan_mode: res.plan_mode } : current));
+            setInput("");
+            toast.success("已退出计划模式");
+          } catch (planError) {
+            toast.error(`退出计划模式失败：${(planError as Error).message}`);
+          } finally {
+            setPlanModeBusy(false);
+            window.requestAnimationFrame(() => textareaRef.current?.focus());
+          }
+          return;
+        }
+        setPlanModeBusy(true);
+        try {
+          const res = await api.setTaskPlanMode(taskId, true);
+          setTask((current) => (current ? { ...current, plan_mode: res.plan_mode } : current));
+        } catch (planError) {
+          toast.error(`开启计划模式失败：${(planError as Error).message}`);
+          return;
+        } finally {
+          setPlanModeBusy(false);
+        }
+        if (arg === "") {
+          setInput("");
+          toast.success("已进入计划模式：agent 只侦察并提交计划，批准后才开始执行");
+          window.requestAnimationFrame(() => textareaRef.current?.focus());
+          return;
+        }
+        // `/plan <一句话>`：计划模式已开启,这句话作为本轮消息继续走普通发送。
+        await send(arg);
+        return;
+      }
+      // `/goal <objective>` 是**命令**,不是发给模型的消息(DSH goal-command-input.ts:9
+      // `GOAL_COMMAND='goal'`:目标由 /goal 命令创建,输入框只负责把命令发出去)。
+      // 走目标通道而不是 /api/chat:模型不该看见这条命令;服务端会把它记成一条人类
+      // 回合,所以刷新后气泡仍在(GoalCommandInputView.tsx:13-18)。
+      const goalMatch = /^\/goal(?:\s+([\s\S]*))?$/.exec(text);
     if (goalMatch) {
       const objective = (goalMatch[1] ?? "").trim();
       setCommandDismissed(false);
@@ -2452,7 +2512,8 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
         const created = await api.setTaskGoal(taskId, objective);
         setTask((current) => (current ? { ...current, goal_state: created } : current));
         setInput("");
-        setAttachments([]);
+        // /goal 是命令,附件不会随它发送;保留附件并提示,不再静默清空(K2)。
+        if (attachments.length > 0) toast.info("附件不会随 /goal 命令发送，已保留");
         // 乐观人类回合:服务端写的是同一条 `/goal <objective>` 活动,回声到达即替换
         // (与普通消息同一条清理逻辑,见下方 echoed effect)。
         setOptimistic([
@@ -2513,15 +2574,22 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
           pendingUser,
           { seq: -2, worker: "mainagent", ts: new Date().toISOString(), kind: "text", summary: response.reply },
         ]);
+        // 规则/无 LLM 模式在 body 里同步给完整回复,本轮已结束;后端也会补发
+        // result 帧,这里立即释放,避免输入框锁到看门狗(U2)。
+        setSending(false);
       }
       void loadActivity(currentKey);
     } catch (sendError) {
       setOptimistic([]);
+      // 发送失败必须复位 sending,否则输入框锁死到 10 分钟看门狗(U2)。
+      setSending(false);
       toast.error(`发送失败：${(sendError as Error).message}`);
     } finally {
       window.requestAnimationFrame(() => textareaRef.current?.focus());
     }
-  }, [activities, attachments, currentKey, currentSeq, input, jumpToBottom, loadActivity, reasoningOverride, sending, taskId]);
+  },
+    [activities, attachments, currentKey, currentSeq, input, jumpToBottom, loadActivity, planModeBusy, reasoningOverride, sending, taskId],
+  );
 
   const stop = React.useCallback(async () => {
     if (stopping) return;
@@ -2635,7 +2703,9 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
 
   // ---- composer: slash commands ----
   const slashQuery = React.useMemo(() => {
-    const match = /^\/([a-zA-Z0-9_-]*)$/.exec(input);
+    // 只锚开头、不要求整串:输入 `/goal <一句话>` 时面板仍然弹出,让带参数
+    // 的命令可被发现(U3)。真正的执行由 send() 里的命令解析决定。
+    const match = /^\/([a-zA-Z0-9_-]*)/.exec(input);
     return match ? match[1].toLowerCase() : null;
   }, [input]);
 
@@ -2650,6 +2720,15 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
         title: "设置目标",
         hint: "写下要达成的最终结果，显示在输入框上方",
         draft: "/goal ",
+        run: () => undefined,
+      },
+      {
+        // `/plan [off|<一句话>]` 三态(DSH plan-mode)。选中只把草稿换成 "/plan ",
+        // 后面接 off 或一句话再回车;真正的开关在 send() 里(U3)。
+        name: "/plan",
+        title: "计划模式",
+        hint: "/plan 开启 · /plan off 退出 · /plan <一句话> 开启并发送",
+        draft: "/plan ",
         run: () => undefined,
       },
       {
@@ -2740,6 +2819,12 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
       }
       if ((event.key === "Enter" || event.key === "Tab") && !event.shiftKey && !composing) {
         event.preventDefault();
+        // 草稿已经带参数(如 `/goal xxx`)时,面板里的"选中即执行"会把参数冲掉:
+        // 此时按发送处理,交给 send() 的命令解析;Tab 不做任何事。
+        if (/\s/.test(input)) {
+          if (event.key === "Enter") void send();
+          return;
+        }
         const item = commandMatches[Math.min(commandIndex, commandMatches.length - 1)];
         if (item) runCommand(item);
         return;
@@ -2782,6 +2867,10 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
   let pauseTitle = "暂停探索";
   if (pauseDisabled) pauseTitle = "当前任务不可暂停";
   else if (task?.paused) pauseTitle = "恢复探索";
+
+  // 空 id 守卫(U1):?id= 为空/尚未就绪时画骨架提示,而不是空渲染
+  // (此前 loader 照发请求,还会串到后端的"最近任务")。
+  if (taskId === "") return <WorkspaceSkeleton />;
 
   return (
     <div className={styles.root} data-testid="task-workspace">
@@ -3025,6 +3114,7 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
               goal={task?.goal_state}
               busy={goalBusy}
               error={goalError}
+              onCreate={createGoal}
               onEdit={editGoal}
               onPause={pauseGoal}
               onResume={resumeGoal}

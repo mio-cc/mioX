@@ -40,7 +40,7 @@ export interface TrajectorySpan {
   worker: string;
   label: string;
   isError: boolean;
-  /** Main segment (turn) this span belongs to. */
+  /** Turn index (user→result pairing, same axis as the chat transcript) this span belongs to. */
   turn: number;
 }
 
@@ -105,9 +105,20 @@ export function deriveTrajectory(
   const boundaries: TrajectoryTurnBoundary[] = [];
   let lastTurn: number | null = null;
 
+  // 回合轴与聊天区同口径:每条 `user` 行开一个回合,该行及其后的行都属于它
+  // (聊天区 turns 列表的 user→result 配对)。`main_seg` 是主会话分段号,只有
+  // /new 才变,拿它当回合轴时一段对话永远只有 1 个回合(U5)。
+  const seqToTurn = new Map<number, number>();
+  let turnCursor = 0;
+  for (const activity of activities) {
+    if (activity.kind === "user") turnCursor += 1;
+    seqToTurn.set(activity.seq, Math.max(turnCursor - 1, 0));
+  }
+  const turnOf = (activity: Activity): number => seqToTurn.get(activity.seq) ?? 0;
+
   if (mode === "sequence") {
     for (const activity of activities) {
-      const turn = activity.main_seg ?? 0;
+      const turn = turnOf(activity);
       if (turn !== lastTurn) {
         boundaries.push({ turn, at: spans.length });
         lastTurn = turn;
@@ -135,7 +146,7 @@ export function deriveTrajectory(
     const span = end > start ? end - start : 1;
     for (let i = 0; i < activities.length; i += 1) {
       const activity = activities[i];
-      const turn = activity.main_seg ?? 0;
+      const turn = turnOf(activity);
       const at = (times[i] ?? start) - start;
       if (turn !== lastTurn) {
         boundaries.push({ turn, at });
@@ -159,7 +170,7 @@ export function deriveTrajectory(
   // turn: one equal slot per turn, activities spread inside their slot.
   const byTurn = new Map<number, Activity[]>();
   for (const activity of activities) {
-    const turn = activity.main_seg ?? 0;
+    const turn = turnOf(activity);
     const bucket = byTurn.get(turn);
     if (bucket) bucket.push(activity);
     else byTurn.set(turn, [activity]);

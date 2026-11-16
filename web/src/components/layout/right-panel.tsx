@@ -24,7 +24,7 @@ const tabs: readonly TabDef[] = [
   { id: "task", label: "任务" },
   { id: "assets", label: "资产" },
   { id: "evidence", label: "证据" },
-  { id: "approvals", label: "审批", count: 2 },
+  { id: "approvals", label: "审批" },
   { id: "files", label: "文件" },
   // Aside session (reference: openChildAside) - a child lane shown beside the main view.
   { id: "session", label: "子会话" },
@@ -553,9 +553,9 @@ function renderTab(tab: RightTab, data: PanelData, aside: string, taskId: string
     case "approvals":
       return <ApprovalsTab data={data} />;
     case "files":
+      return <FilesTab />;
     case "session":
       return <SessionTab laneKey={aside} taskId={taskId} />;
-      return <FilesTab />;
   }
 }
 
@@ -575,6 +575,8 @@ function RightPanelContent({ layout }: { readonly layout: AppLayoutValue | null 
     if (asideKey !== "") setActive("session");
   }, [asideKey]);
   const data = usePanelData(taskId);
+  // 审批 tab 徽标 = API 返回的 pending 条数(K4:之前是硬编码 2)。
+  const pendingApprovals = data.approvals.filter((row) => row.status === "pending").length;
 
   const [active, setActive] = React.useState<RightTab>("task");
   // Tabs are mounted lazily on first visit and kept mounted afterwards.
@@ -745,7 +747,11 @@ function RightPanelContent({ layout }: { readonly layout: AppLayoutValue | null 
                   onClick={() => selectTab(tab.id)}
                 >
                   <span className={styles.tabLabel}>{tab.label}</span>
-                  {tab.count ? <span className={styles.count}>{tab.count}</span> : null}
+                  {tab.id === "approvals" && pendingApprovals > 0 ? (
+                    <span className={styles.count} data-testid="approvals-tab-count">
+                      {pendingApprovals}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}

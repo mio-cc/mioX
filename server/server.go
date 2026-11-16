@@ -3997,7 +3997,9 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply := s.fallbackChat(t, req.Message)
-	s.engine.emitActivity(t, db.Activity{Worker: "mainagent", Kind: "text", Summary: reply, MainSeg: segPtr})
+	// 规则模式与 LLM 路径同口径:最终回答存在 result 帧里(不再单独发 text 帧,
+	// 否则前端会把回答渲染两遍)。前端靠本轮 result 帧释放 sending 闩锁(U2)。
+	s.engine.emitActivity(t, db.Activity{Worker: "mainagent", Kind: "result", Summary: reply, MainSeg: segPtr})
 	s.finishTaskChat(t.ID, cancel)
 	writeJSON(w, 200, map[string]any{"reply": reply, "mode": "rule"})
 }

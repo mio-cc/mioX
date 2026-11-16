@@ -11,8 +11,8 @@
  * - `:52-67` —— 外层 `data-secret`，`aria-pressed` + 眼睛图标切换。
  *
  * 与 DSH 的差别：DSH 的展开按钮是文本插件注册的 UserText 节点渲染器，我们这里是
- * 普通 React 组件，调用方直接把原文交进来；原文同时落在 `data-secret-value` 上，
- * 复制/读屏都拿得到（`innerText` 里只有 `*`，看不到凭据）。
+ * 普通 React 组件，调用方直接把原文交进来。原文只留在 React state 里，不落 DOM
+ * 属性（S6：`data-secret-value` 已移除，DOM 里只有掩码后的文本）。
  */
 "use client";
 
@@ -88,7 +88,6 @@ export function SecretText({ text, interactive = true, className }: SecretTextPr
         key={`secret-${span.start}`}
         className={styles.secret}
         data-secret=""
-        data-secret-value={original}
         data-revealed={revealed ? "true" : undefined}
       >
         <span className={styles.value}>{revealed ? original : <MaskedRun masked={span.masked} />}</span>

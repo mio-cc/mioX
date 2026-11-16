@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 
 import { TaskWorkspaceDsh } from "./task-workspace-dsh";
+import { WorkspaceSkeleton } from "./workspace-skeleton";
 
 // The legacy multi-tab detail statically imports ~10 tab modules (sessions,
 // overview, coverage graph with @xyflow/react, …). Loading it eagerly made the
@@ -29,7 +30,9 @@ function TaskDetailRoute() {
 
 export default function TaskDetailPage() {
   return (
-    <React.Suspense fallback={null}>
+    // 骨架屏而不是 null:静态导出下 useSearchParams 会让这里回退渲染,
+    // fallback={null} 时主区整块留白(U1)。
+    <React.Suspense fallback={<WorkspaceSkeleton />}>
       <TaskDetailRoute />
     </React.Suspense>
   );

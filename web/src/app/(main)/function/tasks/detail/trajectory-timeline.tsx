@@ -77,7 +77,6 @@ export function TrajectoryTimeline({
         </div>
         <div className={styles.track} data-testid="trajectory-track">
           {model.boundaries
-            .filter((boundary) => boundary.at > model.start)
             .map((boundary) => (
               <span
                 key={`${boundary.turn}-${boundary.at}`}
