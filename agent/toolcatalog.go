@@ -34,7 +34,12 @@ type ToolSeed struct {
 func builtinToolsByAgent() map[string][]actool.CoreTool {
 	ts := NewToolSet(nil, "")
 	return map[string][]actool.CoreTool{
-		"mainagent": ts.MainAgentTools(),
+		// 团队任务板的 4 个工具**必须**出现在 mainagent 的 seed 里，哪怕运行时只有
+		// tasks.team_mode=true 才把它们放进工具集：seed 决定 DB tools 表的 agents 绑定，
+		// 而 ToolResolve（server/assembly.go:264）会把「有行但没绑当前 agent」的工具直接
+		// 丢掉。不 seed → 行里只有 planner/worker → 主 agent 永远拿不到（实测就是这个
+		// 症状：team_mode 开了，模型仍回答"我的工具集里没有 team_add"）。
+		"mainagent": append(ts.MainAgentTools(), ts.teamAdd(), ts.teamList(), ts.teamClaim(), ts.teamComplete()),
 		"planner":   ts.PlannerTools(),
 		"worker":    ts.WorkerTools(),
 		// goals（目标拆解器）默认绑 set_goals + set_constraints：靠它们把拆出的目标、
@@ -57,6 +62,15 @@ func builtinToolsByAgent() map[string][]actool.CoreTool {
 // goal_met：绕过逐个 prove_goal、直接从全局宣布【整个任务完成】,权重大且有误判风险,又与
 // 「prove_goal 标记最后一个目标 → 自动收官」重复,故默认不给任何 agent,需要时再手动绑。
 var defaultUnbound = map[string]bool{"goal_met": true}
+
+// TeamToolNames are the shared-board tools granted per SESSION by tasks.team_mode
+// (ToolSet.TeamTools), never by the server-level domain registry: the registry copy is
+// injected into every agent bound to a tool (server/assembly.go:274-289), which would
+// hand the board to a session that never enabled team mode — i.e. it would silently
+// undo the capability gate. Kept as a set so the exclusion has one definition.
+var TeamToolNames = map[string]bool{
+	"team_add": true, "team_list": true, "team_claim": true, "team_complete": true,
+}
 
 // BuiltinToolSeeds 把各 agent 的内置工具集去重合并成 seed 列表：同名工具（如 list_assets
 // 多个 agent 都有）合成一条，Agents 取并集；defaultUnbound 里的工具则强制绑定为空。

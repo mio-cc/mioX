@@ -20,15 +20,27 @@ import (
 //   blocked/exhausted/stopped → completed (closed; the outcome lives in the intent)
 
 // projectIntentTaskID resolves the task that owns an exploration, or 0 when the
-// exploration is not attached to a live task (tests, orphaned graphs).
+// exploration is not attached to a live task (tests, orphaned graphs) OR the task has
+// team mode off.
+//
+// The team_mode check is what keeps the capability real: tasks.team_mode is the
+// session-owned team capability (TeamModeToggle.tsx:1), and with it off the board must
+// stay untouched. Projecting regardless made "team mode off ⇒ empty board" unassertable
+// and let an ungranted session accumulate board rows behind a hidden UI panel.
+// Turning the switch off does NOT delete rows already projected (TeamDisableConfirmation
+// promises existing board rows survive); it only stops new projections and state mirrors.
 func (d *DB) projectIntentTaskID(expID int64) (int64, error) {
 	var taskID int64
-	err := d.QueryRow(`SELECT id FROM tasks WHERE exploration_id=$1 AND deleted_at IS NULL ORDER BY id LIMIT 1`, expID).Scan(&taskID)
+	var teamMode bool
+	err := d.QueryRow(`SELECT id, team_mode FROM tasks WHERE exploration_id=$1 AND deleted_at IS NULL ORDER BY id LIMIT 1`, expID).Scan(&taskID, &teamMode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	if err != nil {
 		return 0, err
+	}
+	if !teamMode {
+		return 0, nil
 	}
 	return taskID, nil
 }

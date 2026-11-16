@@ -490,6 +490,7 @@ func (s *Server) seedOrchestrationTools() {
 	s.seedAutoDefaultBindings()
 	s.seedPlannerDefaultBindings()
 	s.seedMemoryToolBindings()
+	s.seedTeamToolBindings() // 团队任务板 4 个工具补绑 mainagent + 清理改名前的旧行(一次性)
 	s.seedPlannerListAssetsBinding()
 	s.seedCompanyScopeRebind()
 	s.seedWorkerReadToolsUnbind() // list_facts/list_companies/list_worker_traces 从 worker 默认解绑(一次性)
@@ -778,6 +779,38 @@ func (s *Server) seedReporterAgent() {
 		log.Printf("[reporter] 创建触发器失败: %v", err)
 	}
 	log.Printf("[reporter] 已预置「报告撰写」agent + finding 触发器")
+}
+
+// seedTeamToolBindings makes the shared task board reachable for the main agent ONCE:
+//
+//  1. bind "mainagent" onto team_add/team_list/team_claim/team_complete. Their catalog
+//     rows were first seeded planner/worker-only (the four tools live in PlannerTools /
+//     WorkerTools, while the main agent only receives them when tasks.team_mode is on),
+//     and SeedTool is ON CONFLICT DO NOTHING — so without this backfill ToolResolve
+//     (server/assembly.go:264: a known key not bound to the agent is dropped) removes them
+//     from the main agent even with team mode on. Measured symptom: team_mode=true, the
+//     model still answers "我的工具集里没有 team_add".
+//  2. delete the four retired pre-rename keys (team_board_*). Nothing produces those names
+//     anymore; they only clutter the tools page. Exact keys, never a LIKE pattern.
+//
+// The runtime gate stays in code (ToolSet.TeamTools returns nil unless team_mode is on),
+// and AllDomainTools() excludes these keys so the registry inject-back pass cannot undo it.
+func (s *Server) seedTeamToolBindings() {
+	const flag = "team_tools_mainagent_v1"
+	if v, _, _ := s.m.pg.GetSetting(flag); v == "true" {
+		return
+	}
+	if err := s.m.pg.AddAgentToToolBinding("mainagent", []string{"team_add", "team_list", "team_claim", "team_complete"}); err != nil {
+		log.Printf("[team] mainagent 团队任务板工具绑定失败: %v", err)
+		return
+	}
+	retired := []string{"team_board_write", "team_board_list", "team_board_claim", "team_board_complete"}
+	if n, err := s.m.pg.DeleteSystemTools(retired); err != nil {
+		log.Printf("[team] 清理改名前的旧工具行失败: %v", err)
+	} else {
+		log.Printf("[team] 团队任务板 4 个工具已绑给 mainagent；删除改名前的旧工具行 %d 条", n)
+	}
+	_ = s.m.pg.SetSetting(flag, "true")
 }
 
 // seedMemoryToolBindings backfills mainagent/worker onto the memory tools ONCE.

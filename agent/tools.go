@@ -85,6 +85,12 @@ type ToolSet struct {
 	// dsh-plan-mode/README.md:32/81) and gains the exit_plan_mode tool
 	// (dsh-plan-mode/src/index.ts:64, admitted only in plan mode: index.ts:375).
 	planMode bool
+	// teamMode mirrors tasks.team_mode: the session-owned team capability. Unlike plan
+	// mode it DOES change the tool set — the shared-board tools (team_add / team_list /
+	// team_claim / team_complete) are only registered while it is on (ToolSet.TeamTools).
+	// DSH: "Session-owned Agent Teams selection" (TeamModeToggle.tsx:1) + the board is
+	// rendered only when enabled (TeamBoard.tsx:86).
+	teamMode bool
 	// planTurn latches "a plan was submitted in this turn", which ends the turn:
 	// DSH calls exec.concludeTurn() after the plan review (index.ts:340).
 	planTurn *planTurn
@@ -197,6 +203,10 @@ func (t *ToolSet) SetTaskID(id int64) { t.taskID = id }
 // tool: DSH plan mode is guidance (dsh-plan-mode/README.md:32/81), so the only tool
 // change is that exit_plan_mode becomes available (index.ts:375).
 func (t *ToolSet) SetPlanMode(on bool) { t.planMode = on }
+
+// SetTeamMode records whether this session holds the team capability (tasks.team_mode).
+// See ToolSet.teamMode: it gates the shared-board tools out of the tool set entirely.
+func (t *ToolSet) SetTeamMode(on bool) { t.teamMode = on }
 
 // SetPlanTurn binds this turn's plan latch (shared with the exit_plan_mode tool and
 // the post-submission tool gate).
@@ -2100,7 +2110,7 @@ func (t *ToolSet) PlannerTools() []actool.CoreTool {
 		// list_untested_assets：按需查本任务范围内未测资产(类型+分页)，自行决定补测。
 		t.listUntestedAssets(),
 		// 团队任务板：planner 把拆解结果写进共享板，worker 从板上认领。
-		t.teamBoardWrite(), t.teamBoardList(),
+		t.teamAdd(), t.teamList(),
 		// 跨任务记忆：把可复用的结论沉淀下来，并在开工前检索，避免重复踩坑。
 		t.memoryWrite(), t.memorySearch(),
 	}

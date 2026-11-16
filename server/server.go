@@ -4178,9 +4178,12 @@ func (s *Server) setTaskPlanMode(w http.ResponseWriter, r *http.Request) {
 }
 
 // setTaskTeamMode 切换任务的团队模式（会话级）。
-// 与计划模式不同：它不改 agent 工具集，所以不重建 bundle——DSH 的团队开关是
-// 「会话拥有的选择」（TeamModeToggle.tsx:1），只决定看板是否可用
-// （TeamBoard.tsx:86 `if (!team?.enabled) return null`）。落库 + 同步内存即可。
+// 与 v0.84 不同，团队开关现在**改工具集**：team_mode 为真时共享任务板的 4 个工具
+// （team_add/team_list/team_claim/team_complete）才注册进主 agent，关闭时不在工具集里
+// （能力不给，而不是调用时报错）。DSH 依据：TeamModeToggle.tsx:1「Session-owned Agent
+// Teams selection」= 会话拥有的能力选择；TeamBoard.tsx:86 `if (!team?.enabled) return null`
+// 只在启用时渲染看板。工具集固化在 agent bundle 里，所以这里必须像计划模式一样丢弃
+// bundle，让下一轮重建——否则开关只改了库里的一个布尔值，agent 行为不变（假开关）。
 func (s *Server) setTaskTeamMode(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req struct {
@@ -4199,6 +4202,9 @@ func (s *Server) setTaskTeamMode(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "任务不存在")
 		return
 	}
+	s.taskAgentMu.Lock()
+	delete(s.taskAgents, t.ID)
+	s.taskAgentMu.Unlock()
 	log.Printf("[task] #%s 团队模式 -> %v", t.ID, req.On)
 	writeJSON(w, 200, map[string]any{"id": t.ID, "team_mode": req.On})
 }

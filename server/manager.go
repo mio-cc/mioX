@@ -1889,8 +1889,9 @@ func (m *Manager) SetTaskPlanMode(taskID string, on bool) (*Task, error) {
 }
 
 // SetTaskTeamMode 切换任务的团队模式（会话级共享任务板开关）。
-// 与计划模式不同，它不改变 agent bundle 的工具集，所以不重建 agent：
-// 落库 + 同步内存里的任务对象即可，前端下一次 GET 就能读到真值。
+// 落库 + 同步内存里的任务对象。注意：team_mode 现在同时决定**工具集**（共享任务板的
+// 4 个工具只在打开时注册），而工具集固化在 agent bundle 里，所以 HTTP 层
+// （server.setTaskTeamMode）在调用本方法后必须丢弃该任务的 bundle，让下一轮重建。
 func (m *Manager) SetTaskTeamMode(taskID string, on bool) (*Task, error) {
 	m.taskStateMu.Lock()
 	defer m.taskStateMu.Unlock()

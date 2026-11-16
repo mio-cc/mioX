@@ -656,7 +656,7 @@ func (t *ToolSet) WorkerTools() []actool.CoreTool {
 		// node_detail：worker 拿到 intent_id/节点 id 后可查该节点完整详情（配合上面的回看）。
 		t.nodeDetail(),
 		// 团队任务板：认领/完成/查看（planner 负责写入，worker 负责消费）。
-		t.teamBoardList(), t.teamBoardClaim(), t.teamBoardComplete(),
+		t.teamList(), t.teamClaim(), t.teamComplete(),
 		// 记忆：worker 也能检索历史经验、沉淀有效手法（跨任务复用）。
 		t.memoryWrite(), t.memorySearch(),
 		// 以下工具仍【不给】worker，只留给 planner/main（读上下文、跨 work 复盘是规划职责，
@@ -691,11 +691,19 @@ func (t *ToolSet) MainAgentTools() []actool.CoreTool {
 // deduped by name (mainagent order wins). Used by the server to build a registry
 // for injecting domain tools into agents (Auto, custom) that don't own a per-task
 // ToolSet. The caller provides real stores; tools are callable at taskID=0 scope.
+//
+// The team-board tools are deliberately EXCLUDED (see TeamToolNames): they are a
+// session capability granted by tasks.team_mode, and the registry's inject-back pass
+// (server/assembly.go:274-289) would otherwise re-add them to any agent bound to them —
+// including the main agent of a session whose team mode is OFF, defeating the gate.
 func (t *ToolSet) AllDomainTools() []actool.CoreTool {
 	seen := map[string]bool{}
 	var out []actool.CoreTool
 	all := append(append(t.MainAgentTools(), t.PlannerTools()...), t.WorkerTools()...)
 	for _, tool := range all {
+		if TeamToolNames[tool.Name()] {
+			continue
+		}
 		if !seen[tool.Name()] {
 			seen[tool.Name()] = true
 			out = append(out, tool)

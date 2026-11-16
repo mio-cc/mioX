@@ -42,6 +42,22 @@ ON CONFLICT (key) DO NOTHING`, key, desc, schema, agents)
 	return err
 }
 
+// DeleteSystemTools removes built-in (system) tool rows by EXACT key and reports how
+// many rows went. Used by one-time migrations that retire a built-in tool: a renamed
+// tool leaves a dead catalog row that no code can produce anymore, and SeedTool's
+// ON CONFLICT DO NOTHING can never remove it. Exact keys only — a LIKE pattern here
+// could delete a live tool whose name merely looks similar.
+func (d *DB) DeleteSystemTools(keys []string) (int64, error) {
+	if len(keys) == 0 {
+		return 0, nil
+	}
+	result, err := d.Exec(`DELETE FROM tools WHERE system = true AND key = ANY($1)`, keys)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 // AddAgentToToolBinding adds an agent key to the given tools' `agents` arrays if
 // not already present (idempotent). Used to give the built-in Auto agent its
 // default toolset on existing DBs.

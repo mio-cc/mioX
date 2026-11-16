@@ -43,6 +43,11 @@ type MainAgent struct {
 	planReview func(ctx context.Context, title, plan string) (intercept.PlanReviewOutcome, error)
 	// planExit 在用户批准后退出计划模式（DSH index.ts:358-362）。nil = 只在本轮内存里退出。
 	planExit func()
+	// teamMode 是会话级团队模式（tasks.team_mode）。与 planMode 相反，它**改工具集**：
+	// 只有它为真时，共享任务板的 4 个工具（team_add/team_list/team_claim/team_complete）
+	// 才注册进主 agent——DSH 把团队开关当作「会话拥有的能力选择」
+	// （TeamModeToggle.tsx:1 Session-owned Agent Teams selection），没打开就没有这项能力。
+	teamMode bool
 	steerWork       func(intentID int64, msg string) error // engine callback: steer a running work (nil = off)
 	nonStreamingFn  func() bool                            // resolver: use non-streaming (Complete) path? (nil = streaming)
 	noaEnabledFn    func() bool                            // resolver: use experimental noa compaction? (nil = off)
@@ -138,6 +143,12 @@ func (m *MainAgent) SetPlanReview(fn func(ctx context.Context, title, plan strin
 // SetPlanExit 接上"退出计划模式"（用户批准后，DSH index.ts:358-362）。
 func (m *MainAgent) SetPlanExit(fn func()) { m.planExit = fn }
 
+// SetTeamMode 切换团队模式（tasks.team_mode）。与 SetPlanMode 不同，它决定共享任务板的
+// 4 个工具是否进入工具集：关闭时工具**不在**工具集里（能力不给，而不是调用时报错）。
+// DSH 的开关是会话拥有的能力选择（TeamModeToggle.tsx:1），看板也只在 enabled 时渲染
+// （TeamBoard.tsx:86）。开关变更后调用方必须丢弃 agent bundle，下一轮重建才生效。
+func (m *MainAgent) SetTeamMode(on bool) { m.teamMode = on }
+
 // planModeBlock 是计划模式的系统提示段（DSH 的 plan:policy section，部署方自有的
 // 那段文本：index.ts:67-70 注册、index.ts:197-204 仅在计划模式渲染）。
 // 它约束的是**行为**而不是能力：可以随便侦察，但不要改系统状态；侦察完用
@@ -163,6 +174,26 @@ const planModeBlock = `
 - **批准** → 工具返回「计划已获批准」，计划模式退出，你从下一步开始按计划执行；
 - **继续规划** → 工具返回错误并带回用户的反馈，按反馈修改计划后**重新调用 ` + exitPlanModeName + `** 提交；
 - **关闭审阅** → 本轮结束，不要再调用任何工具，用一句话收尾。`
+
+// teamModeBlock 是团队模式的系统提示段。与 planModeBlock 同一写法（只在开关打开时
+// 追加到系统提示），但它对应的是**能力**而不是约束：这段提示只在工具真的注册进
+// 工具集时出现（mainagent.go 的 `if m.teamMode` 分支同时做这两件事）。
+// 依据：DSH 团队开关是会话拥有的能力选择（TeamModeToggle.tsx:1），共享任务板是团队
+// 协作的落点——把复杂工作拆成板上条目，再逐条认领/完成，而不是一口气硬做完。
+const teamModeBlock = `
+
+## 当前处于「团队模式」（team mode）
+这个会话拥有**共享任务板**（工具 team_add / team_list / team_claim / team_complete），
+板上每一行都是一个可执行步骤，带状态（pending / in_progress / completed）、负责人和依赖。
+它和任务列表、会话历史一样是真实落库的数据，用户可以在 UI 的「团队」标签里看到同一块板。
+
+用法约定：
+- **复杂任务先拆板再动手**：接到一个多步骤的活，先用 team_add 把它拆成 2-5 个可独立执行
+  的步骤写进板上（拆多步可以用 items 一次写多条，或用 depends_on 表达先后），再按板推进。
+- **推进时逐条认领**：用 team_list 找 ready=true 的行，team_claim 认领（负责人记为本
+  agent），做完立刻 team_complete 关闭它——依赖它的行只有在它 completed 后才会 ready。
+- 一件事只占一行，不要在板上写"待定/再想想"这类空行；简单的一句话问答不必建板。
+- 用户问"板上有什么"时，用 team_list 读真实状态回答，不要凭记忆复述。`
 
 func mainAgentSystem(goal, dataDir, workDir string) string {
 	body := renderSystem("mainagent", mainAgentDefaultTmpl, MainVars{Goal: goal, DataDir: dataDir, Now: nowStr()})
@@ -193,6 +224,21 @@ func GoalPrompt(base, objective, phase string) string {
 	b.WriteString("当前目标（/goal，阶段 active）：")
 	b.WriteString(objective)
 	return b.String()
+}
+
+// mainAgentBaseTools assembles the tool set one main-agent turn actually runs with:
+// the domain tools, the default Read/Write/Edit/... set, and — only when the session
+// holds the team capability — the shared board tools.
+//
+// Extracted so the capability gate is testable without an LLM turn: with teamMode
+// false the returned list contains no team_* tool at all (DSH grants capabilities, it
+// does not advertise a tool that always fails; TeamModeToggle.tsx:1 + TeamBoard.tsx:86).
+// Plan mode's exit_plan_mode is appended separately by the caller, because it is
+// disclosed by plan mode, not by this gate.
+func mainAgentBaseTools(tsx *ToolSet, teamMode bool) []actool.CoreTool {
+	tsx.SetTeamMode(teamMode)
+	base := append(tsx.DropCoverageTools(tsx.MainAgentTools()), actool.DefaultTools()...)
+	return append(base, tsx.TeamTools()...)
 }
 
 // Chat handles one human message and returns the assistant reply. emit, if
@@ -231,7 +277,8 @@ func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int
 	tsx.steerWork = m.steerWork   // enable steer_work tool (nil = unavailable)
 	// 领域工具 + 基础默认工具集（Read/Write/Edit/MultiEdit/LS/Glob/Grep/Bash）
 	// 资产覆盖度功能关闭时剔除 add_task_scope/list_untested_assets（不入 prompt）。
-	base := append(tsx.DropCoverageTools(tsx.MainAgentTools()), actool.DefaultTools()...)
+	// 团队模式也在这里生效：team_mode 为真才追加共享任务板的 4 个工具（见下）。
+	base := mainAgentBaseTools(tsx, m.teamMode)
 	// 计划模式：工具一个都不摘（DSH README.md:32/81 的软约束模型），只额外披露
 	// exit_plan_mode（DSH index.ts:64，仅计划模式可见：index.ts:375）。
 	planTurn := &planTurn{}
@@ -262,6 +309,9 @@ func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int
 	sysBody := mainAgentSystem(goal, m.workDir, agentDir)
 	if m.planMode {
 		sysBody += planModeBlock
+	}
+	if m.teamMode {
+		sysBody += teamModeBlock
 	}
 	system, boundary := deferredSystem(sysBody, def)
 	opts := agentcore.Options{

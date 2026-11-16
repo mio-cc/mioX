@@ -645,6 +645,10 @@ func (s *Server) agentsForTask(t *Task) *taskAgentBundle {
 		main.SetTaskWorkDir(t.WorkDir)
 	}
 	main.SetPlanMode(t.PlanMode)
+	// 团队模式是**能力门控**（不是提示词约束）：工具集在 bundle 构建时固化，所以
+	// team_mode 为真才把 team_add/team_list/team_claim/team_complete 注册进去。
+	// 与计划模式同理：开关一变就丢弃 bundle（server.setTaskTeamMode），下一轮重建。
+	main.SetTeamMode(t.TeamMode)
 	// 计划审阅闭环（DSH plan-mode/src/index.ts:316-333）：提交计划 → 写 pending 审批 +
 	// 会话流审阅卡片 → 阻塞等用户批准/继续规划/关闭。
 	main.SetPlanReview(func(ctx context.Context, title, plan string) (intercept.PlanReviewOutcome, error) {
