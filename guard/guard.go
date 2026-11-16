@@ -90,6 +90,16 @@ func (g *Guard) applyIntercept(ctx context.Context, ev hook.Event) hook.Result {
 	ctx = intercept.WithCall(ctx, ev.ToolName, ev.Input)
 	dec, matched := g.interceptor.Match(ev.ToolName, ev.Input)
 	if !matched {
+		// D10-T1: 权限档预设（DSH ui-permission-presets 三档 + auto）。
+		// 显式规则优先；无规则命中时，read-only/workspace-write 档直接按
+		// 工具类别给默认动作，auto 档保持"规则 + LLM 裁决"的现有行为。
+		level := intercept.PermissionLevelFromCtx(ctx)
+		if level.PresetDenied(ev.ToolName) {
+			dec = intercept.Decision{Action: "deny", Message: level.PresetMessage(ev.ToolName)}
+			matched = true
+		}
+	}
+	if !matched {
 		// No rule matched. Ask the LLM fallback judge (if enabled); when it is off
 		// or unwired, keep current behavior and allow.
 		d, judged := g.interceptor.Judge(ctx, ev.ToolName, ev.Input)

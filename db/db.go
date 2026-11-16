@@ -160,6 +160,10 @@ func Open(dsn string) (*DB, error) {
 		if err := applySchemaWithRetry(context.Background(), conn, time.Sleep); err != nil {
 			return fmt.Errorf("apply schema: %w", err)
 		}
+		// D10-T1: tasks.permission_level 对旧库的增量迁移（新库由 schema.sql 建列）。
+		if _, err := conn.ExecContext(context.Background(), `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS permission_level TEXT NOT NULL DEFAULT 'auto'`); err != nil {
+			return fmt.Errorf("migrate tasks.permission_level: %w", err)
+		}
 		if err := d.seedBuiltins(); err != nil {
 			return fmt.Errorf("seed builtins: %w", err)
 		}

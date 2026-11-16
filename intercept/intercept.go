@@ -33,6 +33,9 @@ type ctxKey int
 // interceptor can associate "ask" pending records with the right conversation.
 const ConvIDKey ctxKey = 0
 
+// permissionLevelCtxKey carries the session permission preset (D10-T1).
+const permissionLevelCtxKey ctxKey = 1
+
 // WithConvID returns a child context carrying convID.
 func WithConvID(ctx context.Context, convID int64) context.Context {
 	return context.WithValue(ctx, ConvIDKey, convID)
@@ -63,6 +66,20 @@ func WithTaskContext(ctx context.Context, taskID, agentName string, emit func(db
 		ctx = context.WithValue(ctx, taskEmitCtxKey, emit)
 	}
 	return ctx
+}
+
+// WithPermissionLevel carries the session's permission preset through the
+// call chain (D10-T1, DSH ui-permission-presets: session-scoped level).
+func WithPermissionLevel(ctx context.Context, level PermissionLevel) context.Context {
+	return context.WithValue(ctx, permissionLevelCtxKey, level)
+}
+
+// PermissionLevelFromCtx reads the session permission preset (auto if absent).
+func PermissionLevelFromCtx(ctx context.Context) PermissionLevel {
+	if v, ok := ctx.Value(permissionLevelCtxKey).(PermissionLevel); ok {
+		return v
+	}
+	return LevelAuto
 }
 
 func taskInfoFromCtx(ctx context.Context) (taskID, agentName string) {

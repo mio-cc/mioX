@@ -63,6 +63,8 @@ type Task struct {
 	// TeamMode 是会话级团队模式：只有开启时该会话才渲染共享任务板
 	// (DSH TeamModeToggle.tsx:1 session-owned selection + TeamBoard.tsx:86 enabled 门控)。
 	TeamMode             bool                   `json:"team_mode"`
+	// PermissionLevel 是会话级权限档预设（D10-T1，DSH ui-permission-presets 三档 + auto）。
+	PermissionLevel      string                 `json:"permission_level"`
 	FirstRunAt           int64                  `json:"first_run_at,omitempty"`
 	DeadlineAt           int64                  `json:"deadline_at,omitempty"`
 	Store                *pgdb.ExplorationStore `json:"-"`
@@ -853,6 +855,7 @@ func taskFromPG(pt *pgdb.Task, store *pgdb.ExplorationStore, ic *intercept.Inter
 		WorkDir:         pt.WorkDir,
 		PlanMode:        pt.PlanMode,
 		TeamMode:        pt.TeamMode,
+		PermissionLevel: pt.PermissionLevel,
 		FirstRunAt:      unixOrZero(pt.FirstRunAt), DeadlineAt: unixOrZero(pt.DeadlineAt),
 		Store: store, Guard: guard.NewWithInterceptor(ic), notify: make(chan struct{}, 1),
 	}
@@ -1909,5 +1912,27 @@ func (m *Manager) SetTaskTeamMode(taskID string, on bool) (*Task, error) {
 		return nil, nil
 	}
 	task.TeamMode = on
+	return task, nil
+}
+
+// SetTaskPermissionLevel 设置任务权限档（D10-T1）。level 需为四档之一，
+// 由调用方归一；空/非法值回到 auto。
+func (m *Manager) SetTaskPermissionLevel(taskID string, level string) (*Task, error) {
+	m.taskStateMu.Lock()
+	defer m.taskStateMu.Unlock()
+	id, err := strconv.ParseInt(taskID, 10, 64)
+	if err != nil || id <= 0 {
+		return nil, nil
+	}
+	if err := m.pg.SetTaskPermissionLevel(id, level); err != nil {
+		return nil, err
+	}
+	m.mu.RLock()
+	task := m.tasks[taskID]
+	m.mu.RUnlock()
+	if task == nil {
+		return nil, nil
+	}
+	task.PermissionLevel = level
 	return task, nil
 }

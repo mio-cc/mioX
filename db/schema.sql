@@ -537,6 +537,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     -- 团队模式（会话级）：开启后该会话才拥有共享任务板（TeamBoard 在
     -- agentTeam.enabled 为假时整体不渲染，见 DSH TeamBoard.tsx:86）。
     team_mode      BOOLEAN NOT NULL DEFAULT false,
+    -- 权限档预设（D10-T1，DSH ui-permission-presets 三档 + auto）：
+    -- auto = 规则 + LLM 裁决（现状）；read-only / workspace-write / danger-full。
+    permission_level TEXT NOT NULL DEFAULT 'auto',
     pinned_at      TIMESTAMPTZ,
     first_run_at   TIMESTAMPTZ,
     deadline_at    TIMESTAMPTZ,

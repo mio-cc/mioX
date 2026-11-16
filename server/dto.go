@@ -65,6 +65,8 @@ type TaskDTO struct {
 	PlanMode           bool   `json:"plan_mode"`
 	// TeamMode 是会话级团队模式开关（共享任务板的 enabled 位）。
 	TeamMode           bool   `json:"team_mode"`
+	// PermissionLevel 是会话级权限档预设（D10-T1：auto / read-only / workspace-write / danger-full）。
+	PermissionLevel    string `json:"permission_level"`
 	// GoalState 是任务级「目标」(/goal 命令)的当前快照;null=没有目标。
 	// 注意不能复用上面的 Goal 字符串字段:那是建任务时填的静态目标,前端 8+ 处
 	// 按字符串消费(sidebar / 列表 / 概览 / 右栏),改成对象会破坏兼容。
@@ -145,6 +147,7 @@ func taskDTO(t *Task, status string) TaskDTO {
 		WorkDir:            t.WorkDir,
 		PlanMode:           t.PlanMode,
 		TeamMode:           t.TeamMode,
+		PermissionLevel:    t.PermissionLevel,
 	}
 }
 

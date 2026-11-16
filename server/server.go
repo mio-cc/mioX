@@ -849,6 +849,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/tasks/{id}/plan-mode", s.setTaskPlanMode)
 	// 团队模式开关（会话级）：只有开启时该会话才渲染共享任务板。
 	mux.HandleFunc("PATCH /api/tasks/{id}/team-mode", s.setTaskTeamMode)
+	// 权限档预设（D10-T1，DSH ui-permission-presets 三档 + auto）。
+	mux.HandleFunc("PATCH /api/tasks/{id}/permission-level", s.setTaskPermissionLevel)
 	mux.HandleFunc("PUT /api/settings", s.putSettings)
 	// 漏洞 IM 推送。渠道是「多实例 + 各自过滤规则」的资源，因此独立成一组
 	// REST 接口，而不是塞进扁平的 /api/settings 键值里。
@@ -3876,6 +3878,9 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		s.engine.emitActivity(t, rec)
 	}
 	ctx = intercept.WithTaskContext(ctx, t.ID, "mainagent", chatEmit)
+	// D10-T1: 会话级权限档（DSH ui-permission-presets）。t 在请求入口已加载，
+	// 空值归一为 auto，保证旧库/新任务默认行为不变。
+	ctx = intercept.WithPermissionLevel(ctx, intercept.ParsePermissionLevel(t.PermissionLevel))
 
 	// Persist + broadcast the human turn so the 主 Agent 编排会话 survives page
 	// reloads and updates live: the conversation lives in the activity stream as
@@ -4238,6 +4243,43 @@ func (s *Server) setTaskTeamMode(w http.ResponseWriter, r *http.Request) {
 	s.taskAgentMu.Unlock()
 	log.Printf("[task] #%s 团队模式 -> %v", t.ID, req.On)
 	writeJSON(w, 200, map[string]any{"id": t.ID, "team_mode": req.On})
+}
+
+// setTaskPermissionLevel 设置任务的权限档预设（D10-T1，DSH ui-permission-presets
+// 三档 + auto）。档位是会话级判定面：read-only 拒绝状态变更工具、
+// workspace-write 拒绝全局副作用工具、auto 走现有"规则 + LLM 裁决"。
+func (s *Server) setTaskPermissionLevel(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req struct {
+		Level string `json:"level"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, 400, "bad json: "+err.Error())
+		return
+	}
+	// API 层拒绝未知档位（Parse 默认回 auto 是为旧库安全，不适用于显式写入）。
+	switch req.Level {
+	case "auto", "read-only", "workspace-write", "danger-full":
+	default:
+		writeErr(w, 400, "未知权限档（支持 auto / read-only / workspace-write / danger-full）")
+		return
+	}
+	level := intercept.ParsePermissionLevel(req.Level)
+	t, err := s.m.SetTaskPermissionLevel(id, string(level))
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	if t == nil {
+		writeErr(w, 404, "任务不存在")
+		return
+	}
+	// 档位变化影响下一个会话：丢弃 bundle，让下一轮重建时注入新档位。
+	s.taskAgentMu.Lock()
+	delete(s.taskAgents, t.ID)
+	s.taskAgentMu.Unlock()
+	log.Printf("[task] #%s 权限档 -> %s", t.ID, level)
+	writeJSON(w, 200, map[string]any{"id": t.ID, "permission_level": string(level)})
 }
 
 // leavePlanMode 在用户批准计划后退出计划模式（DSH plan-mode/src/index.ts:358-362：

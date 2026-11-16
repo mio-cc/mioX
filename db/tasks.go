@@ -57,6 +57,9 @@ type Task struct {
 	// TeamMode 是会话级团队模式开关：只有它为真时该会话才渲染共享任务板
 	// （DSH TeamBoard.tsx:86 `if (!team?.enabled) return null`）。
 	TeamMode bool `json:"team_mode"`
+	// PermissionLevel 是会话级权限档预设（D10-T1，DSH ui-permission-presets）：
+	// auto（规则 + LLM 裁决，默认）/ read-only / workspace-write / danger-full。
+	PermissionLevel string `json:"permission_level"`
 }
 
 // TaskDeleteResult reports optional related-data cleanup performed in the same
@@ -357,11 +360,11 @@ func insertTaskLLMProfiles(tx *sql.Tx, taskID int64, profileIDs []int64) error {
 
 const taskCols = `id, COALESCE(name,''), category_id,
 COALESCE((SELECT category.name FROM task_categories category WHERE category.id=tasks.category_id),''),
-description, goal, exploration_id, status, paused, queued, queued_at, COALESCE(queue_mode,''), llm_profile_id, active_llm_profile_id, COALESCE(parent_ref,''), pinned_at, created_at, completed_at, COALESCE(timeout_seconds,0), COALESCE(plan_heartbeat_seconds,300), COALESCE(coverage_enabled,true), first_run_at, deadline_at, COALESCE(work_dir,''), COALESCE(plan_mode,false), COALESCE(team_mode,false)`
+description, goal, exploration_id, status, paused, queued, queued_at, COALESCE(queue_mode,''), llm_profile_id, active_llm_profile_id, COALESCE(parent_ref,''), pinned_at, created_at, completed_at, COALESCE(timeout_seconds,0), COALESCE(plan_heartbeat_seconds,300), COALESCE(coverage_enabled,true), first_run_at, deadline_at, COALESCE(work_dir,''), COALESCE(plan_mode,false), COALESCE(team_mode,false), COALESCE(permission_level,'auto')`
 
 func scanTask(sc interface{ Scan(...any) error }) (*Task, error) {
 	var t Task
-	if err := sc.Scan(&t.ID, &t.Name, &t.CategoryID, &t.CategoryName, &t.Description, &t.Goal, &t.ExplorationID, &t.Status, &t.Paused, &t.Queued, &t.QueuedAt, &t.QueueMode, &t.LLMProfileID, &t.ActiveLLMProfileID, &t.ParentRef, &t.PinnedAt, &t.CreatedAt, &t.CompletedAt, &t.TimeoutSeconds, &t.PlanHeartbeatSeconds, &t.CoverageEnabled, &t.FirstRunAt, &t.DeadlineAt, &t.WorkDir, &t.PlanMode, &t.TeamMode); err != nil {
+	if err := sc.Scan(&t.ID, &t.Name, &t.CategoryID, &t.CategoryName, &t.Description, &t.Goal, &t.ExplorationID, &t.Status, &t.Paused, &t.Queued, &t.QueuedAt, &t.QueueMode, &t.LLMProfileID, &t.ActiveLLMProfileID, &t.ParentRef, &t.PinnedAt, &t.CreatedAt, &t.CompletedAt, &t.TimeoutSeconds, &t.PlanHeartbeatSeconds, &t.CoverageEnabled, &t.FirstRunAt, &t.DeadlineAt, &t.WorkDir, &t.PlanMode, &t.TeamMode, &t.PermissionLevel); err != nil {
 		return nil, err
 	}
 	t.Pinned = t.PinnedAt != nil
@@ -675,5 +678,12 @@ func (d *DB) SetTaskPlanMode(id int64, on bool) error {
 // SetTaskTeamMode 切换任务的团队模式（会话级：该会话是否拥有共享任务板）。
 func (d *DB) SetTaskTeamMode(id int64, on bool) error {
 	_, err := d.Exec(`UPDATE tasks SET team_mode=$2 WHERE id=$1`, id, on)
+	return err
+}
+
+// SetTaskPermissionLevel 设置任务的权限档预设（D10-T1，DSH ui-permission-presets
+// 三档 + auto）。未知值由调用方先经 ParsePermissionLevel 归一。
+func (d *DB) SetTaskPermissionLevel(id int64, level string) error {
+	_, err := d.Exec(`UPDATE tasks SET permission_level=$2 WHERE id=$1`, id, level)
 	return err
 }
