@@ -15,6 +15,11 @@ func TestInterceptFilterHTTP(t *testing.T) {
 	if err != nil {
 		t.Skip("no test database configured")
 	}
+	// Never run fixtures against the live database.
+	if testDSN, derr := db.TestDatabaseDSN(dsn); derr == nil {
+		dsn = testDSN
+	}
+
 	d, err := db.Open(dsn)
 	if err != nil {
 		t.Fatal(err)

@@ -59,7 +59,12 @@ func testDSN(t *testing.T) string {
 	if err != nil {
 		t.Skipf("no database config (%v) — skipping", err)
 	}
-	return dsn
+	// Never run fixtures against the live database: derive (and create) <db>_test.
+	testDSN, err := TestDatabaseDSN(dsn)
+	if err != nil {
+		t.Skipf("cannot prepare the test database (%v) — skipping", err)
+	}
+	return testDSN
 }
 
 // TestOpenSeed opens the live dev PG, applies schema, seeds, and verifies the

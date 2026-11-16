@@ -17,6 +17,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		os.Exit(m.Run())
 	}
+	// Never run fixtures against the live database.
+	if testDSN, derr := db.TestDatabaseDSN(dsn); derr == nil {
+		dsn = testDSN
+	}
+
 	conn, err := sql.Open("pgx", dsn)
 	if err != nil || conn.Ping() != nil {
 		os.Exit(m.Run())

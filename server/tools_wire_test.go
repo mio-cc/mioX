@@ -26,6 +26,10 @@ func TestWireTools(t *testing.T) {
 	if err != nil {
 		t.Skipf("no database config (%v) — skipping", err)
 	}
+	// Never run fixtures against the live database.
+	if testDSN, derr := db.TestDatabaseDSN(dsn); derr == nil {
+		dsn = testDSN
+	}
 	pg, err := db.Open(dsn)
 	if err != nil {
 		t.Skipf("postgres unavailable (%v) — skipping", err)
