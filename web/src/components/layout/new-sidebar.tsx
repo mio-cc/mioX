@@ -890,6 +890,8 @@ export function NewSidebar() {
   }, [commands, search, tasks]);
 
   const results = React.useMemo(() => searchEntries.slice(0, 40), [searchEntries]);
+  // D2-T3: 截断提示（DSH 搜索上限由 Host 定且提示"还有更多"；我们之前硬截 40 条无提示）
+  const resultsTruncated = searchEntries.length > results.length;
 
   React.useEffect(() => {
     setActiveResult(0);
@@ -1261,6 +1263,11 @@ export function NewSidebar() {
                   </button>
                 ))
               )}
+              {resultsTruncated ? (
+                <div className={styles.commandEmpty} data-testid="search-truncated-hint">
+                  仅显示前 {results.length} 条，请输入更具体的关键字
+                </div>
+              ) : null}
             </div>
             <div className={styles.commandFooter}>
               <span>
