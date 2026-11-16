@@ -480,8 +480,31 @@ export interface GoalSnapshot {
   updated_at: string;
 }
 
+// 消息级反馈(Like/Dislike + 分类 + 文字) —— 对齐 DSH
+// @deepseek-ai/dsh-client-ui-message-feedback:
+//   - MessageFeedbackActions.tsx:1-8 评分在助手消息的 icon actions 行(复制与分支之间);
+//     点任一个都先开本会话的反馈对话框,提交时才记录;再点已记录的评分=撤回。
+//   - dialog.ts:16-19 一份表单服务两个目标;字段只有 category(可空)+ text。
+// 一条消息只有一条记录(唯一约束 task_id+session_key+message_seq):先赞后踩是覆盖。
+export type MessageFeedbackRating = "up" | "down";
+export interface MessageFeedback {
+  id: string;
+  task_id: string;
+  /** 会话键,形如 `main:0` / `plan` / `intent:<id>`。 */
+  session_key: string;
+  /** 该会话内的活动序号(与 transcript 行的 seq 一致)。 */
+  message_seq: number;
+  rating: MessageFeedbackRating;
+  /** 分类 id(DSH 的 FeedbackCategory),没选就是 null。 */
+  category: string | null;
+  text: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // 约束管理卡片用的操作约束(allow=允许 / deny=禁止)。
 export type ConstraintKind = "allow" | "deny";
+
 export interface TaskConstraint {
   id: string;
   kind: ConstraintKind;
@@ -1084,6 +1107,11 @@ export interface LLMProfile {
   thinking_type?: string;
   // 思考强度: ""=不发送(默认) | "low"/"medium"/"high"/"xhigh"/"max"
   reasoning_effort?: string;
+  // 该模型声明支持的推理档位(off/low/medium/high/xhigh/max 的子集), 对齐 DSH
+  // ModelReasoningEfforts.tsx:15 INITIAL_LEVELS = ['off','low','medium','high']。
+  // 空/缺省 = 未声明: 选档列出全部档位(历史行为); 非空 = 选档只列这些;
+  // 含 "off" 时选 off 的请求体【不带】reasoning_effort (ModelReasoningEfforts.tsx:18-20)。
+  reasoning_efforts?: string[];
   is_default: boolean;
   // 轮询顺位：越大越先被选中。激活配置恒为链首，与本值无关。
   priority?: number;

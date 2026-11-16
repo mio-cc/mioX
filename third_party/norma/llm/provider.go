@@ -113,6 +113,14 @@ type Config struct {
 	// to "reasoning_effort"; for Anthropic to "output_config":{"effort":...}.
 	// Typical values: low / medium / high / max.
 	ReasoningEffort string
+	// Keyless declares that this endpoint needs no credential: an empty APIKey is
+	// the intended configuration, so NewProvider must NOT fall back to
+	// ANTHROPIC_API_KEY / OPENAI_API_KEY, and no Authorization header goes out.
+	// Without it an empty key silently borrows the ambient environment key, which
+	// turns "this local gateway needs no key" into "this gateway got somebody
+	// else's key" — the exact confusion a keyless profile is supposed to remove.
+	// The provider is still built: an empty key is a legal route, not a failure.
+	Keyless bool
 	// MaxTokensField selects which request key carries the output cap on
 	// FormatOpenAI (Chat Completions). "" (default) sends the classic
 	// "max_tokens"; MaxTokensFieldCompletion sends "max_completion_tokens"
@@ -180,7 +188,9 @@ type Provider interface {
 }
 
 // NewProvider builds a built-in provider for cfg.Format. Missing APIKey/BaseURL
-// fall back to standard environment variables and public endpoints.
+// fall back to standard environment variables and public endpoints — unless
+// cfg.Keyless is set, which means the empty key is deliberate and must not be
+// replaced by an ambient environment key.
 func NewProvider(cfg Config) (Provider, error) {
 	if cfg.HTTPClient == nil {
 		client, err := defaultHTTPClient(cfg.Proxy)
@@ -194,7 +204,7 @@ func NewProvider(cfg Config) (Provider, error) {
 	}
 	switch cfg.Format {
 	case FormatAnthropic:
-		if cfg.APIKey == "" {
+		if cfg.APIKey == "" && !cfg.Keyless {
 			cfg.APIKey = os.Getenv("ANTHROPIC_API_KEY")
 		}
 		if cfg.BaseURL == "" {
@@ -205,7 +215,7 @@ func NewProvider(cfg Config) (Provider, error) {
 		}
 		return &anthropicProvider{cfg: cfg}, nil
 	case FormatOpenAI:
-		if cfg.APIKey == "" {
+		if cfg.APIKey == "" && !cfg.Keyless {
 			cfg.APIKey = os.Getenv("OPENAI_API_KEY")
 		}
 		if cfg.BaseURL == "" {
@@ -213,7 +223,7 @@ func NewProvider(cfg Config) (Provider, error) {
 		}
 		return &openaiProvider{cfg: cfg}, nil
 	case FormatOpenAIResponses:
-		if cfg.APIKey == "" {
+		if cfg.APIKey == "" && !cfg.Keyless {
 			cfg.APIKey = os.Getenv("OPENAI_API_KEY")
 		}
 		if cfg.BaseURL == "" {
@@ -256,6 +266,26 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// setBearer sends the Bearer credential when this config has one. A keyless
+// route sends no Authorization header at all: an empty "Bearer " is rejected by
+// some gateways outright and read as a corrupted key by others, so "no key"
+// has to mean "no header".
+func (c Config) setBearer(h http.Header) {
+	if c.APIKey == "" {
+		return
+	}
+	h.Set("authorization", "Bearer "+c.APIKey)
+}
+
+// setAPIKey sends the Anthropic x-api-key credential when this config has one,
+// for the same reason as setBearer.
+func (c Config) setAPIKey(h http.Header) {
+	if c.APIKey == "" {
+		return
+	}
+	h.Set("x-api-key", c.APIKey)
 }
 
 // joinSystem renders the system segments into a single string.

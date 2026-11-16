@@ -125,7 +125,7 @@ func toResponsesInput(msgs []Message) []orInputItem {
 
 func (p *openaiResponsesProvider) setHeaders(r *http.Request) {
 	r.Header.Set("content-type", "application/json")
-	r.Header.Set("authorization", "Bearer "+p.cfg.APIKey)
+	p.cfg.setBearer(r.Header)
 }
 
 // ---- streaming ----

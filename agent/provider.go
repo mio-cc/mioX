@@ -54,6 +54,15 @@ type Config struct {
 	//   "" = 不发送(默认); "low"/"medium"/"high"/"xhigh"/"max" = 对应强度.
 	//   OpenAI 映射为顶层 reasoning_effort;Anthropic 映射为 output_config.effort.
 	ReasoningEffort string
+	// Keyless 表示这个配置【明确不需要鉴权】:APIKey 为空是合法的,请求不带鉴权头,
+	// 也不许回落到环境变量里的 key。它把「无 key 合法」和「key 忘了填」分开:
+	//   - Keyless=true(来自一个 api_key 为空的 DB profile):本地网关/公开端点。
+	//     没有它,llm.NewProvider 会在 APIKey 为空时偷偷取 OPENAI_API_KEY /
+	//     ANTHROPIC_API_KEY(provider.go:197-222),于是「无 key」实际变成「用别人的 key」。
+	//   - Keyless=false(环境变量配置、UI 直接填的配置):沿用原来的回落规则。
+	// 见 DSH ProviderEditor.tsx:9-11「a blank key materializes a reference-free
+	// profile for provider-native authentication」——空 key 是合法配置,不是缺失。
+	Keyless bool
 	// Stream 控制该 profile 是否使用流式(SSE)接口。true(默认)= 流式;false = 真·
 	// 非流式(发 stream:false,一次性拿完整 JSON,走 Provider.Complete)。非流式可绕开
 	// 某些网关糟糕的 SSE 实现(空帧、思考字段丢帧),代价是失去运行中的实时进度/实时
@@ -304,6 +313,9 @@ func (c Config) NewProvider() (llm.Provider, error) {
 		Model:      c.Model,
 		HTTPClient: client,
 	}
+	// 空 key 的合法配置不许回落到环境变量:否则「无 key」会静默变成「用环境里的
+	// key」,本地网关与公开端点会被一个不相干的 Authorization 头搞成 401。
+	lc.Keyless = c.Keyless
 	// 思考开关与强度两个字段各自透传(空 = 该字段不发送)。二者解耦:
 	// 可只发 thinking.type、只发 effort、都发、或都不发。
 	lc.ThinkingType = c.ThinkingType

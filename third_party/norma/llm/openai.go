@@ -321,7 +321,7 @@ func (p *openaiProvider) Stream(ctx context.Context, req CompletionRequest) iter
 		for attempt := 0; ; attempt++ {
 			resp, err := doStream(ctx, p.cfg, p.cfg.BaseURL+"/chat/completions", body, func(r *http.Request) {
 				r.Header.Set("content-type", "application/json")
-				r.Header.Set("authorization", "Bearer "+p.cfg.APIKey)
+				p.cfg.setBearer(r.Header)
 				r.Header.Set("accept", "text/event-stream")
 			}, "openai")
 			if err != nil {
@@ -414,7 +414,7 @@ func (p *openaiProvider) Complete(ctx context.Context, req CompletionRequest) (M
 	for attempt := 0; ; attempt++ {
 		resp, err := doStream(ctx, p.cfg, p.cfg.BaseURL+"/chat/completions", body, func(r *http.Request) {
 			r.Header.Set("content-type", "application/json")
-			r.Header.Set("authorization", "Bearer "+p.cfg.APIKey)
+			p.cfg.setBearer(r.Header)
 			r.Header.Set("accept", "application/json")
 		}, "openai")
 		if err != nil {

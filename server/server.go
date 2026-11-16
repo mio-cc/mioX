@@ -337,6 +337,15 @@ func (s *Server) agentRunSeconds(key string) int {
 }
 
 // loadLLMConfig reads the active LLM profile from PG (llm_profiles).
+//
+// A blank api_key is a LEGAL configuration, not a failure: the profile is a
+// keyless route (local gateway / public endpoint that takes no auth), so
+// cfg.Keyless is set and the provider sends no credential at all. Gating on a
+// non-empty key here is what made "set profile X as the default" silently do
+// nothing — loadLLMConfig returned ok=false, reapplyActiveProfile bailed out,
+// and the running engine kept whatever provider it had built earlier (from env
+// or the previously active profile). ok=false now means only "no active profile
+// row / unbuildable config".
 func (s *Server) loadLLMConfig() (agent.Config, bool) {
 	p, err := s.m.pg.ActiveProfile()
 	if err != nil || p == nil {
@@ -350,10 +359,8 @@ func (s *Server) loadLLMConfig() (agent.Config, bool) {
 	cfg.Stream = p.Streaming
 	cfg.MaxTokens, cfg.MaxTokensField = p.MaxTokens, p.MaxTokensField
 	cfg.SessionHeaderKey = p.SessionHeaderKey
+	cfg.Keyless = p.APIKey == ""
 	s.applyProfileRetry(&cfg, p)
-	if cfg.APIKey == "" {
-		return cfg, false
-	}
 	s.cfgMu.Lock()
 	s.llmProf = p.Name
 	s.cfgMu.Unlock()
@@ -507,7 +514,8 @@ func (s *Server) applyLLM(cfg agent.Config) error {
 }
 
 // loadProfileConfig builds an agent.Config from a specific profile id (with its key).
-// ok=false when the profile is missing or has no api key.
+// ok=false only when the profile is missing. An empty api_key is legal and makes
+// the config keyless — see loadLLMConfig for why that gate had to go.
 func (s *Server) loadProfileConfig(id int64) (agent.Config, bool) {
 	p, err := s.m.pg.ProfileByID(id)
 	if err != nil || p == nil {
@@ -521,10 +529,8 @@ func (s *Server) loadProfileConfig(id int64) (agent.Config, bool) {
 	cfg.Stream = p.Streaming
 	cfg.MaxTokens, cfg.MaxTokensField = p.MaxTokens, p.MaxTokensField
 	cfg.SessionHeaderKey = p.SessionHeaderKey
+	cfg.Keyless = p.APIKey == ""
 	s.applyProfileRetry(&cfg, p)
-	if cfg.APIKey == "" {
-		return cfg, false
-	}
 	return cfg, true
 }
 
@@ -865,6 +871,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/tasks/{id}/turn-files", s.turnFiles)
 	mux.HandleFunc("POST /api/tasks/{id}/chat/stop", s.stopChat)
 	mux.HandleFunc("POST /api/tasks/{id}/chat/truncate", s.truncateChat) // 编辑已发消息：截断该消息起的会话尾部
+	// 消息反馈（Like/Dislike + 分类 + 文字,DSH @deepseek-ai/dsh-client-ui-message-feedback）：
+	// 一条消息只有一条记录（UNIQUE task_id+session_key+message_seq），先赞后踩是覆盖。
+	mux.HandleFunc("PUT /api/tasks/{id}/message-feedback", s.messageFeedbackPut)       // 写/覆盖一条评分
+	mux.HandleFunc("GET /api/tasks/{id}/message-feedback", s.messageFeedbackList)     // 列出本任务全部评分
+	mux.HandleFunc("DELETE /api/tasks/{id}/message-feedback", s.messageFeedbackDelete) // 撤回（?seq=N）
 
 	// --- 管理后台 API (PostgreSQL 数据源; 新版数据库与管理后台方案) ---
 	mux.HandleFunc("DELETE /api/tasks/{id}", s.pgDeleteTask)
@@ -1339,18 +1350,30 @@ func (s *Server) rerunBlocked(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getLLM(w http.ResponseWriter, r *http.Request) {
 	s.cfgMu.Lock()
 	defer s.cfgMu.Unlock()
+	// The composer's "全局默认" row needs the active profile's declared reasoning
+	// levels, which are a per-model property (see db.LLMProfile.ReasoningEfforts).
+	// Best-effort: an unreachable DB just yields an empty declaration, which the
+	// picker reads as "undeclared" and renders every level.
+	var efforts []string
+	if s.m != nil && s.m.pg != nil {
+		if p, err := s.m.pg.ActiveProfile(); err == nil && p != nil {
+			efforts = db.ParseReasoningEfforts(p.ReasoningEfforts)
+		}
+	}
 	writeJSON(w, 200, map[string]any{
-		"configured":       s.llmOn,
-		"provider":         s.llmCfg.Provider(),
-		"model":            s.llmCfg.Model,
-		"base_url":         s.llmCfg.BaseURL,
-		"proxy":            s.llmCfg.Proxy,
-		"key_set":          s.llmCfg.APIKey != "",
-		"rate_per_second":  s.llmCfg.RatePerSecond,
-		"rate_per_minute":  s.llmCfg.RatePerMinute,
-		"context_window_k": s.llmCfg.ContextWindowK,
-		"thinking_type":    s.llmCfg.ThinkingType,
-		"reasoning_effort": s.llmCfg.ReasoningEffort,
+		"configured":        s.llmOn,
+		"provider":          s.llmCfg.Provider(),
+		"model":             s.llmCfg.Model,
+		"base_url":          s.llmCfg.BaseURL,
+		"proxy":             s.llmCfg.Proxy,
+		"key_set":           s.llmCfg.APIKey != "",
+		"keyless":           s.llmCfg.APIKey == "", // true = 该配置明确不带鉴权（合法，不是缺失）
+		"rate_per_second":   s.llmCfg.RatePerSecond,
+		"rate_per_minute":   s.llmCfg.RatePerMinute,
+		"context_window_k":  s.llmCfg.ContextWindowK,
+		"thinking_type":     s.llmCfg.ThinkingType,
+		"reasoning_effort":  s.llmCfg.ReasoningEffort,
+		"reasoning_efforts": efforts,
 	})
 }
 
@@ -1387,10 +1410,11 @@ func (s *Server) setLLM(w http.ResponseWriter, r *http.Request) {
 		cfg.APIKey = s.llmCfg.APIKey // keep existing key if not re-entered
 		s.cfgMu.Unlock()
 	}
-	if cfg.APIKey == "" {
-		writeErr(w, 400, "api_key required")
-		return
-	}
+	// A blank key that is not being kept is a legal keyless route, not a missing
+	// field: this is the legacy single-config endpoint, and refusing it here would
+	// make the local-gateway case impossible through this path. The provider still
+	// has to build, which is checked below.
+	cfg.Keyless = cfg.APIKey == ""
 	// Validate provider construction before persisting it as the active profile.
 	if _, err := cfg.NewProvider(); err != nil {
 		writeErr(w, 400, "provider init failed: "+err.Error())
@@ -1458,15 +1482,17 @@ func (s *Server) testLLM(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if cfg.APIKey == "" {
+	if cfg.APIKey == "" && req.ProfileID == nil {
+		// 没有指定 profile 时保持旧行为：表单没填 key 就借全局配置的 key。
+		// 指定了 profile 就【不再】借——该 profile 的 key 为空是它自己的合法状态。
 		s.cfgMu.Lock()
 		cfg.APIKey = s.llmCfg.APIKey
 		s.cfgMu.Unlock()
 	}
-	if cfg.APIKey == "" {
-		writeJSON(w, 200, map[string]any{"ok": false, "error": "未提供 API Key"})
-		return
-	}
+	// 空 key 是合法配置（本地网关/公开端点），不再当成「未提供 API Key」拒绝。
+	// 带上 Keyless 让测试请求真的不带鉴权头，测出来的就是会话里会跑的那条路径；
+	// 端点确实要 key 时它会回 401，用户看到的是真话而不是一句前置拦截。
+	cfg.Keyless = cfg.APIKey == ""
 	// 重试参数【不】带进连接测试:测试有 30s 硬超时,把配置的重试次数/长间隔叠上去
 	// 只会让一个本来能用的端点测成"超时失败"。测试看的是"这个端点通不通",重试节奏
 	// 是跑起来之后的事。

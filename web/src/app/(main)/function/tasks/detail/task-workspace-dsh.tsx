@@ -21,6 +21,8 @@ import {
   Send,
   Square,
   Terminal,
+  ThumbsDown,
+  ThumbsUp,
   Wrench,
   X,
 } from "lucide-react";
@@ -38,7 +40,17 @@ import { api, sseUrl } from "@/lib/api";
 import { ScrollFollow, scrollMetrics } from "@/lib/scroll-follow";
 import { copyText } from "@/lib/utils";
 import { MOCK } from "@/lib/mock/enabled";
-import type { Activity, ChatAttachment, GoalSnapshot, LLMProfile, Task, TaskNode, TurnChangedFile } from "@/lib/types";
+import type {
+  Activity,
+  ChatAttachment,
+  GoalSnapshot,
+  LLMProfile,
+  MessageFeedback,
+  MessageFeedbackRating,
+  Task,
+  TaskNode,
+  TurnChangedFile,
+} from "@/lib/types";
 import { TeamTab } from "./_tabs/team-tab";
 
 import { FindingsTab } from "./_tabs/findings-tab";
@@ -158,6 +170,29 @@ function sessionKeyOf(activity: Activity): string {
 /** Canonical main-agent lane key for a segment number. */
 function mainLaneKey(seq: number): string {
   return `main:${seq}`;
+}
+
+/**
+ * 消息反馈的分类。DSH FeedbackDialog.tsx:23-32 把 Host 的 FeedbackCategory 联合类型
+ * 重述成一张完整的表（client 不能 import Host 的值）；文案取 locales.ts:13-19 的 zh 字典，
+ * 顺序就是展示顺序。
+ */
+const FEEDBACK_CATEGORIES: ReadonlyArray<{ readonly id: string; readonly label: string }> = [
+  { id: "task-result", label: "任务结果" },
+  { id: "instruction-following", label: "指令理解与遵循" },
+  { id: "product-interaction", label: "产品功能与交互" },
+  { id: "service-stability", label: "稳定性和速度" },
+  { id: "resource-cost", label: "资源使用与费用" },
+  { id: "security-privacy-permission", label: "安全隐私与权限" },
+  { id: "other", label: "其他" },
+];
+
+/**
+ * 一条消息的身份是 (会话键, 消息序号)，与后端唯一约束
+ * (task_id, session_key, message_seq) 同构，所以前端用同一个键做查表。
+ */
+function feedbackKey(sessionKey: string, seq: number): string {
+  return `${sessionKey}|${seq}`;
 }
 
 /** Compact DSH-style session switcher: a button plus a grouped keyboard listbox. */
@@ -1287,6 +1322,77 @@ function UserRow({
 }
 
 /**
+ * 助手消息的 icon actions 行：复制 + Like/Dislike。
+ *
+ * 逐条照 DSH MessageFeedbackActions.tsx:1-8 的语义：
+ *  ① 评分在助手消息的 icon actions 行里，位置在「复制」和「分支」之间（mioX 还没有分支
+ *     动作，所以就是复制之后的两个按钮）；
+ *  ② 点任一个都【先开】本会话的反馈对话框，提交时才把判断连同分类与文字记录
+ *     （所以取消对话框 = 什么都不写）；
+ *  ③ 再点已记录的那个评分＝撤回（判断在父组件的 chooseFeedback 里，与 :58-74 的 choose() 同构）；
+ *  ④ 已记录的评分显示【实心】图标（:96/:111 在 Fill/Outline 两个字形间切换），信号不依赖 hover。
+ */
+function AssistantActions({
+  seq,
+  text,
+  rating,
+  onChoose,
+}: {
+  readonly seq: number;
+  readonly text: string;
+  readonly rating: MessageFeedbackRating | null;
+  readonly onChoose: (rating: MessageFeedbackRating) => void;
+}) {
+  const [copied, setCopied] = React.useState(false);
+  const copy = async () => {
+    const ok = await copyText(text);
+    if (!ok) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
+  const activeClass = `${styles.assistantAction} ${styles.assistantActionOn}`;
+  return (
+    <div className={styles.assistantActions} data-testid="assistant-actions" data-seq={seq}>
+      <button
+        type="button"
+        className={styles.assistantAction}
+        title="复制原文"
+        aria-label="复制这条回答的原文"
+        data-testid="assistant-copy"
+        data-copy-text={text}
+        onClick={() => void copy()}
+      >
+        {copied ? "已复制" : "复制"}
+      </button>
+      <button
+        type="button"
+        className={rating === "up" ? activeClass : styles.assistantAction}
+        title={rating === "up" ? "取消标记" : "好的回答"}
+        aria-label={rating === "up" ? "取消标记" : "好的回答"}
+        aria-pressed={rating === "up"}
+        data-testid="msg-feedback-up"
+        data-active={rating === "up" ? "true" : undefined}
+        onClick={() => onChoose("up")}
+      >
+        <ThumbsUp size={13} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className={rating === "down" ? activeClass : styles.assistantAction}
+        title={rating === "down" ? "取消标记" : "有问题的回答"}
+        aria-label={rating === "down" ? "取消标记" : "有问题的回答"}
+        aria-pressed={rating === "down"}
+        data-testid="msg-feedback-down"
+        data-active={rating === "down" ? "true" : undefined}
+        onClick={() => onChoose("down")}
+      >
+        <ThumbsDown size={13} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+/**
  * The final answer is stored in full in the activity detail; the history row only
  * carries its first line. Render the detail once it loads, keeping the summary as
  * the immediate (and fallback) text - rendering the summary alone is what made a
@@ -1328,6 +1434,11 @@ function buildActivityNodes(
   seg: number,
   onEdited: () => void,
   turnFiles: Readonly<Record<number, readonly TurnChangedFile[]>> = {},
+  // 消息反馈：本任务全部评分（一次读全，见 controller.ts:241-257 的 load()）、当前会话键，
+  // 以及点 Like/Dislike 时的回调（开对话框 / 撤回由父组件的 chooseFeedback 决定）。
+  feedback: Readonly<Record<string, MessageFeedback>> = {},
+  sessionKey = "main:0",
+  onChooseFeedback?: (seq: number, rating: MessageFeedbackRating) => void,
 ): React.ReactNode[] {
   const resultByUse = new Map<string, Activity>();
   for (const activity of activities) {
@@ -1438,6 +1549,16 @@ function buildActivityNodes(
             <div className={styles.assistant} data-testid="assistant-answer">
               <AssistantAnswer taskId={taskId} seq={activity.seq} summary={answer} />
             </div>
+          ) : null}
+          {/* 助手消息的动作行（复制 + Like/Dislike）。DSH MessageFeedbackActions.tsx:1-8：
+              评分就挂在这条动作行里，位置在复制与分支之间。 */}
+          {answer && onChooseFeedback ? (
+            <AssistantActions
+              seq={activity.seq}
+              text={answer}
+              rating={feedback[feedbackKey(sessionKey, activity.seq)]?.rating ?? null}
+              onChoose={(rating) => onChooseFeedback(activity.seq, rating)}
+            />
           ) : null}
           {changed.length > 0 ? <ChangedFilesCard files={changed} taskId={taskId} /> : null}
           <div className={styles.footer} data-seq={activity.seq} data-turn-end={activity.seq}>
@@ -1550,6 +1671,90 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     }
     void applyTeamMode(true);
   }, [applyTeamMode]);
+
+  // ---- 消息反馈（Like/Dislike + 分类 + 文字）----
+  // 对齐 DSH @deepseek-ai/dsh-client-ui-message-feedback：
+  //   - MessageFeedbackActions.tsx:1-8  点任一个评分都先开对话框，提交时才记录；再点已记录的
+  //     那个评分＝撤回；已记录的显示实心图标。
+  //   - dialog.ts:1-6/16-19            一个会话一份表单（target 决定记录到哪条消息），字段只有
+  //     category（可空）+ text，提交中忽略编辑。
+  //   - controller.ts:241-257          一次列表读全，seed 所有按钮（所以刷新后仍是实心）。
+  // 评分必须落库（不能存 localStorage）：换浏览器/换设备后状态要一致。
+  const [feedback, setFeedback] = React.useState<Record<string, MessageFeedback>>({});
+  const [feedbackDraft, setFeedbackDraft] = React.useState<{
+    sessionKey: string;
+    seq: number;
+    rating: MessageFeedbackRating;
+  } | null>(null);
+  const [feedbackCategory, setFeedbackCategory] = React.useState("");
+  const [feedbackText, setFeedbackText] = React.useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = React.useState(false);
+
+  React.useEffect(() => {
+    if (taskId === "") return;
+    let live = true;
+    api
+      .messageFeedback(taskId)
+      .then((items) => {
+        if (!live) return;
+        const next: Record<string, MessageFeedback> = {};
+        for (const item of items) next[feedbackKey(item.session_key, item.message_seq)] = item;
+        setFeedback(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [taskId]);
+
+  // DSH MessageFeedbackActions.tsx:58-74 的 choose()：点的是已记录的那个评分 → 撤回；
+  // 点的是另一个（或还没记录）→ 打开对话框，此刻【不写库】。
+  const chooseFeedback = React.useCallback(
+    async (sessionKey: string, seq: number, rating: MessageFeedbackRating) => {
+      const recorded = feedback[feedbackKey(sessionKey, seq)]?.rating ?? null;
+      if (recorded !== rating) {
+        setFeedbackCategory("");
+        setFeedbackText("");
+        setFeedbackDraft({ sessionKey, seq, rating });
+        return;
+      }
+      try {
+        await api.deleteMessageFeedback(taskId, seq, sessionKey);
+        setFeedback((prev) => {
+          const next = { ...prev };
+          delete next[feedbackKey(sessionKey, seq)];
+          return next;
+        });
+        toast.success("已撤回评分");
+      } catch (e) {
+        toast.error(`撤回失败：${(e as Error).message}`);
+      }
+    },
+    [feedback, taskId],
+  );
+
+  // 提交对话框：成功才关框并落状态；失败保留草稿让用户改了再交（dialog.ts:89-108 同构）。
+  const submitFeedback = React.useCallback(async () => {
+    const draft = feedbackDraft;
+    if (!draft || feedbackSubmitting) return; // 提交中忽略重复提交
+    setFeedbackSubmitting(true);
+    try {
+      const item = await api.putMessageFeedback(taskId, {
+        session_key: draft.sessionKey,
+        message_seq: draft.seq,
+        rating: draft.rating,
+        category: feedbackCategory === "" ? null : feedbackCategory,
+        text: feedbackText,
+      });
+      setFeedback((prev) => ({ ...prev, [feedbackKey(item.session_key, item.message_seq)]: item }));
+      setFeedbackDraft(null);
+      toast.success("感谢你的反馈");
+    } catch (e) {
+      toast.error(`反馈保存失败：${(e as Error).message}`);
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  }, [feedbackCategory, feedbackDraft, feedbackSubmitting, feedbackText, taskId]);
 
   // 任务级「目标」(/goal)的动作。DSH 的语义:创建只走 `/goal <objective>` 命令
   // (goal-command-input.ts:9),GoalBar 本身只提供 编辑/清除/暂停/恢复
@@ -2719,7 +2924,21 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
                         <span>本回合 {processCount} 步过程已折叠</span>
                       </button>
                     ) : null}
-                    {buildActivityNodes(rows, taskId, streamingSeq, mainSegOf(currentKey), () => { void loadActivity(currentKey); }, turnFiles)}
+                    {buildActivityNodes(
+                      rows,
+                      taskId,
+                      streamingSeq,
+                      mainSegOf(currentKey),
+                      () => {
+                        void loadActivity(currentKey);
+                      },
+                      turnFiles,
+                      feedback,
+                      currentKey,
+                      (seq, rating) => {
+                        void chooseFeedback(currentKey, seq, rating);
+                      },
+                    )}
                     {/* 进行中的回合（还没有 result 行）：改动文件卡挂在当前内容末尾。 */}
                     {isLiveTurn && (turnFiles[0]?.length ?? 0) > 0 ? (
                       <ChangedFilesCard files={turnFiles[0]} taskId={taskId} />
@@ -3061,6 +3280,76 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
               }}
             >
               关闭团队模式
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 消息反馈对话框：一份表单服务所有助手消息（DSH dialog.ts:1-6/16-19 —— 一个会话一个
+          FeedbackDialogController，target 决定记录到哪条消息；字段只有 category + text）。
+          取消＝dismiss()：丢掉草稿，什么都不写（所以"点赞但取消"必须查不到记录）。 */}
+      <Dialog
+        open={feedbackDraft !== null}
+        onOpenChange={(open) => {
+          // 提交中不许被外部交互关掉（dialog.ts:26-27：提交中表单忽略编辑）。
+          if (!open && !feedbackSubmitting) setFeedbackDraft(null);
+        }}
+      >
+        <DialogContent className="w-[92vw] max-w-[520px]" data-testid="msg-feedback-dialog">
+          <DialogHeader>
+            <DialogTitle>{feedbackDraft?.rating === "down" ? "这条回答有什么问题？" : "提交反馈"}</DialogTitle>
+            <DialogDescription>
+              选一个分类、补充详情；提交后这条消息才会记录你的判断（取消不记录）。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-3 flex flex-col gap-3">
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">反馈分类</span>
+              <select
+                className="h-8 rounded-md border bg-transparent px-2 text-sm"
+                value={feedbackCategory}
+                disabled={feedbackSubmitting}
+                data-testid="msg-feedback-category"
+                onChange={(event) => setFeedbackCategory(event.target.value)}
+              >
+                <option value="">不选分类</option>
+                {FEEDBACK_CATEGORIES.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">反馈详情</span>
+              <textarea
+                className="min-h-24 rounded-md border bg-transparent p-2 text-sm"
+                value={feedbackText}
+                readOnly={feedbackSubmitting}
+                maxLength={2000}
+                placeholder="填写详情以帮助我们改进体验"
+                data-testid="msg-feedback-text"
+                onChange={(event) => setFeedbackText(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={feedbackSubmitting}
+              data-testid="msg-feedback-cancel"
+              onClick={() => setFeedbackDraft(null)}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              disabled={feedbackSubmitting}
+              data-testid="msg-feedback-submit"
+              onClick={() => void submitFeedback()}
+            >
+              {feedbackSubmitting ? "提交中…" : "提交"}
             </Button>
           </div>
         </DialogContent>

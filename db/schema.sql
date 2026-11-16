@@ -1464,3 +1464,50 @@ CREATE TABLE IF NOT EXISTS memories (
 CREATE INDEX IF NOT EXISTS idx_memories_scope  ON memories(scope, task_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_kind   ON memories(kind, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_tags   ON memories USING GIN(tags);
+
+-- =====================================================================
+-- 消息反馈（Like / Dislike + 分类 + 文字）
+-- =====================================================================
+-- 对齐 DSH @deepseek-ai/dsh-client-ui-message-feedback:
+--   - MessageFeedbackActions.tsx:1-8  Like/Dislike 在助手消息的 icon actions 行里（复制与分支之间）；
+--     点任一个都【先开】本会话的反馈对话框，提交时才把判断连同分类与文字记录；再点已记录的那个
+--     评分＝撤回；已记录的评分显示实心图标（信号不依赖 hover）。
+--   - dialog.ts:16-19  一份表单服务两个目标（整个会话 / 单条消息），字段只有 category（可空）+ text。
+--   - controller.ts:161-170  rate() 的语义是「创建或替换」：同一目标只留一条记录。
+--
+-- 所以物理约束是 UNIQUE (task_id, session_key, message_seq)：先赞后踩是【覆盖】而不是两条，
+-- 否则「再点已记录的那个评分＝撤回」就没有定义（该删哪条？）。session_key 形如 'main:0'。
+CREATE TABLE IF NOT EXISTS message_feedback (
+    id          BIGSERIAL PRIMARY KEY,
+    task_id     BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    session_key TEXT   NOT NULL,                       -- 'main:0' | 'plan' | 'intent:<id>'
+    message_seq BIGINT NOT NULL,                       -- 该会话内的活动序号
+    rating      TEXT   NOT NULL CHECK (rating IN ('up','down')),
+    category    TEXT,                                  -- 可空：没选分类就是 NULL
+    "text"      TEXT   NOT NULL DEFAULT '',            -- 补充文字，上限在应用层（2000 字符）
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (task_id, session_key, message_seq)
+);
+CREATE INDEX IF NOT EXISTS idx_message_feedback_task ON message_feedback(task_id, session_key);
+DROP TRIGGER IF EXISTS trg_message_feedback_upd ON message_feedback;
+CREATE TRIGGER trg_message_feedback_upd BEFORE UPDATE ON message_feedback
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- =====================================================================
+-- 每模型声明的推理档位（reasoning levels）
+-- =====================================================================
+-- 对齐 DSH @deepseek-ai/dsh-client-ui-settings-models:
+--   - ProviderEditor.tsx:14-18  「Reasoning effort is deliberately absent: it is a
+--     per-MODEL capability, and the models under one provider disagree about it, so a
+--     provider-scoped control can only be set to a value some of them reject.」
+--     → 档位是「模型」的属性，不是「provider/配置」的属性。
+--   - ModelReasoningEfforts.tsx:15  INITIAL_LEVELS = ['off','low','medium','high']
+--   - ModelReasoningEfforts.tsx:18-20  defaultValue(level): off → null（Off 发 null）
+--   - ModelReasoningEfforts.tsx:99  「至少一个 Off 以外的档位」才算有效声明
+-- mioX 的 llm_profiles 是「一个配置 = 一个模型」，所以「每模型」在这里就等于「每配置」。
+-- 空串 = 未声明（保持历史行为：前端列出全部档位，请求体按 reasoning_effort 原样发送）。
+-- 非空 = 逗号分隔的档位名（off,low,medium,high,xhigh,max 的子集），前端只列这些档位，
+--        选 off 时请求体【不带】reasoning_effort（db.EffortWireValue，由
+--        server/task_llm.go 的 withEffort 在每轮覆盖时套用）。
+ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS reasoning_efforts TEXT NOT NULL DEFAULT '';

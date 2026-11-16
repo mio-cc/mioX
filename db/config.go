@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -31,7 +32,21 @@ type LLMProfile struct {
 	// ReasoningEffort 独立控制思考「强度」:"" = 不发送(默认);
 	// "low"/"medium"/"high"/"xhigh"/"max" = 对应强度. 见 agent.Config.NewProvider.
 	ReasoningEffort string `json:"reasoning_effort"`
-	IsDefault       bool   `json:"is_default"`
+	// ReasoningEfforts declares which reasoning levels this profile's MODEL
+	// supports, comma-separated (a subset of ReasoningEffortLevels). Empty =
+	// undeclared, which keeps the historical behaviour: the picker offers every
+	// level and the request body sends ReasoningEffort verbatim.
+	//
+	// DSH keeps this on the model, not on the provider
+	// (ProviderEditor.tsx:14-18): one provider's models disagree about which
+	// levels they accept, so a provider-scoped control can only be set to a value
+	// some of them reject. mioX has exactly one model per profile, so "per model"
+	// lands here.
+	//
+	// Raw string + json:"-" mirrors APIKey: the wire shape is a JSON array
+	// (LLMProfileDTO.ReasoningEfforts), the storage shape is one TEXT column.
+	ReasoningEfforts string `json:"-"`
+	IsDefault        bool   `json:"is_default"`
 	// Priority orders the failover chain: higher goes first. The ACTIVE profile
 	// (IsDefault) always heads the chain regardless of this value.
 	Priority int `json:"priority"`
@@ -80,8 +95,62 @@ type RetryOverride struct {
 // profileCols is the read column list (hint variant, no api key) shared by the
 // list query; profileColsKey is the same with api_key for the single-row loads.
 const profileRetryCols = `COALESCE(retry_connect_attempts,0),COALESCE(retry_connect_interval_ms,0),COALESCE(retry_empty_attempts,0),COALESCE(retry_empty_interval_ms,0),COALESCE(retry_stream_attempts,0),COALESCE(retry_stream_interval_ms,0)`
-const profileCols = `id,name,format,COALESCE(base_url,''),COALESCE(proxy,''),model,COALESCE(api_key_hint,''),rate_per_second,rate_per_minute,context_window_k,COALESCE(reasoning_effort,''),is_default,priority,pool_exclude,COALESCE(thinking_type,''),COALESCE(streaming,true),COALESCE(max_tokens,0),COALESCE(max_tokens_field,''),COALESCE(session_header_key,''),` + profileRetryCols
-const profileColsKey = `id,name,format,COALESCE(base_url,''),COALESCE(proxy,''),model,COALESCE(api_key,''),rate_per_second,rate_per_minute,context_window_k,COALESCE(reasoning_effort,''),is_default,priority,pool_exclude,COALESCE(thinking_type,''),COALESCE(streaming,true),COALESCE(max_tokens,0),COALESCE(max_tokens_field,''),COALESCE(session_header_key,''),` + profileRetryCols
+
+// ReasoningEffortLevels is every level a profile may declare, in DSH's escalation
+// order: `off` first (it sends nothing) then the common OpenAI-compatible trio,
+// then the two extended levels this codebase already accepts on
+// `reasoning_effort`. ModelReasoningEfforts.tsx:15 lists
+// `['off','low','medium','high']`; xhigh/max come from llm.Config's own doc
+// comment (provider.go:112-115), so they are accepted here too rather than being
+// silently dropped for an existing profile.
+var ReasoningEffortLevels = []string{"off", "low", "medium", "high", "xhigh", "max"}
+
+// EffortWireValue maps a declared level to the value sent on the wire. `off`
+// sends nothing — ModelReasoningEfforts.tsx:18-20 `defaultValue(level)` returns
+// null for Off, i.e. the request carries no reasoning-effort field at all.
+func EffortWireValue(level string) string {
+	if level == "off" {
+		return ""
+	}
+	return level
+}
+
+// ParseReasoningEfforts reads the stored declaration, keeping only known levels
+// in the canonical order and dropping duplicates. Anything unrecognized is
+// dropped rather than stored, so a hand-edited row cannot offer a level the
+// adapter would reject.
+func ParseReasoningEfforts(raw string) []string {
+	declared := map[string]bool{}
+	for _, part := range strings.Split(raw, ",") {
+		declared[strings.TrimSpace(part)] = true
+	}
+	out := make([]string, 0, len(ReasoningEffortLevels))
+	for _, level := range ReasoningEffortLevels {
+		if declared[level] {
+			out = append(out, level)
+		}
+	}
+	return out
+}
+
+// JoinReasoningEfforts is ParseReasoningEfforts' inverse: canonical, deduplicated,
+// comma-separated. An empty result means "undeclared".
+func JoinReasoningEfforts(levels []string) string {
+	declared := map[string]bool{}
+	for _, level := range levels {
+		declared[strings.TrimSpace(level)] = true
+	}
+	kept := make([]string, 0, len(ReasoningEffortLevels))
+	for _, level := range ReasoningEffortLevels {
+		if declared[level] {
+			kept = append(kept, level)
+		}
+	}
+	return strings.Join(kept, ",")
+}
+
+const profileCols = `id,name,format,COALESCE(base_url,''),COALESCE(proxy,''),model,COALESCE(api_key_hint,''),rate_per_second,rate_per_minute,context_window_k,COALESCE(reasoning_effort,''),is_default,priority,pool_exclude,COALESCE(thinking_type,''),COALESCE(streaming,true),COALESCE(max_tokens,0),COALESCE(max_tokens_field,''),COALESCE(session_header_key,''),` + profileRetryCols + `,COALESCE(reasoning_efforts,'')`
+const profileColsKey = `id,name,format,COALESCE(base_url,''),COALESCE(proxy,''),model,COALESCE(api_key,''),rate_per_second,rate_per_minute,context_window_k,COALESCE(reasoning_effort,''),is_default,priority,pool_exclude,COALESCE(thinking_type,''),COALESCE(streaming,true),COALESCE(max_tokens,0),COALESCE(max_tokens_field,''),COALESCE(session_header_key,''),` + profileRetryCols + `,COALESCE(reasoning_efforts,'')`
 
 // scanProfile reads one row in the profileCols / profileColsKey column order. The
 // 7th column lands in APIKeyHint or APIKey depending on which list the caller used.
@@ -91,7 +160,8 @@ func scanProfile(sc interface{ Scan(...any) error }, into *string, p *LLMProfile
 		&p.MaxTokens, &p.MaxTokensField, &p.SessionHeaderKey,
 		&p.Retry.Connect.Attempts, &p.Retry.Connect.IntervalMS,
 		&p.Retry.Empty.Attempts, &p.Retry.Empty.IntervalMS,
-		&p.Retry.Stream.Attempts, &p.Retry.Stream.IntervalMS)
+		&p.Retry.Stream.Attempts, &p.Retry.Stream.IntervalMS,
+		&p.ReasoningEfforts)
 }
 
 func (d *DB) ListProfiles() ([]*LLMProfile, error) {
@@ -133,13 +203,15 @@ func (d *DB) ProfileByID(id int64) (*LLMProfile, error) {
 }
 
 // PoolProfiles returns the failover chain in run order, api keys included: the
-// active profile first, then every other keyed profile that isn't excluded, by
-// priority DESC (id ASC to stay stable). Profiles without an api key can't serve
-// a request, so they never enter the chain. The ordering IS the policy — callers
-// walk the slice front to back.
+// active profile first, then every other profile that isn't excluded, by
+// priority DESC (id ASC to stay stable). A profile with no api key is a legal
+// keyless route (a local gateway / public endpoint that takes no auth), so it
+// takes part like any other — excluding it would silently drop the one profile a
+// keyless-only install has. The ordering IS the policy — callers walk the slice
+// front to back.
 func (d *DB) PoolProfiles() ([]*LLMProfile, error) {
 	rows, err := d.Query(`SELECT ` + profileColsKey + ` FROM llm_profiles
-WHERE COALESCE(api_key,'') <> '' AND (is_default OR NOT pool_exclude)
+WHERE is_default OR NOT pool_exclude
 ORDER BY is_default DESC, priority DESC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -163,23 +235,24 @@ func (d *DB) SaveProfile(p *LLMProfile) (int64, error) {
 		hint = "…" + p.APIKey[len(p.APIKey)-4:]
 	}
 	r := p.Retry.Clamped()
+	efforts := JoinReasoningEfforts(ParseReasoningEfforts(p.ReasoningEfforts))
 	if p.ID == 0 {
 		var id int64
-		err := d.QueryRow(`INSERT INTO llm_profiles(name,format,base_url,proxy,model,api_key,api_key_hint,rate_per_second,rate_per_minute,context_window_k,reasoning_effort,priority,pool_exclude,thinking_type,streaming,max_tokens,max_tokens_field,session_header_key,retry_connect_attempts,retry_connect_interval_ms,retry_empty_attempts,retry_empty_interval_ms,retry_stream_attempts,retry_stream_interval_ms)
-VALUES ($1,$2,NULLIF($3,''),NULLIF($4,''),$5,NULLIF($6,''),NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24) RETURNING id`,
+		err := d.QueryRow(`INSERT INTO llm_profiles(name,format,base_url,proxy,model,api_key,api_key_hint,rate_per_second,rate_per_minute,context_window_k,reasoning_effort,priority,pool_exclude,thinking_type,streaming,max_tokens,max_tokens_field,session_header_key,retry_connect_attempts,retry_connect_interval_ms,retry_empty_attempts,retry_empty_interval_ms,retry_stream_attempts,retry_stream_interval_ms,reasoning_efforts)
+VALUES ($1,$2,NULLIF($3,''),NULLIF($4,''),$5,NULLIF($6,''),NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id`,
 			p.Name, p.Format, p.BaseURL, p.Proxy, p.Model, p.APIKey, hint, p.RatePerSecond, p.RatePerMinute, p.ContextWindowK, p.ReasoningEffort, p.Priority, p.PoolExclude, p.ThinkingType, p.Streaming, p.MaxTokens, p.MaxTokensField, p.SessionHeaderKey,
-			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS).Scan(&id)
+			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, efforts).Scan(&id)
 		return id, err
 	}
 	if p.APIKey == "" {
-		_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,rate_per_second=$6,rate_per_minute=$7,context_window_k=$8,reasoning_effort=$9,priority=$10,pool_exclude=$11,thinking_type=$12,streaming=$13,max_tokens=$14,max_tokens_field=$15,session_header_key=$16,retry_connect_attempts=$17,retry_connect_interval_ms=$18,retry_empty_attempts=$19,retry_empty_interval_ms=$20,retry_stream_attempts=$21,retry_stream_interval_ms=$22 WHERE id=$23`,
+		_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,rate_per_second=$6,rate_per_minute=$7,context_window_k=$8,reasoning_effort=$9,priority=$10,pool_exclude=$11,thinking_type=$12,streaming=$13,max_tokens=$14,max_tokens_field=$15,session_header_key=$16,retry_connect_attempts=$17,retry_connect_interval_ms=$18,retry_empty_attempts=$19,retry_empty_interval_ms=$20,retry_stream_attempts=$21,retry_stream_interval_ms=$22,reasoning_efforts=$23 WHERE id=$24`,
 			p.Name, p.Format, p.BaseURL, p.Proxy, p.Model, p.RatePerSecond, p.RatePerMinute, p.ContextWindowK, p.ReasoningEffort, p.Priority, p.PoolExclude, p.ThinkingType, p.Streaming, p.MaxTokens, p.MaxTokensField, p.SessionHeaderKey,
-			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.ID)
+			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, efforts, p.ID)
 		return p.ID, err
 	}
-	_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,api_key=$6,api_key_hint=$7,rate_per_second=$8,rate_per_minute=$9,context_window_k=$10,reasoning_effort=$11,priority=$12,pool_exclude=$13,thinking_type=$14,streaming=$15,max_tokens=$16,max_tokens_field=$17,session_header_key=$18,retry_connect_attempts=$19,retry_connect_interval_ms=$20,retry_empty_attempts=$21,retry_empty_interval_ms=$22,retry_stream_attempts=$23,retry_stream_interval_ms=$24 WHERE id=$25`,
+	_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,api_key=$6,api_key_hint=$7,rate_per_second=$8,rate_per_minute=$9,context_window_k=$10,reasoning_effort=$11,priority=$12,pool_exclude=$13,thinking_type=$14,streaming=$15,max_tokens=$16,max_tokens_field=$17,session_header_key=$18,retry_connect_attempts=$19,retry_connect_interval_ms=$20,retry_empty_attempts=$21,retry_empty_interval_ms=$22,retry_stream_attempts=$23,retry_stream_interval_ms=$24,reasoning_efforts=$25 WHERE id=$26`,
 		p.Name, p.Format, p.BaseURL, p.Proxy, p.Model, p.APIKey, hint, p.RatePerSecond, p.RatePerMinute, p.ContextWindowK, p.ReasoningEffort, p.Priority, p.PoolExclude, p.ThinkingType, p.Streaming, p.MaxTokens, p.MaxTokensField, p.SessionHeaderKey,
-		r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.ID)
+		r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, efforts, p.ID)
 	return p.ID, err
 }
 

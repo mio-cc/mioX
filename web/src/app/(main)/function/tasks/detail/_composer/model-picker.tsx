@@ -24,6 +24,8 @@ export type GlobalLLM = {
   readonly provider: string;
   readonly model: string;
   readonly reasoning_effort?: string;
+  /** 激活配置的模型声明了哪些推理档位（空/缺省 = 未声明）。 */
+  readonly reasoning_efforts?: string[];
 };
 
 /** One row of the composer model popover. */
@@ -34,11 +36,18 @@ export type ModelOption = {
   readonly label: string;
   readonly meta: string;
   readonly active: boolean;
+  /**
+   * 这一行的模型声明支持哪些推理档位（DSH ModelReasoningEfforts.tsx:15）。
+   * 空/缺省 = 未声明 → 选档列出全部档位（历史行为）。
+   */
+  readonly reasoningEfforts?: string[];
 };
 
 export type ModelGroup = { readonly title: string; readonly rows: ModelOption[] };
 
 const EFFORT_LABELS: Record<string, string> = {
+  // off = 关闭思考，请求体不带 reasoning_effort（ModelReasoningEfforts.tsx:18-20）。
+  off: "关闭",
   low: "低",
   medium: "中",
   high: "高",
@@ -78,6 +87,7 @@ export function buildModelGroups(task: Task | null, profiles: LLMProfile[], glob
       label: profileLabel(profile),
       meta: [profile.model, profile.format].filter(Boolean).join(" · "),
       active: id === activeId,
+      reasoningEfforts: profile.reasoning_efforts,
     };
     (chain.includes(id) ? inChain : others).push(row);
   }
@@ -93,10 +103,27 @@ export function buildModelGroups(task: Task | null, profiles: LLMProfile[], glob
         label: global?.model?.trim() || "跟随全局设置",
         meta: global?.configured ? `${global.provider} · 已配置` : "全局未配置模型",
         active: activeId === undefined || activeId === null || activeId === 0,
+        reasoningEfforts: global?.reasoning_efforts,
       },
     ],
   });
   return groups;
+}
+
+/**
+ * 当前生效那一行声明的推理档位；`undefined` = 未声明（列出全部档位）。
+ * 档位是模型的属性（DSH ProviderEditor.tsx:14-18：同一 provider 下不同模型接受的档位
+ * 不一样），所以取的是「当前在跑的这个模型」的声明，而不是全局并集。
+ */
+export function declaredEffortLevels(groups: ModelGroup[]): readonly string[] | undefined {
+  for (const group of groups) {
+    for (const row of group.rows) {
+      if (!row.active) continue;
+      const levels = row.reasoningEfforts ?? [];
+      return levels.length > 0 ? levels : undefined;
+    }
+  }
+  return undefined;
 }
 
 /** Effort choices in the drilled pane; "" = follow the provider/model default. */
@@ -241,6 +268,17 @@ export function ModelSelect({
 
   const modelLabel = activeRow?.label ?? "未配置模型";
   const effortLabel = effortText(effort || inheritedEffort);
+  // 该模型声明了档位 → 只列声明的这些；未声明 → 保留原来的完整列表（含「默认」）。
+  // 「选档只列支持的」是 DSH 的行为：schema 只给出该模型接受的档位，
+  // 卡片就不会出现一个这个模型必然拒绝的值。
+  const declared = React.useMemo(() => declaredEffortLevels(groups), [groups]);
+  const effortChoices = React.useMemo(
+    () =>
+      declared
+        ? declared.map((level) => ({ value: level, label: EFFORT_LABELS[level] ?? level }))
+        : EFFORT_CHOICES,
+    [declared],
+  );
   itemRefs.current = [];
   let itemIndex = 0;
   const registerItem = (node: HTMLButtonElement | null) => {
@@ -400,7 +438,7 @@ export function ModelSelect({
           {pane === "effort" ? (
             <div className={styles.modelGroup} role="group" aria-label="思考档位">
               <div className={styles.modelGroupTitle}>思考档位（本轮）</div>
-              {EFFORT_CHOICES.map((choice) => (
+              {effortChoices.map((choice) => (
                 <button
                   key={choice.value || "default"}
                   ref={registerItem}
@@ -420,6 +458,9 @@ export function ModelSelect({
                     <span className={styles.modelOptionLabel}>{choice.label}</span>
                     {choice.value === "" ? (
                       <span className={styles.modelOptionMeta}>跟随模型配置</span>
+                    ) : choice.value === "off" ? (
+                      // Off 发 null：请求体不带 reasoning_effort（ModelReasoningEfforts.tsx:18-20）。
+                      <span className={styles.modelOptionMeta}>请求不带 reasoning_effort</span>
                     ) : null}
                   </span>
                   {choice.value === effort ? <Check size={12} aria-hidden="true" className={styles.modelCheck} /> : null}

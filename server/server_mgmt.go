@@ -1801,6 +1801,13 @@ func (s *Server) pgSaveProfile(w http.ResponseWriter, r *http.Request) {
 		db.LLMProfile
 		APIKey    string `json:"api_key"`
 		Streaming *bool  `json:"streaming"`
+		// ReasoningEfforts is the per-model level declaration (see
+		// db.LLMProfile.ReasoningEfforts). A sibling because the stored shape is
+		// one TEXT column and the wire shape is a JSON array — the same split
+		// APIKey already uses. A POINTER so "field omitted" (nil: keep whatever is
+		// stored, which is what every older/partial client sends) stays
+		// distinguishable from "explicitly empty" (declaration cleared).
+		ReasoningEfforts *[]string `json:"reasoning_efforts"`
 	}
 	if err := decode(r, &body); err != nil {
 		writeErr(w, 400, err.Error())
@@ -1809,6 +1816,24 @@ func (s *Server) pgSaveProfile(w http.ResponseWriter, r *http.Request) {
 	p := body.LLMProfile
 	p.APIKey = body.APIKey
 	p.Streaming = body.Streaming == nil || *body.Streaming
+	switch {
+	case body.ReasoningEfforts != nil:
+		p.ReasoningEfforts = db.JoinReasoningEfforts(*body.ReasoningEfforts)
+	case p.ID != 0:
+		// Omitted: carry the stored declaration through this update.
+		if existing, err := pg.ProfileByID(p.ID); err == nil && existing != nil {
+			p.ReasoningEfforts = existing.ReasoningEfforts
+		}
+	}
+	// A declaration of only `off` would leave the picker with a single entry that
+	// sends nothing — DSH refuses that shape instead of saving it
+	// (ModelReasoningEfforts.tsx:99 `modelReasoningNeedsLevel`: add at least one
+	// level besides Off). Refusing here keeps the stored row meaningful and gives
+	// the caller the same instruction the card shows.
+	if p.ReasoningEfforts == "off" {
+		writeErr(w, 400, "推理档位声明至少要有 off 以外的一个档位；不需要思考请留空（不声明）")
+		return
+	}
 	// 输出上限:负数无意义,归零(= 不发送该字段)。字段名开关只有 Chat Completions
 	// 用得上——anthropic 与 openai-responses 各自定死了字段名,存下来只会误导后续读者,
 	// 故非 openai 格式一律清空。未知取值同样清空,避免把 DB CHECK 的报错甩给用户。
@@ -1995,10 +2020,6 @@ func (s *Server) pgListModels(w http.ResponseWriter, r *http.Request) {
 			apiKey = p.APIKey
 		}
 	}
-	if apiKey == "" {
-		writeJSON(w, 200, map[string]any{"ok": false, "error": "未提供 API Key"})
-		return
-	}
 
 	baseURL := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
 	provider := strings.TrimSpace(req.Provider)
@@ -2011,14 +2032,21 @@ func (s *Server) pgListModels(w http.ResponseWriter, r *http.Request) {
 		url string
 		hdr http.Header
 	}
+	// 空 key 是合法配置（本地网关 / 公开端点），不再是「未提供 API Key」的拒绝理由：
+	// 直接不带鉴权头去拉列表，端点要不要 key 由它自己回答（401 就是 401）。
+	// 这正是「无 key 合法」与「key 缺失」的区别：后者是输入框格式错，在 UI 层拦。
 	bearerHdr := func() http.Header {
 		h := http.Header{}
-		h.Set("Authorization", "Bearer "+apiKey)
+		if apiKey != "" {
+			h.Set("Authorization", "Bearer "+apiKey)
+		}
 		return h
 	}
 	anthropicHdr := func() http.Header {
 		h := http.Header{}
-		h.Set("x-api-key", apiKey)
+		if apiKey != "" {
+			h.Set("x-api-key", apiKey)
+		}
 		h.Set("anthropic-version", "2023-06-01")
 		return h
 	}

@@ -17,6 +17,12 @@ type taskLLMResolution struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+// resolutionFromProfile reports what a profile would resolve to, for the read-only
+// task LLM panel. A blank api_key is a legal keyless route, so the key is NOT a
+// precondition here — the same gate that made `loadLLMConfig` report a keyless
+// active profile as unusable would otherwise show a perfectly working local
+// gateway as "未设置 API Key / 不可用" in the panel. What decides availability is
+// whether the profile builds a provider at all.
 func (s *Server) resolutionFromProfile(p *db.LLMProfile, source string) taskLLMResolution {
 	if p == nil {
 		return taskLLMResolution{Source: source, Reason: "LLM 配置不存在"}
@@ -28,10 +34,6 @@ func (s *Server) resolutionFromProfile(p *db.LLMProfile, source string) taskLLMR
 		Format:    p.Format,
 		Model:     p.Model,
 		Source:    source,
-	}
-	if p.APIKey == "" {
-		result.Reason = "LLM 配置未设置 API Key"
-		return result
 	}
 	if _, _, ok := s.providerForProfile(p.ID); !ok {
 		result.Reason = "LLM 配置格式或参数无效"

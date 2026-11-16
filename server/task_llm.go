@@ -76,18 +76,29 @@ func (r *taskLLMRuntime) effortOverrideValue() string {
 
 // withEffort returns a provider honouring the turn's effort override.
 //
+// The composer picks a DECLARED level, and `off` is one of them. `off` sends no
+// reasoning-effort field at all — ModelReasoningEfforts.tsx:18-20 `defaultValue`
+// returns null for Off — so the level is mapped to its wire value ("" for off)
+// BEFORE the equality check. Comparing the raw level instead would make "choose
+// off" a no-op whenever the profile itself already carries an effort, which is
+// exactly the case the user reaches for Off in.
+//
 // It never fails the turn: if the override cannot be applied (unknown value,
 // provider construction error) the resolved provider is returned unchanged, so a
 // bad optional parameter degrades to "no override" instead of breaking chat.
 func (r *taskLLMRuntime) withEffort(base llm.Provider, cfg agent.Config) llm.Provider {
-	want := r.effortOverrideValue()
-	if want == "" || want == cfg.ReasoningEffort {
+	level := r.effortOverrideValue()
+	if level == "" {
+		return base
+	}
+	want := db.EffortWireValue(level)
+	if want == cfg.ReasoningEffort {
 		return base
 	}
 	cfg.ReasoningEffort = want
 	p, err := cfg.NewProvider()
 	if err != nil {
-		log.Printf("[llm] reasoning effort override %q ignored: %v", want, err)
+		log.Printf("[llm] reasoning effort override %q ignored: %v", level, err)
 		return base
 	}
 	// Keep the recorder in the loop: without this the overridden turn would vanish
@@ -96,7 +107,7 @@ func (r *taskLLMRuntime) withEffort(base llm.Provider, cfg agent.Config) llm.Pro
 	if r.s != nil && r.s.m != nil {
 		p = llmrec.Wrap(p, r.s.m.PG(), cfg.Model, "", cfg.ThinkingType, cfg.ReasoningEffort, r.s.m.LLMRecordEnabled)
 	}
-	log.Printf("[llm] reasoning effort override %q applied for this turn", want)
+	log.Printf("[llm] reasoning effort override %q applied for this turn (wire value %q; \"\" means the field is omitted)", level, want)
 	return p
 }
 

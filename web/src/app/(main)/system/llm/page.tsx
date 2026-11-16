@@ -28,6 +28,9 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
+// API Key 的浏览器侧启发式校验，逐条对齐 DSH apiKey.ts（见该文件头注释）：
+// 空值不是失败、引号/空格/NAME=value 一律算格式错、且**只在 UI 跑**。
+import { apiKeyFailure, apiKeyFailureText, apiKeyWireValue } from "@/lib/api-key";
 import {
   clearLLMModelCache,
   formatModelCacheTime,
@@ -84,22 +87,56 @@ const EFFORT_LEVELS: { value: string; label: string }[] = [
   { value: "max", label: "max" },
 ];
 
+// 每模型声明支持的推理档位（对齐 DSH ModelReasoningEfforts.tsx:15）：
+// INITIAL_LEVELS = ['off','low','medium','high'] —— Off 排第一，因为它是「关掉思考」，
+// 不是「多一档强度」。xhigh/max 是本项目 reasoning_effort 已支持的扩展档，一并列出。
+// 声明非空时，合成器的选档只列这些档位；选 off 时请求体【不带】reasoning_effort
+// （ModelReasoningEfforts.tsx:18-20 defaultValue: off → null）。
+const DECLARABLE_EFFORT_LEVELS: { value: string; label: string; hint?: string }[] = [
+  { value: "off", label: "off", hint: "关闭思考：请求体不带 reasoning_effort" },
+  { value: "low", label: "low" },
+  { value: "medium", label: "medium" },
+  { value: "high", label: "high" },
+  { value: "xhigh", label: "xhigh" },
+  { value: "max", label: "max" },
+];
+
 function cooldownText(secs: number) {
   if (secs <= 0) return "";
   if (secs < 60) return `${secs}s`;
   return `${Math.ceil(secs / 60)}min`;
 }
 
-// 一个配置在卡片上显示的「是否正常」。没填 Key 的配置根本发不出请求，比熔断更该先说；
-// 其余状态来自轮询的熔断记录（轮询关着时不会产生新记录，此时「正常」= 没有已知故障）。
+// 一个配置在卡片上显示的「是否正常」。没填 Key 的配置不一定是坏的：
+// 本地网关 / 公开端点本来就不要鉴权，空 key 是**合法配置**（对齐 DSH
+// ProviderEditor.tsx:9-11「a blank key materializes a reference-free profile for
+// provider-native authentication」）。所以这里只标注「不带鉴权」，不当故障；
+// 真正的故障来自轮询的熔断记录（轮询关着时不会产生新记录，此时「正常」= 没有已知故障）。
 type Health = { label: string; cls: string; hint?: string };
 function healthOf(p: LLMProfile, m?: LLMPoolMember): Health {
   if (!p.api_key_hint) {
-    return {
-      label: "未配置 Key",
+    // 与「Key 缺失」区分开：缺失是输入框没填（表单校验拦），这里是存下来的配置状态。
+    const keyless: Health = {
+      label: "无 Key · 不带鉴权",
       cls: "border-muted-foreground/40 text-muted-foreground",
-      hint: "未填 API Key，无法调用",
+      hint: "该配置不带 API Key，请求不发送鉴权头（本地网关 / 公开端点适用）",
     };
+    // 熔断/降级状态仍然优先展示：无 Key 不代表一定连得上。
+    if (m?.state === "tripped") {
+      return {
+        label: m.cooldown_secs > 0 ? `已熔断 · ${cooldownText(m.cooldown_secs)}` : "已熔断",
+        cls: "border-destructive/50 text-destructive",
+        hint: m.last_error,
+      };
+    }
+    if (m?.state === "degraded") {
+      return {
+        label: `无 Key · 失败 ${m.fails} 次`,
+        cls: "border-amber-500/50 text-amber-600 dark:text-amber-400",
+        hint: m.last_error,
+      };
+    }
+    return keyless;
   }
   if (m?.state === "tripped") {
     return {
@@ -343,6 +380,8 @@ function ProfileSheet({
   const [cw, setCw] = React.useState("0"); // 上下文窗口(K tokens);0=默认200K
   const [thinkingType, setThinkingType] = React.useState(NONE);
   const [effort, setEffort] = React.useState(NONE);
+  // 该模型声明支持的推理档位（空 = 不声明，选档列出全部档位）。见 DECLARABLE_EFFORT_LEVELS。
+  const [efforts, setEfforts] = React.useState<string[]>([]);
   const [priority, setPriority] = React.useState("0"); // 轮询顺位;越大越先
   const [poolExclude, setPoolExclude] = React.useState(false);
   const [streaming, setStreaming] = React.useState(true); // true=流式(默认);false=非流式
@@ -387,6 +426,7 @@ function ProfileSheet({
     setCw(String(profile?.context_window_k ?? 0));
     setThinkingType(fromStore(profile?.thinking_type));
     setEffort(fromStore(profile?.reasoning_effort));
+    setEfforts(profile?.reasoning_efforts ?? []);
     setPriority(String(profile?.priority ?? 0));
     setPoolExclude(profile?.pool_exclude ?? false);
     setStreaming(profile?.streaming ?? true);
@@ -400,6 +440,14 @@ function ProfileSheet({
   }, [open, profile, preset, applyOpencodePreset]);
 
   const profileId = profile ? Number(profile.id) : undefined;
+
+  // 输入框当前值的判定（apiKey.ts:51-58）：空 = 不失败（保留已存的 key）。
+  // 这是【字段级】判定，只拦提交与测试；已存的配置状态（无 key 合法）不受它影响。
+  const keyFailure = apiKeyFailure(apiKey);
+  const keyErrorText = keyFailure ? apiKeyFailureText(keyFailure) : "";
+  // 只声明了 off 等于没有强度可调，DSH 直接拒绝这种声明
+  // （ModelReasoningEfforts.tsx:99 modelReasoningNeedsLevel）。
+  const effortsOnlyOff = efforts.length > 0 && efforts.every((level) => level === "off");
 
   async function loadModels(options: { silent?: boolean; open?: boolean } = {}) {
     if (loadingModels) return;
@@ -488,6 +536,13 @@ function ProfileSheet({
 
   async function testConnection() {
     if (testing) return;
+    // 格式错的 key 先别发：DSH 的做法是把 probe 一起挡住
+    // （ProviderEditor.tsx:635 probeBlocked={...shownKeyFailure}），否则用户会拿到一个
+    // 401 而不是「你这行贴错了」。
+    if (keyFailure) {
+      toast.error(keyErrorText);
+      return;
+    }
     setTesting(true);
     try {
       // 用配置实际会跑的思考参数来测，这样不支持该字段的模型在这里就失败，
@@ -522,6 +577,15 @@ function ProfileSheet({
       toast.error("请填写名称与模型");
       return;
     }
+    // 空 key 不是失败（本地网关/公开端点合法）；格式错才拦。
+    if (keyFailure) {
+      toast.error(keyErrorText);
+      return;
+    }
+    if (effortsOnlyOff) {
+      toast.error("推理档位至少要有 off 以外的一个档位；不需要思考请留空（不声明）");
+      return;
+    }
     if (saving) return;
     setSaving(true);
     try {
@@ -532,12 +596,15 @@ function ProfileSheet({
         model: model.trim(),
         base_url: baseUrl.trim(),
         proxy: proxy.trim(),
-        api_key: apiKey,
+        // 粘进来时被包住的空白一并去掉（ProviderEditor.tsx:287 keyText.trim()）：
+        // 提交的是「真正要发出去的 key」，不是用户复制粘贴时的边角。
+        api_key: apiKeyWireValue(apiKey),
         rate_per_second: Number(rps) || 0,
         rate_per_minute: Number(rpm) || 0,
         context_window_k: Number(cw) || 0,
         thinking_type: toStore(thinkingType),
         reasoning_effort: toStore(effort),
+        reasoning_efforts: efforts,
         priority: Number(priority) || 0,
         pool_exclude: poolExclude,
         streaming,
@@ -811,10 +878,23 @@ function ProfileSheet({
             <Input
               id="p-api-key"
               type="password"
-              placeholder={keyHint ? `已设置（${keyHint}），留空保持不变` : "sk-…"}
+              // 空 = 不发送鉴权头，是合法配置（本地网关/公开端点）；这不是错误提示。
+              placeholder={keyHint ? `已设置（${keyHint}），留空保持不变` : "留空 = 不带鉴权头（本地网关/公开端点）"}
               value={apiKey}
+              aria-invalid={keyFailure !== undefined}
               onChange={(e) => setApiKey(e.target.value)}
             />
+            {keyFailure ? (
+              <p className="text-destructive text-xs" data-testid="profile-key-error" role="alert">
+                {keyErrorText}
+              </p>
+            ) : (
+              <p className="text-muted-foreground text-xs" data-testid="profile-key-hint">
+                {keyHint
+                  ? "已存有 Key：留空保存＝保持不变。"
+                  : "可以留空：该配置将不带鉴权头发送（本地网关、公开端点）。空值不算错误，只有格式错才拦。"}
+              </p>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -974,6 +1054,53 @@ function ProfileSheet({
                 </SelectContent>
               </Select>
             </div>
+            {/* 每模型声明支持的推理档位（DSH ModelReasoningEfforts.tsx）。
+                档位是【模型】的能力，不是 provider 的：同一网关下不同模型接受的档位不一样，
+                所以这里声明的是「这个模型能收哪些」，合成器的选档只列这些。 */}
+            <div className="grid gap-2 border-t pt-3">
+              <div className="grid gap-0.5">
+                <Label className="text-sm">该模型支持的推理档位</Label>
+                <p className="text-muted-foreground text-xs">
+                  勾选这个模型真正接受的档位；合成器的思考档位菜单只列勾选的这些。
+                  <b>off</b> 表示关闭思考——选中它时请求体【不带】reasoning_effort。
+                  一个都不勾 = 不声明，菜单列出全部档位（历史行为）。
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="该模型支持的推理档位">
+                {DECLARABLE_EFFORT_LEVELS.map((level) => {
+                  const on = efforts.includes(level.value);
+                  return (
+                    <button
+                      key={level.value}
+                      type="button"
+                      aria-pressed={on}
+                      title={level.hint}
+                      data-testid="profile-effort-level"
+                      data-level={level.value}
+                      data-active={on ? "true" : "false"}
+                      onClick={() =>
+                        setEfforts((cur) =>
+                          cur.includes(level.value) ? cur.filter((v) => v !== level.value) : [...cur, level.value],
+                        )
+                      }
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 font-mono text-xs transition-colors",
+                        on
+                          ? "border-foreground/40 bg-foreground text-background"
+                          : "border-input text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                      )}
+                    >
+                      {level.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {effortsOnlyOff && (
+                <p className="text-destructive text-xs" data-testid="profile-effort-error" role="alert">
+                  至少添加一个 off 以外的档位；不需要思考请一个都不勾（不声明）。
+                </p>
+              )}
+            </div>
           </div>
 
           <ProfileRetryFields value={retry} onChange={setRetry} />
@@ -984,7 +1111,7 @@ function ProfileSheet({
             {testing ? <Loader2Icon className="animate-spin" /> : <PlugZapIcon />}
             {testing ? "测试中…" : "测试连接"}
           </Button>
-          <Button onClick={save} disabled={saving} className="flex-1">
+          <Button onClick={save} disabled={saving || keyFailure !== undefined || effortsOnlyOff} className="flex-1">
             {saving && <Loader2Icon className="animate-spin" />}
             {!saving && (isNew ? <PlusIcon /> : <SaveIcon />)}
             {isNew ? "新建" : "保存"}
@@ -1144,13 +1271,16 @@ export default function LLMPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-6 text-muted-foreground text-xs">
-                      {p.api_key_hint && <span>{p.api_key_hint}</span>}
+                      {p.api_key_hint ? <span>{p.api_key_hint}</span> : <span>无 Key · 不带鉴权</span>}
                       <span>
                         {p.rate_per_second}/s · {p.rate_per_minute}/min
                       </span>
                       {p.proxy && <span className="truncate">代理 {p.proxy}</span>}
                       {p.reasoning_effort && (
                         <span>思考 {p.reasoning_effort === "off" ? "关" : p.reasoning_effort}</span>
+                      )}
+                      {(p.reasoning_efforts?.length ?? 0) > 0 && (
+                        <span>档位 {p.reasoning_efforts?.join("/")}</span>
                       )}
                       {/* 轮询相关的两个字段只在轮询开着时才有意义，关着时不占版面 */}
                       {poolOn &&

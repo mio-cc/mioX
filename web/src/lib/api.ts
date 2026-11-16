@@ -64,6 +64,8 @@ import type {
   LLMTask,
   MCPServer,
   MCPTool,
+  MessageFeedback,
+  MessageFeedbackRating,
   MissingSkill,
   ModelTokenStat,
   NotificationChannel,
@@ -463,6 +465,28 @@ export const api = {
   // 清除目标:服务端删除该行,之后 GET 返回 null。
   clearTaskGoal: (id: string) =>
     post<{ ok: boolean; cleared: boolean }>(`/tasks/${id}/goal/clear`, {}),
+
+  // ---- 消息反馈（Like/Dislike + 分类 + 文字,DSH ui-message-feedback）----
+  // 一条消息只有一条记录(唯一约束 task_id+session_key+message_seq):先赞后踩是【覆盖】,
+  // 所以"再点已记录的那个评分=撤回"才有确定含义。列表一次读全,用来 seed 所有按钮的实心态。
+  messageFeedback: (id: string) =>
+    get<{ items: MessageFeedback[] | null }>(`/tasks/${id}/message-feedback`).then((r) => arr(r.items)),
+  // 写/覆盖一条评分:只有对话框提交时才调用(点 Like/Dislike 只开对话框,不落库)。
+  putMessageFeedback: (
+    id: string,
+    input: {
+      session_key: string;
+      message_seq: number;
+      rating: MessageFeedbackRating;
+      category?: string | null;
+      text?: string;
+    },
+  ) => put<{ feedback: MessageFeedback }>(`/tasks/${id}/message-feedback`, input).then((r) => r.feedback),
+  // 撤回:再点已记录的那个评分时调用(幂等,重复撤回 deleted=false 而不是报错)。
+  deleteMessageFeedback: (id: string, seq: number, session?: string) =>
+    del<{ ok: boolean; deleted: boolean }>(
+      `/tasks/${id}/message-feedback?seq=${seq}${session ? `&session=${encodeURIComponent(session)}` : ""}`,
+    ),
 
   // ---- 操作约束管理（总览）----
   // 本任务全部操作约束（allow/deny）。
@@ -1002,11 +1026,16 @@ export const api = {
       base_url: string;
       proxy?: string;
       key_set: boolean;
+      // true = 激活配置明确不带鉴权（本地网关/公开端点）。key_set 为 false 时它区分
+      // 「无 key 合法」与「key 缺失」：前者是配置好的状态，后者只是输入框没填。
+      keyless?: boolean;
       rate_per_second?: number;
       rate_per_minute?: number;
       context_window_k?: number;
       thinking_type?: string;
       reasoning_effort?: string;
+      // 激活配置的模型声明了哪些推理档位（空/缺省 = 未声明，选档列出全部）。
+      reasoning_efforts?: string[];
     }>("/llm"),
   setLLM: (
     provider: string,
@@ -1057,6 +1086,9 @@ export const api = {
     context_window_k?: number;
     thinking_type?: string; // ""(不发送)|"disabled"|"enabled"
     reasoning_effort?: string; // ""(不发送)|"low"|"medium"|"high"|"xhigh"|"max"
+    // 该模型声明支持的推理档位（off/low/medium/high/xhigh/max 的子集）。
+    // 省略 = 不改动已存的声明；[] = 清空声明（回到"列出全部档位"）。
+    reasoning_efforts?: string[];
     priority?: number; // 轮询顺位，越大越先用
     pool_exclude?: boolean; // true=不作为故障转移目标
     streaming?: boolean; // true(默认)=流式 | false=非流式

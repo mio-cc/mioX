@@ -609,7 +609,15 @@ type LLMProfileDTO struct {
 	ContextWindowK  int     `json:"context_window_k"`
 	ThinkingType    string  `json:"thinking_type"`
 	ReasoningEffort string  `json:"reasoning_effort"`
-	IsDefault       bool    `json:"is_default"`
+	// ReasoningEfforts lists the levels this profile's MODEL supports, in the
+	// schema's escalation order (off/low/medium/high/xhigh/max). Empty =
+	// undeclared: the picker offers every level and the request body sends
+	// ReasoningEffort verbatim (the historical behaviour). A declaration narrows
+	// the picker to these levels; `off` among them means "send nothing".
+	// DSH keeps levels per model (ModelReasoningEfforts.tsx:15,18-20), and mioX's
+	// one-model-per-profile makes this field that declaration.
+	ReasoningEfforts []string `json:"reasoning_efforts"`
+	IsDefault        bool     `json:"is_default"`
 	// 轮询(故障转移)参数：priority 越大越先被选中(激活配置恒为链首)；
 	// pool_exclude=true 则不作为故障转移目标，但仍可被 agent/任务显式绑定。
 	Priority    int  `json:"priority"`
@@ -644,6 +652,7 @@ func llmProfileDTO(p *db.LLMProfile) LLMProfileDTO {
 		ContextWindowK:   p.ContextWindowK,
 		ThinkingType:     p.ThinkingType,
 		ReasoningEffort:  p.ReasoningEffort,
+		ReasoningEfforts: db.ParseReasoningEfforts(p.ReasoningEfforts),
 		IsDefault:        p.IsDefault,
 		Priority:         p.Priority,
 		PoolExclude:      p.PoolExclude,
