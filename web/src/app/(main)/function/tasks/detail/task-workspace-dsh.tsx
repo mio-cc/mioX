@@ -11,6 +11,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   ClipboardList,
   Loader2,
   PanelRight,
@@ -2074,6 +2075,9 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     return window.localStorage.getItem("miox.chat.compactView") === "1";
   });
   const [expandedFolds, setExpandedFolds] = React.useState<ReadonlySet<number>>(new Set());
+  // D4-T3: 手动折叠集合（DSH turn-process 语义：折叠是回合级交互，不是只有全局档位）。
+  // 优先级：expandedFolds（展开）> collapsedFolds（手动折叠）> compactView 默认（历史回合折、live 回合不折）。
+  const [collapsedFolds, setCollapsedFolds] = React.useState<ReadonlySet<number>>(new Set());
   React.useEffect(() => {
     try {
       window.localStorage.setItem("miox.chat.compactView", compactView ? "1" : "0");
@@ -2282,6 +2286,7 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     setHasOlder(false);
     setOldestSeq(0);
     setExpandedFolds(new Set()); // D4-T1: 折叠键按 startSeq，切车道后旧键全部失效，清空
+    setCollapsedFolds(new Set()); // D4-T3: 手动折叠同回合级状态，切车道清空
     void loadActivity(currentKey);
   }, [currentKey, loadActivity, taskId]);
 
@@ -3049,13 +3054,29 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
               {turnGroups.map((group, groupIndex) => {
                 const isLiveTurn = groupIndex === turnGroups.length - 1;
                 const processCount = group.rows.filter((row) => PROCESS_KINDS.has(row.kind)).length;
-                const folded = compactView && !isLiveTurn && processCount > 0 && !expandedFolds.has(group.startSeq);
+                const folded =
+                  processCount > 0 &&
+                  !expandedFolds.has(group.startSeq) &&
+                  (collapsedFolds.has(group.startSeq) || (compactView && !isLiveTurn));
                 // D4-T4: 折叠时保留全部行（过程行 hidden="until-found"，Ctrl+F 可命中并自动展开），
                 // 不再从数组剔除（DSH searchable-hidden 语义：折叠内容不卸载 DOM）。
                 const rows = group.rows;
                 const foldState = folded ? { hiddenKinds: PROCESS_KINDS, turnSeq: group.startSeq } : undefined;
                 return (
                   <React.Fragment key={`turn-${group.startSeq}`}>
+                    {!folded && processCount > 0 ? (
+                      // D4-T3: 每回合独立折叠按钮（DSH turn-process 折叠控件在回合内，不在全局档位）
+                      <button
+                        type="button"
+                        className={styles.foldBar}
+                        onClick={() => setCollapsedFolds((prev) => new Set(prev).add(group.startSeq))}
+                        data-action="fold-turn"
+                        data-testid="chat-fold-button"
+                      >
+                        <ChevronUp size={12} aria-hidden="true" />
+                        <span>折叠本回合 {processCount} 步过程</span>
+                      </button>
+                    ) : null}
                     {folded ? (
                       <button
                         type="button"
