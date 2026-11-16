@@ -571,10 +571,22 @@ export function HarnessTaskList() {
             第 {safePage} / {pageCount} 页 · 共 {filtered.length} 条
           </span>
           <span className={styles.footerActions}>
-            <button type="button" className={styles.pageBtn} disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>
+            <button
+              type="button"
+              className={styles.pageBtn}
+              disabled={safePage <= 1}
+              title={safePage <= 1 ? "已经是第一页" : "上一页"}
+              onClick={() => setPage(safePage - 1)}
+            >
               上一页
             </button>
-            <button type="button" className={styles.pageBtn} disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>
+            <button
+              type="button"
+              className={styles.pageBtn}
+              disabled={safePage >= pageCount}
+              title={safePage >= pageCount ? "已经是最后一页" : "下一页"}
+              onClick={() => setPage(safePage + 1)}
+            >
               下一页
             </button>
           </span>

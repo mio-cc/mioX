@@ -193,10 +193,22 @@ export function FindingsList() {
         <footer className={styles.footer}>
           <span className={styles.footerInfo}>第 {page} / {pageCount} 页 · 共 {total} 条</span>
           <span className={styles.footerActions}>
-            <button type="button" className={styles.pageBtn} disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            <button
+              type="button"
+              className={styles.pageBtn}
+              disabled={page <= 1}
+              title={page <= 1 ? "已经是第一页" : "上一页"}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
               上一页
             </button>
-            <button type="button" className={styles.pageBtn} disabled={page >= pageCount} onClick={() => setPage((p) => p + 1)}>
+            <button
+              type="button"
+              className={styles.pageBtn}
+              disabled={page >= pageCount}
+              title={page >= pageCount ? "已经是最后一页" : "下一页"}
+              onClick={() => setPage((p) => p + 1)}
+            >
               下一页
             </button>
           </span>

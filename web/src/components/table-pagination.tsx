@@ -84,6 +84,7 @@ export function TablePagination({
                 disabled={safePage === 1}
                 onClick={() => onPageChange(safePage - 1)}
                 aria-label="上一页"
+                title={safePage === 1 ? "已经是第一页" : "上一页"}
               >
                 <ChevronLeftIcon className="size-4" />
               </Button>
@@ -113,6 +114,7 @@ export function TablePagination({
                 disabled={safePage === totalPages}
                 onClick={() => onPageChange(safePage + 1)}
                 aria-label="下一页"
+                title={safePage === totalPages ? "已经是最后一页" : "下一页"}
               >
                 <ChevronRightIcon className="size-4" />
               </Button>
