@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -17,23 +18,30 @@ const TestDatabaseNameSuffix = "_test"
 // TestDatabaseDSN returns the DSN a test should use, never the live one.
 //
 // Why this exists: `go test ./server/ ./db/` used to run against the live database and
-// wrote its fixtures there — one afternoon accumulated 86 junk tasks in the real task
-// list (v0.88). Tests now default to a sibling `<db>_test` database that is created on
-// demand, so a test run cannot pollute real data.
+// wrote (and deleted!) its fixtures there — one afternoon it created 86 junk tasks and
+// wiped the configured LLM profile (v0.88/v0.90). Tests now default to a sibling
+// `<db>_test` database that is created on demand, so a test run cannot touch real data.
 //
 // Precedence:
 //  1. ARTEX_TEST_PG_DSN when set (lets CI point at a prepared server);
 //  2. otherwise the live DSN with its database name suffixed by "_test";
 //  3. the live DSN unchanged when it already ends with the suffix.
+//
+// The database name is replaced by URL surgery rather than by mutating pgx's ConnConfig:
+// ConnConfig.ConnString() returns the ORIGINAL string it parsed, so a mutated Database
+// field never reaches the caller (this exact mistake silently disabled the isolation).
 func TestDatabaseDSN(liveDSN string) (string, error) {
 	if explicit := strings.TrimSpace(os.Getenv("ARTEX_TEST_PG_DSN")); explicit != "" {
 		return explicit, nil
 	}
-	cfg, err := pgx.ParseConfig(liveDSN)
+	u, err := url.Parse(liveDSN)
 	if err != nil {
 		return "", fmt.Errorf("parse dsn: %w", err)
 	}
-	live := cfg.Database
+	if u.Scheme != "postgres" && u.Scheme != "postgresql" {
+		return "", fmt.Errorf("unsupported dsn scheme %q", u.Scheme)
+	}
+	live := strings.TrimPrefix(u.Path, "/")
 	if live == "" {
 		return "", fmt.Errorf("dsn has no database name")
 	}
@@ -41,21 +49,25 @@ func TestDatabaseDSN(liveDSN string) (string, error) {
 		return liveDSN, nil
 	}
 	testName := live + TestDatabaseNameSuffix
-	if err := ensureTestDatabase(cfg, testName); err != nil {
+	if err := ensureTestDatabase(liveDSN, testName); err != nil {
 		return "", err
 	}
-	testCfg := cfg.Copy()
-	testCfg.Database = testName
-	return testCfg.ConnString(), nil
+	out := *u
+	out.Path = "/" + testName
+	return out.String(), nil
 }
 
 // ensureTestDatabase creates name on the same server when it is missing. A concurrent
 // create is not an error: PostgreSQL reports duplicate_database, which means it is there.
-func ensureTestDatabase(cfg *pgx.ConnConfig, name string) error {
+func ensureTestDatabase(liveDSN, name string) error {
 	ctx := context.Background()
-	admin := cfg.Copy()
-	admin.Database = "postgres"
-	conn, err := pgx.ConnectConfig(ctx, admin)
+	u, err := url.Parse(liveDSN)
+	if err != nil {
+		return fmt.Errorf("parse dsn: %w", err)
+	}
+	admin := *u
+	admin.Path = "/postgres"
+	conn, err := pgx.Connect(ctx, admin.String())
 	if err != nil {
 		return fmt.Errorf("connect maintenance db: %w", err)
 	}
