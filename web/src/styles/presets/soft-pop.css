@@ -87,3 +87,33 @@ value: soft-pop
   --shadow-xl: 0px 0px 0px 0px hsl(0 0% 10.1961% / 0.05), 0px 8px 10px -1px hsl(0 0% 10.1961% / 0.05);
   --shadow-2xl: 0px 0px 0px 0px hsl(0 0% 10.1961% / 0.13);
 }
+
+/*
+ * Workbench token layer (`--ax-*`) — light mode.
+ * The shadcn variables above never reach the main UI: the workbench stylesheets
+ * read `--ax-*` only. These mirror this preset's own `--primary` (the colour the
+ * preset picker paints its dot with) onto the brand/accent/status tokens, in both
+ * modes as `ui-theme/index.ts:57-70` requires. Radius and the neutral surfaces stay
+ * on the neutral `--ax-*` defaults: a preset only re-colours, it does not re-space.
+ */
+:root[data-theme-preset="soft-pop"] {
+  --ax-brand: oklch(0.5106 0.2301 276.9656);
+  --ax-brand-hover: color-mix(in oklab, oklch(0.5106 0.2301 276.9656) 86%, #000);
+  --ax-accent: oklch(0.5106 0.2301 276.9656);
+  --ax-info: oklch(0.5106 0.2301 276.9656);
+}
+
+/*
+ * Workbench token layer (`--ax-*`) — dark mode.
+ * The shadcn variables above never reach the main UI: the workbench stylesheets
+ * read `--ax-*` only. These mirror this preset's own `--primary` (the colour the
+ * preset picker paints its dot with) onto the brand/accent/status tokens, in both
+ * modes as `ui-theme/index.ts:57-70` requires. Radius and the neutral surfaces stay
+ * on the neutral `--ax-*` defaults: a preset only re-colours, it does not re-space.
+ */
+.dark:root[data-theme-preset="soft-pop"] {
+  --ax-brand: oklch(0.6801 0.1583 276.9349);
+  --ax-brand-hover: color-mix(in oklab, oklch(0.6801 0.1583 276.9349) 86%, #fff);
+  --ax-accent: oklch(0.6801 0.1583 276.9349);
+  --ax-info: oklch(0.6801 0.1583 276.9349);
+}

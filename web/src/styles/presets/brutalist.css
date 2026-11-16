@@ -87,3 +87,33 @@ value: brutalist
   --shadow-xl: 4px 4px 0px 0px hsl(0 0% 0% / 1), 4px 8px 10px -1px hsl(0 0% 0% / 1);
   --shadow-2xl: 4px 4px 0px 0px hsl(0 0% 0% / 2.5);
 }
+
+/*
+ * Workbench token layer (`--ax-*`) — light mode.
+ * The shadcn variables above never reach the main UI: the workbench stylesheets
+ * read `--ax-*` only. These mirror this preset's own `--primary` (the colour the
+ * preset picker paints its dot with) onto the brand/accent/status tokens, in both
+ * modes as `ui-theme/index.ts:57-70` requires. Radius and the neutral surfaces stay
+ * on the neutral `--ax-*` defaults: a preset only re-colours, it does not re-space.
+ */
+:root[data-theme-preset="brutalist"] {
+  --ax-brand: oklch(0.6489 0.237 26.9728);
+  --ax-brand-hover: color-mix(in oklab, oklch(0.6489 0.237 26.9728) 86%, #000);
+  --ax-accent: oklch(0.6489 0.237 26.9728);
+  --ax-info: oklch(0.6489 0.237 26.9728);
+}
+
+/*
+ * Workbench token layer (`--ax-*`) — dark mode.
+ * The shadcn variables above never reach the main UI: the workbench stylesheets
+ * read `--ax-*` only. These mirror this preset's own `--primary` (the colour the
+ * preset picker paints its dot with) onto the brand/accent/status tokens, in both
+ * modes as `ui-theme/index.ts:57-70` requires. Radius and the neutral surfaces stay
+ * on the neutral `--ax-*` defaults: a preset only re-colours, it does not re-space.
+ */
+.dark:root[data-theme-preset="brutalist"] {
+  --ax-brand: oklch(0.7044 0.1872 23.1858);
+  --ax-brand-hover: color-mix(in oklab, oklch(0.7044 0.1872 23.1858) 86%, #fff);
+  --ax-accent: oklch(0.7044 0.1872 23.1858);
+  --ax-info: oklch(0.7044 0.1872 23.1858);
+}

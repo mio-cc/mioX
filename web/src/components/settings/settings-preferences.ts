@@ -24,11 +24,21 @@ export const FONT_SIZE_LEVELS = [
 
 export type FontSizeLevel = (typeof FONT_SIZE_LEVELS)[number]["id"];
 
-/** `--ax-font-size-*` / `--ax-line-height-*` values for one level. */
+/**
+ * `--ax-font-size-*` / `--ax-line-height-*` values for one level.
+ *
+ * Every step of the type scale (`styles/tokens.css`) is listed here, not only the
+ * four the dialog mentions: a token missing from this map keeps its `:root` value
+ * at every level, which is how a "font size" setting silently stops at the dialog
+ * border. Consumers: `task-workspace-dsh.module.css` (workbench), `app-frame`,
+ * `settings-dialog`, `new-sidebar`, `right-panel`.
+ */
 type FontSizeTokens = Readonly<Record<string, string>>;
 
 const FONT_SIZE_TOKENS: Readonly<Record<FontSizeLevel, FontSizeTokens>> = {
   compact: {
+    "--ax-font-size-display": "24px",
+    "--ax-font-size-title": "14px",
     "--ax-font-size-body": "13px",
     "--ax-line-height-body": "22px",
     "--ax-font-size-secondary": "12px",
@@ -38,8 +48,13 @@ const FONT_SIZE_TOKENS: Readonly<Record<FontSizeLevel, FontSizeTokens>> = {
     "--ax-font-size-code": "11px",
     "--ax-line-height-code": "17px",
     "--ax-font-size-code-block": "10px",
+    "--ax-font-size-label": "10px",
+    "--ax-font-size-micro": "9px",
+    "--ax-font-size-glyph": "7px",
   },
   default: {
+    "--ax-font-size-display": "26px",
+    "--ax-font-size-title": "15px",
     "--ax-font-size-body": "14px",
     "--ax-line-height-body": "24px",
     "--ax-font-size-secondary": "13px",
@@ -49,8 +64,13 @@ const FONT_SIZE_TOKENS: Readonly<Record<FontSizeLevel, FontSizeTokens>> = {
     "--ax-font-size-code": "12px",
     "--ax-line-height-code": "19px",
     "--ax-font-size-code-block": "11px",
+    "--ax-font-size-label": "11px",
+    "--ax-font-size-micro": "10px",
+    "--ax-font-size-glyph": "8px",
   },
   comfortable: {
+    "--ax-font-size-display": "30px",
+    "--ax-font-size-title": "17px",
     "--ax-font-size-body": "16px",
     "--ax-line-height-body": "26px",
     "--ax-font-size-secondary": "15px",
@@ -60,6 +80,9 @@ const FONT_SIZE_TOKENS: Readonly<Record<FontSizeLevel, FontSizeTokens>> = {
     "--ax-font-size-code": "13px",
     "--ax-line-height-code": "20px",
     "--ax-font-size-code-block": "12px",
+    "--ax-font-size-label": "12px",
+    "--ax-font-size-micro": "11px",
+    "--ax-font-size-glyph": "9px",
   },
 };
 

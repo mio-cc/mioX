@@ -91,7 +91,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--ax-text-primary);
-  font-size: 15px;
+  font-size: var(--ax-font-size-title);
   line-height: 22px;
   font-weight: 600;
   letter-spacing: -0.1px;
@@ -112,7 +112,7 @@
   border-radius: 5px;
   background: color-mix(in srgb, var(--ax-info) 10%, transparent);
   color: var(--ax-accent);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   line-height: 22px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -139,7 +139,7 @@
 .meta {
   flex: 0 0 auto;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -155,7 +155,7 @@
   border-radius: 5px;
   background: var(--ax-bg-subtle);
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   line-height: 22px;
   white-space: nowrap;
 }
@@ -191,7 +191,7 @@
   background: var(--ax-bg-surface);
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -218,7 +218,7 @@
 .sessionCaption {
   flex: 0 0 auto;
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
 }
 
 .sessionValue {
@@ -250,7 +250,7 @@
 .sessionGroup {
   padding: 6px 8px 3px;
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
@@ -314,7 +314,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   text-align: left;
   cursor: pointer;
   user-select: none;
@@ -348,7 +348,7 @@
 .sessionOptionMeta {
   flex: 0 0 auto;
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   font-variant-numeric: tabular-nums;
 }
 
@@ -368,7 +368,7 @@
   background: var(--ax-bg-surface);
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -399,7 +399,7 @@
 .actionIcon {
   width: 28px;
   padding: 0;
-  font-size: 15px;
+  font-size: var(--ax-font-size-title);
 }
 
 .tabs {
@@ -428,7 +428,7 @@
   background: transparent;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   cursor: pointer;
   transition: color var(--ax-duration-fast) var(--ax-ease);
 }
@@ -487,7 +487,7 @@
   background: transparent;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
 }
 
 .loadOlderButton {
@@ -591,7 +591,7 @@
   border-radius: 10px;
   background: color-mix(in srgb, var(--ax-info) 10%, var(--ax-bg-surface));
   color: var(--ax-text-primary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 22px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -600,8 +600,8 @@
 .assistant {
   margin: 0 0 12px;
   color: var(--ax-text-primary);
-  font-size: 14px;
-  line-height: 24px;
+  font-size: var(--ax-font-size-body);
+  line-height: var(--ax-line-height-body);
 }
 
 .assistant :global(p) {
@@ -611,14 +611,14 @@
 .reasoning {
   margin: 2px 0;
   color: var(--ax-text-tertiary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 22px;
 }
 
 .round {
   margin: 14px 0 6px;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 16px;
 }
 
@@ -646,7 +646,7 @@
   background: transparent;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 24px;
   text-align: left;
   cursor: pointer;
@@ -700,7 +700,7 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 24px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -710,7 +710,7 @@
   flex: 0 0 auto;
   margin-left: 8px;
   color: var(--ax-danger);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
 }
 
 .toolChevron {
@@ -741,7 +741,7 @@
 .toolSectionLabel {
   margin: 0 0 4px;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 16px;
 }
 
@@ -751,7 +751,7 @@
   overflow: auto;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family-code);
-  font-size: 12px;
+  font-size: var(--ax-font-size-code);
   line-height: 18px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -781,7 +781,7 @@
 
 .approvalTitle {
   color: #6b4e16;
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   font-weight: 600;
 }
 
@@ -804,7 +804,7 @@
 .approvalId {
   color: #a98545;
   font-family: var(--ax-font-family-code);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
 }
 
 .approvalTag {
@@ -812,7 +812,7 @@
   border-radius: 4px;
   background: rgba(107, 78, 22, 0.08);
   color: #8a6b35;
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   line-height: 16px;
 }
 
@@ -842,7 +842,7 @@
   gap: 5px;
   border-radius: 7px;
   font-family: var(--ax-font-family);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   font-weight: 500;
   cursor: pointer;
   transition: background 120ms var(--ax-ease), border-color 120ms var(--ax-ease);
@@ -883,14 +883,14 @@
 
 .approvalBody {
   color: #8a6b35;
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 20px;
 }
 
 .footer {
   margin: 6px 0 18px;
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   line-height: 16px;
 }
 
@@ -939,8 +939,8 @@
   background: transparent;
   color: var(--ax-text-primary);
   font-family: var(--ax-font-family);
-  font-size: 14px;
-  line-height: 24px;
+  font-size: var(--ax-font-size-body);
+  line-height: var(--ax-line-height-body);
   scrollbar-width: thin;
   scrollbar-color: var(--ax-border-strong) transparent;
 }
@@ -991,7 +991,7 @@
   border-radius: 999px;
   background: var(--ax-bg-subtle);
   color: var(--ax-text-secondary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
 }
 
 .attachmentName {
@@ -1043,7 +1043,7 @@
   gap: 8px;
   min-width: 0;
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
 }
 
 /* ---- composer seats: model / reasoning / approval chips ---- */
@@ -1077,7 +1077,7 @@
   background: var(--ax-bg-subtle);
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   line-height: 22px;
   white-space: nowrap;
   cursor: pointer;
@@ -1173,7 +1173,7 @@
 .modelGroupTitle {
   padding: 6px 8px 3px;
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
@@ -1223,7 +1223,7 @@
 
 .modelOptionLabel {
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1232,7 +1232,7 @@
 .modelOptionMeta {
   overflow: hidden;
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   line-height: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1250,7 +1250,7 @@
   border-top: 1px solid var(--ax-border-subtle);
   border-radius: 0 0 7px 7px;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 18px;
   text-decoration: none;
 }
@@ -1305,7 +1305,7 @@
   justify-content: space-between;
   padding: 6px 8px 4px;
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
@@ -1318,7 +1318,7 @@
 .commandEmpty {
   padding: 10px 8px;
   color: var(--ax-text-tertiary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
 }
 
 .commandRow {
@@ -1333,7 +1333,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   text-align: left;
   cursor: pointer;
 }
@@ -1356,7 +1356,7 @@
   min-width: 68px;
   color: var(--ax-text-primary);
   font-family: var(--ax-font-family-code);
-  font-size: 11px;
+  font-size: var(--ax-font-size-code-block);
 }
 
 .commandTitle {
@@ -1369,7 +1369,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1498,7 +1498,7 @@
 .error {
   padding: 24px;
   color: var(--ax-text-tertiary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   text-align: center;
 }
 
@@ -1607,13 +1607,13 @@
 .constraintText {
   margin: 0;
   color: var(--ax-text-secondary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 18px;
 }
 
 .constraintLink {
   color: var(--ax-accent);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   text-decoration: none;
 }
 
@@ -1632,7 +1632,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   text-align: left;
   cursor: pointer;
 }
@@ -1658,7 +1658,7 @@
 .chipMenuMeta {
   margin-left: auto;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
 }
 /* Model seat: one chip showing `model · effort`, 28px like the sibling chips.
    Matches the reference harness's composer seat (13/20 regular, secondary tone,
@@ -1676,7 +1676,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 20px;
   font-weight: 400;
   cursor: pointer;
@@ -1705,7 +1705,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ax-text-tertiary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
 }
 
 /* Root pane: the Model / Effort row pair. */
@@ -1728,7 +1728,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   text-align: left;
   cursor: pointer;
 }
@@ -1743,7 +1743,7 @@
 .modelCellLabel {
   flex: 0 0 auto;
   color: var(--ax-text-tertiary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
 }
 
 .modelCellValue {
@@ -1782,13 +1782,13 @@
   flex: 1 1 auto;
   min-width: 0;
   color: var(--ax-text-secondary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   white-space: nowrap;
 }
 
 .modelTeamHint {
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1844,7 +1844,7 @@
 .modelTeamError {
   margin: 4px 8px 2px;
   color: var(--ax-danger, #ef4444);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 1.4;
 }
 /* ---- Reasoning disclosure (ported from the reference ReasoningRow) ---- */
@@ -1872,7 +1872,7 @@
   background: transparent;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 20px;
   text-align: left;
   cursor: pointer;
@@ -1911,7 +1911,7 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 20px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1942,7 +1942,7 @@
 .thinkBody {
   padding: 4px 0 8px 20px;
   color: var(--ax-text-secondary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 20px;
 }
 
@@ -1980,7 +1980,7 @@
   background: var(--ax-bg-subtle);
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family-code);
-  font-size: 8px;
+  font-size: var(--ax-font-size-glyph);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -1994,7 +1994,7 @@
 
 .attachmentMeta {
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   white-space: nowrap;
 }
 
@@ -2019,7 +2019,7 @@
   border-radius: 12px;
   background: var(--ax-bg-surface);
   color: var(--ax-text-secondary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
 }
 /* ---- Turn rail (ported from TurnNavigator) ----
    Right-edge rail, one tick per turn: 28px frame, fixed 10px pitch, each tick a
@@ -2082,7 +2082,7 @@
 
 .turnPreviewIndex {
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   letter-spacing: 0.03em;
 }
 
@@ -2090,7 +2090,7 @@
   display: -webkit-box;
   overflow: hidden;
   color: var(--ax-text-secondary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 16px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -2170,7 +2170,7 @@
   justify-content: center;
   gap: 10px;
   color: var(--ax-text-primary);
-  font-size: 26px;
+  font-size: var(--ax-font-size-display);
   line-height: 32px;
   font-weight: 500;
 }
@@ -2188,7 +2188,7 @@
 .heroHint {
   margin: 0;
   color: var(--ax-text-tertiary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 20px;
 }
 
@@ -2207,7 +2207,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 18px;
   cursor: pointer;
   transition: background-color 120ms var(--ax-ease, ease), border-color 120ms var(--ax-ease, ease);
@@ -2231,7 +2231,7 @@
   gap: 8px;
   padding: 6px 0 2px;
   color: var(--ax-text-tertiary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 20px;
 }
 
@@ -2289,7 +2289,7 @@
   gap: 8px;
   padding: 10px 0;
   color: var(--ax-text-tertiary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
 }
 
 .stateError {
@@ -2307,13 +2307,13 @@
 
 .stateErrorTitle {
   color: var(--ax-text-primary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   font-weight: 500;
 }
 
 .stateErrorBody {
   color: var(--ax-text-secondary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 18px;
   word-break: break-word;
 }
@@ -2326,7 +2326,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   cursor: pointer;
 }
 
@@ -2353,7 +2353,7 @@
 
 .teamSummary {
   color: var(--ax-text-secondary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 20px;
 }
 
@@ -2378,7 +2378,7 @@
   background: var(--ax-bg-surface);
   color: var(--ax-text-primary);
   font-family: var(--ax-font-family);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   outline: none;
 }
 
@@ -2397,7 +2397,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   cursor: pointer;
 }
 
@@ -2414,7 +2414,7 @@
 .teamEmpty {
   margin: 0;
   color: var(--ax-text-tertiary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
 }
 
 .teamList {
@@ -2446,7 +2446,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   text-align: left;
   cursor: pointer;
 }
@@ -2493,7 +2493,7 @@
 .teamMeta {
   flex: 0 0 auto;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
 }
 
 .teamChevron {
@@ -2513,7 +2513,7 @@
 .teamDetail {
   margin: 0 0 8px;
   color: var(--ax-text-secondary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 18px;
   white-space: pre-wrap;
 }
@@ -2524,7 +2524,7 @@
   gap: 4px;
   margin: 0 0 4px;
   color: var(--ax-text-secondary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 16px;
   word-break: break-word;
 }
@@ -2550,7 +2550,7 @@
   background: transparent;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   cursor: pointer;
 }
 
@@ -2581,7 +2581,7 @@
   border-radius: 12px;
   background: var(--ax-bg-subtle);
   color: var(--ax-text-tertiary);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 20px;
 }
 
@@ -2608,7 +2608,7 @@
   border-radius: 12px;
   background: var(--ax-bg-subtle);
   color: var(--ax-text-secondary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 20px;
 }
 
@@ -2630,7 +2630,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--ax-info) 14%, transparent);
   color: var(--ax-info);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 18px;
 }
 
@@ -2659,14 +2659,14 @@
   background: var(--ax-bg-base);
   color: var(--ax-text-primary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 20px;
 }
 
 .goalError {
   flex: 0 0 auto;
   color: var(--ax-danger);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
 }
 
 .goalActions {
@@ -2710,8 +2710,8 @@
   border-radius: 6px;
   background: color-mix(in srgb, var(--ax-accent) 12%, transparent);
   color: var(--ax-accent);
-  font-family: var(--ax-font-mono, monospace);
-  font-size: 11px;
+  font-family: var(--ax-font-family-code);
+  font-size: var(--ax-font-size-code-block);
   line-height: 18px;
   vertical-align: 1px;
 }
@@ -2730,7 +2730,7 @@
   gap: 6px;
   min-width: 0;
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 18px;
 }
 
@@ -2746,7 +2746,7 @@
   overflow: hidden;
   color: var(--ax-text-primary);
   font-family: var(--ax-font-family-code);
-  font-size: 12px;
+  font-size: var(--ax-font-size-code);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -2762,7 +2762,7 @@
   overflow: hidden;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family-code);
-  font-size: 12px;
+  font-size: var(--ax-font-size-code);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -2770,7 +2770,7 @@
 .cardMeta {
   flex: 0 0 auto;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
 }
 
 .cardExit {
@@ -2779,7 +2779,7 @@
   border-radius: 4px;
   background: var(--ax-bg-hover);
   color: var(--ax-success);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 16px;
 }
 
@@ -2801,7 +2801,7 @@
   background: transparent;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   cursor: pointer;
 }
 
@@ -2818,7 +2818,7 @@
   border: 1px solid var(--ax-border-subtle);
   border-radius: 999px;
   color: var(--ax-text-tertiary);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   line-height: 16px;
   cursor: pointer;
 }
@@ -2846,7 +2846,7 @@
   flex: 0 0 34px;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family-code);
-  font-size: 11px;
+  font-size: var(--ax-font-size-code-block);
   line-height: 18px;
   text-align: right;
   user-select: none;
@@ -2857,7 +2857,7 @@
   min-width: 0;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family-code);
-  font-size: 12px;
+  font-size: var(--ax-font-size-code);
   line-height: 18px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -2892,7 +2892,7 @@
   background: transparent;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   line-height: 16px;
   cursor: pointer;
 }
@@ -2930,7 +2930,7 @@
   flex: 0 0 10px;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family-code);
-  font-size: 12px;
+  font-size: var(--ax-font-size-code);
   line-height: 18px;
   user-select: none;
 }
@@ -2948,7 +2948,7 @@
   min-width: 0;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family-code);
-  font-size: 12px;
+  font-size: var(--ax-font-size-code);
   line-height: 18px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -2959,7 +2959,7 @@
   display: inline-flex;
   gap: 6px;
   font-family: var(--ax-font-family-code);
-  font-size: 11px;
+  font-size: var(--ax-font-size-code-block);
 }
 
 .diffAdded {
@@ -2973,8 +2973,56 @@
 .cardEmpty {
   margin: 0;
   color: var(--ax-text-tertiary);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
 }
+/* ---- 助手消息的 icon actions 行（复制 + Like/Dislike）----
+   DSH MessageFeedbackActions.tsx:1-8：评分按钮就在助手消息的动作行里，位置在「复制」与
+   「分支」之间；已记录的评分显示【实心】图标（:96/:111 在 Fill/Outline 两个字形间切换），
+   所以"已记录"这个信号不依赖 hover 也能看见。 */
+.assistantActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: -4px 0 12px;
+}
+
+.assistantAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family);
+  font-size: var(--ax-font-size-label);
+  line-height: 18px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.assistantAction:hover {
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-primary);
+}
+
+/* 实心态：lucide 是描边画法（svg 上是 fill="none" 的表现属性），CSS 规则优先于表现属性，
+   所以这里能把它填成实心，等价于 DSH 换用 Fill 字形。 */
+.assistantActionOn,
+.assistantActionOn:hover {
+  border-color: color-mix(in srgb, var(--ax-info) 45%, transparent);
+  background: color-mix(in srgb, var(--ax-info) 12%, transparent);
+  color: var(--ax-info);
+}
+
+.assistantActionOn svg {
+  fill: currentColor;
+}
+
 /* ---- Editable human turn (reference: message editing in codex / zcode) ---- */
 .userEdit {
   flex: 0 0 auto;
@@ -2986,7 +3034,7 @@
   background: transparent;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 18px;
   cursor: pointer;
   opacity: 0;
@@ -3011,7 +3059,7 @@
   background: var(--ax-bg-base);
   color: var(--ax-text-primary);
   font-family: var(--ax-font-family);
-  font-size: 13px;
+  font-size: var(--ax-font-size-secondary);
   line-height: 1.5;
   resize: vertical;
 }
@@ -3027,7 +3075,7 @@
   padding: 3px 12px;
   border-radius: 6px;
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 20px;
   cursor: pointer;
 }
@@ -3053,7 +3101,7 @@
 .userEditError {
   margin-top: 4px;
   color: var(--ax-danger);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
 }
 
 /* 已完成回合的折叠条（参照 DSH：折叠只压过程，回复仍然可见） */
@@ -3069,7 +3117,7 @@
   background: transparent;
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   text-align: left;
   cursor: pointer;
 }
@@ -3103,7 +3151,7 @@
   min-width: 0;
   color: var(--ax-text-primary);
   font-family: var(--ax-font-family);
-  font-size: 12px;
+  font-size: var(--ax-font-size-caption);
   line-height: 18px;
   font-weight: 500;
 }
@@ -3111,7 +3159,7 @@
 .changedFilesMeta {
   flex: 0 0 auto;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 16px;
 }
 
@@ -3161,7 +3209,7 @@
   overflow: hidden;
   color: var(--ax-text-secondary);
   font-family: var(--ax-font-family-code);
-  font-size: 12px;
+  font-size: var(--ax-font-size-code);
   line-height: 18px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -3170,7 +3218,7 @@
 .changedFileOps {
   flex: 0 0 auto;
   color: var(--ax-text-tertiary);
-  font-size: 11px;
+  font-size: var(--ax-font-size-label);
   line-height: 16px;
 }
 
@@ -3182,7 +3230,7 @@
   background: var(--ax-bg-hover);
   color: var(--ax-text-tertiary);
   font-family: var(--ax-font-family-code);
-  font-size: 10px;
+  font-size: var(--ax-font-size-micro);
   line-height: 16px;
   text-align: center;
 }
