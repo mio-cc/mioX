@@ -491,6 +491,7 @@ func (s *Server) seedOrchestrationTools() {
 	s.seedPlannerDefaultBindings()
 	s.seedMemoryToolBindings()
 	s.seedTeamToolBindings() // 团队任务板 4 个工具补绑 mainagent + 清理改名前的旧行(一次性)
+	s.seedBackgroundTaskBindings() // 后台任务 4 个工具补绑 mainagent/worker(一次性)
 	s.seedPlannerListAssetsBinding()
 	s.seedCompanyScopeRebind()
 	s.seedWorkerReadToolsUnbind() // list_facts/list_companies/list_worker_traces 从 worker 默认解绑(一次性)
@@ -811,6 +812,36 @@ func (s *Server) seedTeamToolBindings() {
 		log.Printf("[team] 团队任务板 4 个工具已绑给 mainagent；删除改名前的旧工具行 %d 条", n)
 	}
 	_ = s.m.pg.SetSetting(flag, "true")
+}
+
+// seedBackgroundTaskBindings binds the SDK's background-task control tools
+// (TaskOutput/TaskStop/TaskList/Monitor) onto mainagent + worker ONCE.
+//
+// The rows themselves come from agent.BuiltinToolSeeds() (backgroundTaskTools is in
+// mainagent's and worker's seed list) and SeedTool inserts them on every startup —
+// but SeedTool is ON CONFLICT DO NOTHING, so a DB whose rows already exist (seeded
+// earlier, or by a build where the tool sat on a different agent) never picks up the
+// binding. Without this backfill ToolResolve (server/assembly.go:264: a known key not
+// bound to the agent is dropped) would hide TaskOutput from the very agent Bash's
+// description tells to call it — the team-tools failure mode, one layer down.
+//
+// Scope is mainagent + worker on purpose (agent/backgroundTaskTools): the main lane
+// runs long scans/servers, the worker lane runs the long recon commands. planner and
+// the chat/goals sessions keep the SDK's own grant but get no host instance.
+func (s *Server) seedBackgroundTaskBindings() {
+	const flag = "background_task_tools_mainagent_worker_v1"
+	if v, _, _ := s.m.pg.GetSetting(flag); v == "true" {
+		return
+	}
+	keys := []string{"TaskOutput", "TaskStop", "TaskList", "Monitor"}
+	for _, agentKey := range []string{"mainagent", "worker"} {
+		if err := s.m.pg.AddAgentToToolBinding(agentKey, keys); err != nil {
+			log.Printf("[bg-task] %s 后台任务工具绑定失败: %v", agentKey, err)
+			return
+		}
+	}
+	_ = s.m.pg.SetSetting(flag, "true")
+	log.Printf("[bg-task] 后台任务 4 个工具(TaskOutput/TaskStop/TaskList/Monitor)已绑给 mainagent + worker(一次性)")
 }
 
 // seedMemoryToolBindings backfills mainagent/worker onto the memory tools ONCE.

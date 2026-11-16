@@ -241,7 +241,22 @@ type Manager struct {
 	sessSeq  int
 }
 
-func baseTaskDir() string { return filepath.Join(os.TempDir(), "norma") }
+// baseTaskDir is the root under which every session's task directory is created:
+// AGENT_CORE_TASK_DIR when the host sets it, else <os.TempDir()>/norma.
+//
+// The override exists because os.TempDir() is not reliably writable: on hosts with a
+// locked-down or ACL-restricted TMP (and inside sandboxes that map TEMP to a short
+// 8.3 path) NewManager fails, and every failure is SILENT — agentcore.go only grants
+// the four task tools when the manager exists, so the whole background-execution
+// feature disappears while Bash still advertises run_in_background (bash.go:47 gates
+// the schema on the disable switch, not on a live manager). Pointing the host at its
+// own data directory makes the feature independent of TMP policy.
+func baseTaskDir() string {
+	if d := strings.TrimSpace(os.Getenv("AGENT_CORE_TASK_DIR")); d != "" {
+		return d
+	}
+	return filepath.Join(os.TempDir(), "norma")
+}
 
 // NewManager creates the per-session task directory and garbage-collects stale
 // directories left by previous sessions.

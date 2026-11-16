@@ -23,6 +23,40 @@ type ToolSeed struct {
 	Agents []string       // 默认绑定的 agent key（worker/planner/mainagent）
 }
 
+// backgroundTaskTools returns the SDK's background-task management tools: the
+// only way to read, list and stop a command started with Bash(run_in_background)
+// or Monitor. Bash's own schema advertises exactly these names
+// (norma/tool/bash.go:47-53 "read its output later with TaskOutput"), so if they
+// are missing from the tool list the model is told to call a tool that does not
+// exist and the backgrounded command becomes an orphan (no output, no kill).
+//
+// Why these four are seeded into the tools table even though they come from the
+// SDK (unlike DefaultTools, see builtinToolsByAgent):
+//   - Bash's description names TaskOutput, so the model must actually have it;
+//     without a catalog row the tools page cannot show the capability at all, and
+//     a user cannot see/tune the description the model reads.
+//   - A row makes ToolResolve (server/assembly.go:264) authoritative: it drops a
+//     tool from an agent the row is not bound to. So the row + the binding have to
+//     ship together — that is what seedBackgroundTaskBindings backfills for DBs
+//     whose rows predate this change.
+//   - The SDK still grants them to every session it owns (agentcore.go:317-322),
+//     so removing the row/binding cannot make the capability vanish; the catalog
+//     decides which agents get the *host* instance (decorated + metered) rather
+//     than the SDK's bare fallback copy.
+//
+// Granted to mainagent (the human-facing lane: long scans, dev servers, polling)
+// and worker (the lane that actually runs the long recon commands). Not planner:
+// its turns are short and planning-only; if a planner command is auto-backgrounded
+// on timeout it still gets the output-file path back and can Read it.
+func backgroundTaskTools() []actool.CoreTool {
+	return []actool.CoreTool{
+		actool.NewTaskOutput(), // read a task's captured output (optionally blocking)
+		actool.NewTaskStop(),   // kill one task / all of them
+		actool.NewTaskList(),   // what is running in this session
+		actool.NewMonitor(),    // start a streaming process (tail -f, dev server, poll loop)
+	}
+}
+
 // builtinToolsByAgent 用一个「只读空壳」ToolSet（nil stores）构造每个执行 agent 的
 // 领域工具集。工具构造函数只把闭包塞进 Spec、构造期不解引用 store，所以 nil 安全——
 // 这些工具在这里只用来读 Name()/Description()/InputSchema()，绝不 Call。
@@ -31,6 +65,11 @@ type ToolSeed struct {
 // Grep/Bash）：它们每个 agent 都固定拥有、没有「绑定到谁」的取舍，且说明大多在 Prompt()
 // 里（本表只覆盖 Description()，会造成半覆盖误导）。不 seed → 无 DB 行 → ToolResolve
 // 原样放行、不覆盖，行为与从前一致。只有 artex 自己的领域工具入表可管。
+//
+// 例外：backgroundTaskTools()（TaskOutput/TaskStop/TaskList/Monitor）虽然也是 SDK 通用
+// 工具，却**必须**入表，理由见该函数注释——它们是 Bash(run_in_background) 的唯一出口，
+// 而入表之后 ToolResolve 就会按 agents 绑定裁剪它们（assembly.go:264），所以入表与绑定
+// 必须同时到位，否则「工具管理页看得见」和「模型真的能用」会打架。
 func builtinToolsByAgent() map[string][]actool.CoreTool {
 	ts := NewToolSet(nil, "")
 	return map[string][]actool.CoreTool{
@@ -39,9 +78,11 @@ func builtinToolsByAgent() map[string][]actool.CoreTool {
 		// 而 ToolResolve（server/assembly.go:264）会把「有行但没绑当前 agent」的工具直接
 		// 丢掉。不 seed → 行里只有 planner/worker → 主 agent 永远拿不到（实测就是这个
 		// 症状：team_mode 开了，模型仍回答"我的工具集里没有 team_add"）。
-		"mainagent": append(ts.MainAgentTools(), ts.teamAdd(), ts.teamList(), ts.teamClaim(), ts.teamComplete()),
+		// backgroundTaskTools 见其函数注释：Bash(run_in_background) 的读/停出口，
+		// 入表 + 绑定必须成对，否则 ToolResolve 会把它们从 agent 上摘掉。
+		"mainagent": append(append(ts.MainAgentTools(), ts.teamAdd(), ts.teamList(), ts.teamClaim(), ts.teamComplete()), backgroundTaskTools()...),
 		"planner":   ts.PlannerTools(),
-		"worker":    ts.WorkerTools(),
+		"worker":    append(ts.WorkerTools(), backgroundTaskTools()...),
 		// goals（目标拆解器）默认绑 set_goals + set_constraints：靠它们把拆出的目标、
 		// 抽出的操作约束写进库。与 mainagent 共用同一受管工具，web 端可改描述/schema、按 agent 勾选。
 		"goals": {ts.setGoals(), ts.setConstraints()},

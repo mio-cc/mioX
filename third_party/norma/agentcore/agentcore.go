@@ -317,7 +317,12 @@ func NewSession(opts Options) *Session {
 	if !tool.BackgroundTasksDisabled() && !opts.DisableBackgroundTasks {
 		if mgr, err := tool.NewManager(s.sessionID); err == nil {
 			s.tasks = mgr
-			tools = append(tools, tool.NewTaskOutput(), tool.NewTaskStop(), tool.NewTaskList(), tool.NewMonitor())
+			// appendMissingTools, not a plain append: a host that already supplied
+			// these four in Options.Tools (e.g. to route them through its own
+			// description/schema overrides or metering) must keep its instance —
+			// Registry.Add replaces by name, so a plain append would silently throw
+			// the host's decorated tool away and hand the model the bare copy.
+			tools = appendMissingTools(tools, tool.NewTaskOutput(), tool.NewTaskStop(), tool.NewTaskList(), tool.NewMonitor())
 		}
 	}
 	s.registry = tool.NewRegistry(tools...)
@@ -337,6 +342,25 @@ func NewSession(opts Options) *Session {
 		s.writer = s.store.NewWriter(s.sessionID, "")
 	}
 	return s
+}
+
+// appendMissingTools appends the tools whose names are not already in list,
+// preserving the host's own instance for any tool it provided itself (the
+// registry keeps one tool per name, and a later Add would replace the earlier
+// one). Order of list is preserved; extras land in the order given.
+func appendMissingTools(list []tool.CoreTool, extra ...tool.CoreTool) []tool.CoreTool {
+	have := make(map[string]bool, len(list)+len(extra))
+	for _, t := range list {
+		have[t.Name()] = true
+	}
+	for _, t := range extra {
+		if have[t.Name()] {
+			continue
+		}
+		list = append(list, t)
+		have[t.Name()] = true
+	}
+	return list
 }
 
 // Close releases session resources, killing any background tasks and removing

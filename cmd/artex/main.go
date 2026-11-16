@@ -101,6 +101,17 @@ func run() int {
 	}
 	defer mgr.Close()
 
+	// Background-task output (<data>/bg-tasks/<session>/tasks/<task>.log) must live
+	// somewhere this process can definitely write. The SDK defaults to
+	// <os.TempDir()>/norma, and a locked-down TMP makes NewManager fail SILENTLY:
+	// the four task tools (TaskOutput/TaskStop/TaskList/Monitor) are then never
+	// granted, while Bash keeps advertising run_in_background — the model is told to
+	// call tools that do not exist and the command runs in the foreground instead.
+	// Set before any agent session can start; an operator-provided value wins.
+	if os.Getenv("AGENT_CORE_TASK_DIR") == "" {
+		_ = os.Setenv("AGENT_CORE_TASK_DIR", filepath.Join(*dataDir, "bg-tasks"))
+	}
+
 	// Surviving this long means a freshly swapped-in build actually works, so drop
 	// the upgrade marker and stop counting attempts. Until it fires, every boot
 	// increments the count and a build that keeps dying gets rolled back.

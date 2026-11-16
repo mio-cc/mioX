@@ -227,17 +227,29 @@ func GoalPrompt(base, objective, phase string) string {
 }
 
 // mainAgentBaseTools assembles the tool set one main-agent turn actually runs with:
-// the domain tools, the default Read/Write/Edit/... set, and — only when the session
-// holds the team capability — the shared board tools.
+// the domain tools, the default Read/Write/Edit/... set, the SDK's background-task
+// control tools, and — only when the session holds the team capability — the shared
+// board tools.
 //
 // Extracted so the capability gate is testable without an LLM turn: with teamMode
 // false the returned list contains no team_* tool at all (DSH grants capabilities, it
 // does not advertise a tool that always fails; TeamModeToggle.tsx:1 + TeamBoard.tsx:86).
 // Plan mode's exit_plan_mode is appended separately by the caller, because it is
 // disclosed by plan mode, not by this gate.
+//
+// Background-task tools are appended here (not left to the SDK) so they pass through
+// ToolResolve like every other tool: that is what makes the tools-table row decide
+// whether this agent gets them, and what lets the row's description reach the model.
+// The SDK's own grant (agentcore.go:317-322) stays as the fallback for sessions that
+// do not list them, and it no longer overwrites the instance supplied here
+// (agentcore.go appendMissingTools). Gated on the same global switch the SDK uses, so
+// a host that turned background tasks off never advertises four dead tools.
 func mainAgentBaseTools(tsx *ToolSet, teamMode bool) []actool.CoreTool {
 	tsx.SetTeamMode(teamMode)
 	base := append(tsx.DropCoverageTools(tsx.MainAgentTools()), actool.DefaultTools()...)
+	if !actool.BackgroundTasksDisabled() {
+		base = append(base, backgroundTaskTools()...)
+	}
 	return append(base, tsx.TeamTools()...)
 }
 

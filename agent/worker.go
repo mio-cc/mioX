@@ -383,6 +383,12 @@ func (w *Worker) execute(ctx context.Context, name string, taskID int64, as *db.
 	// worker 刻意不给 MultiEdit/Glob/Grep：文件精改用 Edit、检索走 Bash(grep/find)，
 	// 收敛工具面、减少低价值调用。其余 SDK 默认工具(Read/Write/Edit/LS/Bash/Sleep)照常。
 	base = append(base, defaultToolsExcept("MultiEdit", "Glob", "Grep")...)
+	// 后台任务控制工具：worker 是真正跑长命令（nmap/ffuf/长扫）的那条 lane，
+	// Bash(run_in_background) 的产出只能靠 TaskOutput 读、靠 TaskStop 停——不给就是孤儿进程。
+	// 与 mainAgentBaseTools 同源同门控（见 backgroundTaskTools 注释）。
+	if !actool.BackgroundTasksDisabled() {
+		base = append(base, backgroundTaskTools()...)
+	}
 	ctx = WithRunInfo(ctx, RunInfo{TaskID: taskID, ExplorationID: explorationID(ts), IntentID: intent.ID})
 	tools, def, cleanup := AugmentTools(ctx, "worker", base)
 	defer cleanup()
