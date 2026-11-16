@@ -2558,6 +2558,34 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
         await send(arg);
         return;
       }
+      // D10-T2: `/permission [档位]` 命令（DSH ui-permission-presets 的 /permission
+      // 装饰）。无参显示当前档位；带参切换四档之一。
+      const permMatch = /^\/permission(?:\s+([\s\S]*))?$/.exec(text);
+      if (permMatch) {
+        const arg = (permMatch[1] ?? "").trim().toLowerCase();
+        setCommandDismissed(false);
+        const valid = ["auto", "read-only", "workspace-write", "danger-full"];
+        if (arg === "") {
+          const current = task?.permission_level ?? "auto";
+          toast.info(
+            `当前权限档：${current}。用法：/permission <auto | read-only | workspace-write | danger-full>`,
+          );
+          return;
+        }
+        if (!valid.includes(arg)) {
+          toast.error(`未知权限档：${arg}（支持 auto / read-only / workspace-write / danger-full）`);
+          return;
+        }
+        try {
+          await api.setTaskPermissionLevel(taskId, arg);
+          setTask((current) => (current ? { ...current, permission_level: arg } : current));
+          setInput("");
+          toast.success(`权限档已切换：${arg}`);
+        } catch (permError) {
+          toast.error(`切换权限档失败：${(permError as Error).message}`);
+        }
+        return;
+      }
       // `/goal <objective>` 是**命令**,不是发给模型的消息(DSH goal-command-input.ts:9
       // `GOAL_COMMAND='goal'`:目标由 /goal 命令创建,输入框只负责把命令发出去)。
       // 走目标通道而不是 /api/chat:模型不该看见这条命令;服务端会把它记成一条人类
@@ -2793,6 +2821,15 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
         title: "计划模式",
         hint: "/plan 开启 · /plan off 退出 · /plan <一句话> 开启并发送",
         draft: "/plan ",
+        run: () => undefined,
+      },
+      {
+        // D10-T2: `/permission [档位]`（DSH ui-permission-presets 的 /permission 装饰）。
+        // 选中把草稿换成 "/permission "，send() 里解析四档。
+        name: "/permission",
+        title: "权限档",
+        hint: "/permission auto · read-only · workspace-write · danger-full",
+        draft: "/permission ",
         run: () => undefined,
       },
       {

@@ -45,6 +45,9 @@ export interface Task {
   // 团队模式（会话级开关）：只有为 true 时该会话才渲染共享任务板
   // （DSH TeamModeToggle.tsx:1 session-owned + TeamBoard.tsx:86 enabled 门控）。
   team_mode?: boolean;
+  // 权限档预设（D10-T1，DSH ui-permission-presets 三档 + auto）：
+  // auto / read-only / workspace-write / danger-full。
+  permission_level?: string;
   // 任务级「目标」(/goal 命令)的当前快照;null/缺省=没有目标 → GoalBar 不渲染。
   // 注意与上面的 goal(建任务时填的静态目标字符串)不是同一字段。
   goal_state?: GoalSnapshot | null;

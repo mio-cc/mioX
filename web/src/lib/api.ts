@@ -1348,6 +1348,9 @@ export const api = {
   // 团队模式开关（会话级）：只有开启时该会话才渲染共享任务板。
   setTaskTeamMode: (id: string, on: boolean) =>
     patch<{ id: string; team_mode: boolean }>(`/tasks/${id}/team-mode`, { on }),
+  // 权限档预设（D10-T1，DSH ui-permission-presets 三档 + auto）。
+  setTaskPermissionLevel: (id: string, level: string) =>
+    patch<{ id: string; permission_level: string }>(`/tasks/${id}/permission-level`, { level }),
   interceptExecution: (id: number, conversationId?: number) =>
     get<import("@/lib/types").InterceptExecution>(
       `/intercept/history/${id}/execution${conversationId ? `?conversation=${conversationId}` : ""}`,
