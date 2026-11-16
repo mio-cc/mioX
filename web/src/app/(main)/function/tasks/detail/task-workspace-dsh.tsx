@@ -2517,12 +2517,18 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
         setCommandDismissed(false);
         if (planModeBusy) return;
         if (arg.toLowerCase() === "off") {
+          // D8-T1: /plan off 拒收附件（DSH plan-mode/index.ts:240-242
+          // "Attachments cannot accompany /plan off."）
+          if (attachments.length > 0) {
+            toast.error("附件不能伴随 /plan off。请先移除附件再退出计划模式。");
+            return;
+          }
           setPlanModeBusy(true);
           try {
             const res = await api.setTaskPlanMode(taskId, false);
             setTask((current) => (current ? { ...current, plan_mode: res.plan_mode } : current));
             setInput("");
-            toast.success("已退出计划模式");
+            toast.success("Plan mode off."); // DSH index.ts:246 措辞
           } catch (planError) {
             toast.error(`退出计划模式失败：${(planError as Error).message}`);
           } finally {
@@ -2543,7 +2549,8 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
         }
         if (arg === "") {
           setInput("");
-          toast.success("已进入计划模式：agent 只侦察并提交计划，批准后才开始执行");
+          // D8-T1: 进入文案对齐 DSH index.ts:270-274
+          toast.success("Plan mode on. Use /plan off to leave.");
           window.requestAnimationFrame(() => textareaRef.current?.focus());
           return;
         }
