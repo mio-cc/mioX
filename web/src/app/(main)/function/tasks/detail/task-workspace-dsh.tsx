@@ -29,12 +29,14 @@ import { toast } from "sonner";
 import { useAppLayout } from "@/components/layout/app-frame";
 import { ApprovalRecords } from "@/components/approval-records";
 import { Markdown } from "@/components/markdown";
+import { SecretText } from "@/components/secret-text";
 import { PlanCard, PlanReviewCard } from "@/components/transcript";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { api, sseUrl } from "@/lib/api";
 import { ScrollFollow, scrollMetrics } from "@/lib/scroll-follow";
+import { copyText } from "@/lib/utils";
 import { MOCK } from "@/lib/mock/enabled";
 import type { Activity, ChatAttachment, GoalSnapshot, LLMProfile, Task, TaskNode } from "@/lib/types";
 import { TeamTab } from "./_tabs/team-tab";
@@ -452,7 +454,8 @@ function CollapsibleOutput({
   return (
     <div className={styles.cardBody}>
       <pre className={styles.toolPre} data-error={failed || undefined}>
-        {shown.join("\\n") || "（无输出）"}
+        {/* 输出里的凭据遮住（DSH index.ts:2-4：只改画出来的字），原文仍在上面的 CopyButton 里。 */}
+        {shown.length > 0 ? <SecretText text={shown.join("\\n")} /> : "（无输出）"}
       </pre>
       {hidden > 0 ? (
         <button
@@ -483,7 +486,7 @@ function NumberedLines({ text, maxLines }: { readonly text: string; readonly max
         {shown.map((line, index) => (
           <div className={styles.numberedRow} key={index}>
             <span className={styles.numberedGutter} aria-hidden="true">{index + 1}</span>
-            <span className={styles.numberedText}>{line === "" ? " " : line}</span>
+            <span className={styles.numberedText}>{line === "" ? " " : <SecretText text={line} />}</span>
           </div>
         ))}
       </div>
@@ -540,7 +543,7 @@ function SearchGroups({ text, maxLines }: { readonly text: string; readonly maxL
           {rows.slice(0, expanded ? rows.length : 3).map((row, index) => (
             <div className={styles.searchHit} key={`${row.line}-${index}`}>
               <span className={styles.numberedGutter} aria-hidden="true">{row.line}</span>
-              <span className={styles.numberedText}>{row.text}</span>
+              <span className={styles.numberedText}><SecretText text={row.text} /></span>
             </div>
           ))}
         </div>
@@ -611,7 +614,7 @@ function DiffBody({ hunks, maxLines = 9 }: { readonly hunks: ReadonlyArray<DiffH
         {shown.map((row, index) => (
           <div className={styles.diffRow} data-sign={row.sign} key={index}>
             <span className={styles.diffSign} aria-hidden="true">{row.sign}</span>
-            <span className={styles.diffText}>{row.text === "" ? " " : row.text}</span>
+            <span className={styles.diffText}>{row.text === "" ? " " : <SecretText text={row.text} />}</span>
           </div>
         ))}
       </div>
@@ -634,6 +637,9 @@ function CopyButton({ value, label }: { readonly value: string; readonly label: 
       title={label}
       aria-label={label}
       data-testid="tool-copy"
+      // 复制的是**原文**，不是掩码版（DSH index.ts:2-4：copy actions keep the original
+      // characters）。这个属性让验收能直接读到复制源。
+      data-copy-text={value}
       onClick={(event) => {
         event.stopPropagation();
         void navigator.clipboard?.writeText(value).then(
@@ -748,7 +754,7 @@ function ToolRow({
         </span>
         <span className={styles.toolName}>{toolLabel(tool)}</span>
         <span className={styles.toolSep} aria-hidden="true" />
-        <span className={styles.toolSummary}>{argSummary || "执行中…"}</span>
+        <span className={styles.toolSummary}>{argSummary ? <SecretText text={argSummary} /> : "执行中…"}</span>
         {cardKind === "diff" && (totals.added > 0 || totals.removed > 0) ? (
           <span className={styles.diffStat} data-testid="diff-summary">
             <span className={styles.diffAdded}>+{totals.added}</span>
@@ -764,7 +770,9 @@ function ToolRow({
             <>
               <div className={styles.cardHead}>
                 <span className={styles.cardPrompt} aria-hidden="true">$</span>
-                <code className={styles.cardCommand}>{String(args?.command ?? argSummary) || "—"}</code>
+                <code className={styles.cardCommand}>
+                  <SecretText text={String(args?.command ?? argSummary) || "—"} />
+                </code>
                 <CopyButton value={String(args?.command ?? argSummary)} label="复制命令" />
                 <CopyButton value={bodyText} label="复制输出" />
                 <span className={styles.cardExit} data-failed={failed || undefined}>
@@ -818,7 +826,9 @@ function ToolRow({
               ) : null}
               <div className={styles.toolSectionLabel}>输出</div>
               <pre className={styles.toolPre} data-error={failed || undefined}>
-                {loading ? "加载中…" : output || detail || (pending ? "等待结果…" : "（无输出）")}
+                <SecretText
+                  text={loading ? "加载中…" : output || detail || (pending ? "等待结果…" : "（无输出）")}
+                />
               </pre>
             </>
           ) : null}
@@ -1062,7 +1072,17 @@ function UserRow({
   const [draft, setDraft] = React.useState(activity.summary ?? "");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [copied, setCopied] = React.useState(false);
   const goalCommand = goalCommandParts(activity.summary ?? "");
+
+  // 复制走的是**原文** `activity.summary`，不是画出来的掩码版
+  // （DSH ui-secret-mask/client/index.ts:2-4：copy actions keep the original characters）。
+  const copy = async () => {
+    const ok = await copyText(activity.summary ?? "");
+    if (!ok) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
 
   const save = async () => {
     const text = draft.trim();
@@ -1100,33 +1120,48 @@ function UserRow({
           className={styles.bubble}
           data-testid={goalCommand ? "goal-command-bubble" : undefined}
         >
+          {/* 用户文本里的凭据只遮画出来的字（DSH ui-secret-mask：一个 UserText
+              匹配器 + 一个 secret 节点渲染器）；气泡里的原文、复制、模型输入都不变。 */}
           {goalCommand ? (
             <>
               <span className={styles.goalChip} data-testid="goal-command-chip">
                 {goalCommand.chip}
               </span>
-              {goalCommand.rest}
+              <SecretText text={goalCommand.rest} />
             </>
           ) : (
-            activity.summary
+            <SecretText text={activity.summary ?? ""} />
           )}
         </div>
         {/* `/goal` 命令气泡没有普通消息动作(DSH GoalCommandInputView.tsx:13-18):
             编辑它等于截断会话,而目标本身要改应该走 GoalBar。 */}
         {goalCommand ? null : (
-          <button
-            type="button"
-            className={styles.userEdit}
-            title="编辑并重新发送"
-            aria-label="编辑这条消息"
-            data-testid="user-edit"
-            onClick={() => {
-              setDraft(activity.summary ?? "");
-              setEditing(true);
-            }}
-          >
-            编辑
-          </button>
+          <>
+            <button
+              type="button"
+              className={styles.userEdit}
+              title="复制原文"
+              aria-label="复制这条消息的原文"
+              data-testid="user-copy"
+              data-copy-text={activity.summary ?? ""}
+              onClick={() => void copy()}
+            >
+              {copied ? "已复制" : "复制"}
+            </button>
+            <button
+              type="button"
+              className={styles.userEdit}
+              title="编辑并重新发送"
+              aria-label="编辑这条消息"
+              data-testid="user-edit"
+              onClick={() => {
+                setDraft(activity.summary ?? "");
+                setEditing(true);
+              }}
+            >
+              编辑
+            </button>
+          </>
         )}
       </div>
     );

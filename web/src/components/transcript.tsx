@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Markdown } from "@/components/markdown";
+import { SecretText } from "@/components/secret-text";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -709,7 +710,8 @@ function ToolBlock({
       </button>
       {open && (
         <pre className="ml-7 mb-1 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded bg-muted/50 p-2 font-mono text-[11px] leading-relaxed">
-          {detail ?? "加载中…"}
+          {/* 工具输出里的凭据也要遮（DSH 的掩码只影响画出来的字）。 */}
+          <SecretText text={detail ?? "加载中…"} />
         </pre>
       )}
     </section>
@@ -778,7 +780,7 @@ function MessageBlock({
       </button>
       {open && (
         <pre className="ml-7 mb-1 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded bg-muted/50 p-2 font-mono text-[11px] leading-relaxed">
-          {detail ?? "加载中…"}
+          <SecretText text={detail ?? "加载中…"} />
         </pre>
       )}
     </div>
@@ -858,7 +860,8 @@ function UserRow({ step, intent, getDetail }: { step: Activity; intent?: boolean
         )}
         {text && (
           <div className="min-w-0 max-w-full whitespace-pre-wrap rounded-lg rounded-tr-sm bg-primary px-3 py-1.5 text-sm text-primary-foreground [overflow-wrap:anywhere]">
-            {text}
+            {/* 用户文本里的凭据只遮画出来的字（DSH ui-secret-mask/client/index.ts:2-4）。 */}
+            <SecretText text={text} />
           </div>
         )}
         <ActivityTime ts={step.ts} />
