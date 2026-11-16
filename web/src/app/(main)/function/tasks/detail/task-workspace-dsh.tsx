@@ -2075,12 +2075,15 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
 
   // One render group per turn, so a finished turn's process rows can fold on their own.
   const turnGroups = React.useMemo(() => {
-    const groups: Array<{ index: number; rows: Activity[] }> = [];
-    let current: { index: number; rows: Activity[] } = { index: 0, rows: [] };
+    const groups: Array<{ index: number; startSeq: number; rows: Activity[] }> = [];
+    let current: { index: number; startSeq: number; rows: Activity[] } = { index: 0, startSeq: 0, rows: [] };
     for (const activity of transcript) {
       if (activity.kind === "user" && current.rows.length > 0) {
         groups.push(current);
-        current = { index: groups.length, rows: [] };
+        current = { index: groups.length, startSeq: activity.seq, rows: [] };
+      } else if (current.rows.length === 0) {
+        // D4-T1: 回合稳定标识 = 该组第一行的 seq（DSH turn-process 折叠状态挂 turn seq，不是位置序号）
+        current.startSeq = activity.seq;
       }
       current.rows.push(activity);
     }
@@ -2265,6 +2268,11 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     activeSessionKeyRef.current = currentKey;
     // 空 id 守卫(U1):同上面的 loader,不发起无 task 的 history 请求。
     if (taskId === "") return;
+    // D4-T2: 车道切换重置跨车道残留状态（DSH per-session store 语义：每个会话自己的视口状态）
+    setLoading(true);
+    setHasOlder(false);
+    setOldestSeq(0);
+    setExpandedFolds(new Set()); // D4-T1: 折叠键按 startSeq，切车道后旧键全部失效，清空
     void loadActivity(currentKey);
   }, [currentKey, loadActivity, taskId]);
 
@@ -2278,6 +2286,24 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     element.style.height = `${nextHeight}px`;
     element.style.overflowY = element.scrollHeight > 180 ? "auto" : "hidden";
   }, [input]);
+
+  // D4-T5: 输入框滚动链（DSH view-binding.ts:86-100 installDraftWheel）
+  // 输入框自己的滚动到边界后，把手势转交给外层对话滚动宿主 [data-conversation-scroll]。
+  React.useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      const host = el.closest("[data-conversation-scroll]");
+      if (!(host instanceof HTMLElement) || e.deltaY === 0) return;
+      const atTop = el.scrollTop <= 0;
+      const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+      if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atEnd)) return;
+      e.preventDefault();
+      host.scrollTop += e.deltaY;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
 
   // Follow content GROWTH, not row count: a streaming assistant message grows
   // inside one row, so counting activities never fires. The reference viewport
@@ -2952,7 +2978,7 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
 
       {tab === "chat" ? (
         <div className={styles.body}>
-          <div className={styles.chatScroll} ref={scrollRef} onScroll={handleChatScroll} data-testid="chat-scroll">
+          <div className={styles.chatScroll} ref={scrollRef} onScroll={handleChatScroll} data-testid="chat-scroll" data-conversation-scroll="">
             <div className={styles.chatColumn}>
               {hasOlder || loadingOlder || olderError ? (
                 <div className={styles.loadOlder} data-testid="load-older">
@@ -2997,15 +3023,15 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
               {turnGroups.map((group, groupIndex) => {
                 const isLiveTurn = groupIndex === turnGroups.length - 1;
                 const processCount = group.rows.filter((row) => PROCESS_KINDS.has(row.kind)).length;
-                const folded = compactView && !isLiveTurn && processCount > 0 && !expandedFolds.has(group.index);
+                const folded = compactView && !isLiveTurn && processCount > 0 && !expandedFolds.has(group.startSeq);
                 const rows = folded ? group.rows.filter((row) => !PROCESS_KINDS.has(row.kind)) : group.rows;
                 return (
-                  <React.Fragment key={`turn-${group.index}`}>
+                  <React.Fragment key={`turn-${group.startSeq}`}>
                     {folded ? (
                       <button
                         type="button"
                         className={styles.foldBar}
-                        onClick={() => setExpandedFolds((prev) => new Set(prev).add(group.index))}
+                        onClick={() => setExpandedFolds((prev) => new Set(prev).add(group.startSeq))}
                         data-action="unfold-turn"
                         data-testid="chat-fold-bar"
                       >
