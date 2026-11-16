@@ -860,6 +860,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/chat", s.chat)
 	mux.HandleFunc("POST /api/chat/upload", s.chatUpload) // 方式1 文件上传:落到会话/任务工作目录 uploads/
 	mux.HandleFunc("GET /api/tasks/{id}/chat/status", s.taskChatStatus)
+	// 每回合的「改动文件卡」：数据只从记录下来的 Write/Edit/MultiEdit 调用推导
+	// （DSH ui-deliverables turn-deliverables.ts:1-7），不看模型回复文本。
+	mux.HandleFunc("GET /api/tasks/{id}/turn-files", s.turnFiles)
 	mux.HandleFunc("POST /api/tasks/{id}/chat/stop", s.stopChat)
 	mux.HandleFunc("POST /api/tasks/{id}/chat/truncate", s.truncateChat) // 编辑已发消息：截断该消息起的会话尾部
 

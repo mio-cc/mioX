@@ -3078,3 +3078,118 @@
   border-color: var(--ax-border-strong);
   color: var(--ax-text-secondary);
 }
+
+/* ---- 回合末尾的「本轮改动」卡（参照 DSH ui-deliverables ChangedFiles.tsx）----
+   一张卡 + 每行一个文件；行展开后是同一个 DiffBody，所以它读起来和工具卡的 diff
+   完全一致，而不是另造一套对比样式。 */
+.changedFiles {
+  margin: 6px 0 2px;
+  border: 1px solid var(--ax-border-subtle);
+  border-radius: 10px;
+  background: var(--ax-bg-surface);
+  overflow: hidden;
+}
+
+.changedFilesHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ax-border-subtle);
+}
+
+.changedFilesTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ax-text-primary);
+  font-family: var(--ax-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.changedFilesMeta {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.changedFilesList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 2px 0;
+  list-style: none;
+}
+
+.changedFileRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.changedFileRow:hover {
+  background: var(--ax-bg-hover);
+}
+
+.changedFileRow:focus-visible {
+  outline: 1px solid var(--ax-border-strong);
+  outline-offset: -1px;
+}
+
+.changedFileChevron {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  transition: transform 120ms ease;
+}
+
+.changedFileChevron[data-open] {
+  transform: rotate(90deg);
+}
+
+.changedFilePath {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ax-text-secondary);
+  font-family: var(--ax-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.changedFileOps {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.changedFileCount {
+  flex: 0 0 auto;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ax-bg-hover);
+  color: var(--ax-text-tertiary);
+  font-family: var(--ax-font-family-code);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.changedFileDiff {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 10px 8px 28px;
+}

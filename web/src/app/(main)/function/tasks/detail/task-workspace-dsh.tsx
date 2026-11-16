@@ -38,7 +38,7 @@ import { api, sseUrl } from "@/lib/api";
 import { ScrollFollow, scrollMetrics } from "@/lib/scroll-follow";
 import { copyText } from "@/lib/utils";
 import { MOCK } from "@/lib/mock/enabled";
-import type { Activity, ChatAttachment, GoalSnapshot, LLMProfile, Task, TaskNode } from "@/lib/types";
+import type { Activity, ChatAttachment, GoalSnapshot, LLMProfile, Task, TaskNode, TurnChangedFile } from "@/lib/types";
 import { TeamTab } from "./_tabs/team-tab";
 
 import { FindingsTab } from "./_tabs/findings-tab";
@@ -623,6 +623,102 @@ function DiffBody({ hunks, maxLines = 9 }: { readonly hunks: ReadonlyArray<DiffH
           {expanded ? "收起" : `展开其余 ${hidden} 行`}
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/** 「本轮改动」卡片里一行的操作名（后端只回 write / edit）。 */
+const TURN_FILE_OPS: Record<string, string> = { write: "新建/覆写", edit: "修改" };
+
+/**
+ * 一个回合的改动文件卡（参照 DSH ui-deliverables `ChangedFiles.tsx:37-106`：卡片
+ * 标题报总数，每行一个文件，行内展开该文件的对比）。
+ *
+ * 数据来自 `GET /api/tasks/{id}/turn-files`——后端只从**记录下来的成功
+ * Write/Edit/MultiEdit 调用**推导（`turn-deliverables.ts:1-7`），所以这张卡永远
+ * 不会因为回复里提了个文件名就凭空长出一行。行展开复用工具卡同一套 DiffBody。
+ */
+function ChangedFilesCard({
+  files,
+  taskId,
+}: {
+  readonly files: readonly TurnChangedFile[];
+  readonly taskId: string;
+}) {
+  const [openPath, setOpenPath] = React.useState<string | null>(null);
+  const [args, setArgs] = React.useState<Record<string, Array<Record<string, unknown> | null>>>({});
+  const [loadingPath, setLoadingPath] = React.useState<string | null>(null);
+  const writes = files.reduce((total, file) => total + file.count, 0);
+
+  const toggle = async (file: TurnChangedFile) => {
+    const next = openPath === file.path ? null : file.path;
+    setOpenPath(next);
+    if (next === null || args[file.path] !== undefined || loadingPath === file.path) return;
+    setLoadingPath(file.path);
+    try {
+      // 参数 JSON 只存在 tool_use 活动上（列表载荷里只有截断的 summary），
+      // 所以展开时才按 call.seq 拉 detail。
+      const loaded = await Promise.all(
+        file.calls.map((call) =>
+          api.activityDetail(call.seq, taskId).then(
+            (response) => {
+              try {
+                return JSON.parse(response.detail || "{}") as Record<string, unknown>;
+              } catch {
+                return null;
+              }
+            },
+            () => null,
+          ),
+        ),
+      );
+      setArgs((prev) => ({ ...prev, [file.path]: loaded }));
+    } finally {
+      setLoadingPath(null);
+    }
+  };
+
+  return (
+    <div className={styles.changedFiles} data-testid="turn-changed-files" data-file-count={files.length} data-write-count={writes}>
+      <div className={styles.changedFilesHead}>
+        <span className={styles.changedFilesTitle}>本轮改动 {files.length} 个文件</span>
+        <span className={styles.changedFilesMeta}>{writes} 次写入</span>
+      </div>
+      <ul className={styles.changedFilesList}>
+        {files.map((file) => {
+          const expanded = openPath === file.path;
+          return (
+            <li key={file.path}>
+              <button
+                type="button"
+                className={styles.changedFileRow}
+                data-testid="changed-file-row"
+                data-path={file.path}
+                data-ops={file.ops.join(",")}
+                data-count={file.count}
+                aria-expanded={expanded}
+                onClick={() => void toggle(file)}
+              >
+                <ChevronRight size={12} className={styles.changedFileChevron} data-open={expanded || undefined} aria-hidden="true" />
+                <span className={styles.changedFilePath} title={file.path}>
+                  {file.path}
+                </span>
+                <span className={styles.changedFileOps}>{file.ops.map((op) => TURN_FILE_OPS[op] ?? op).join(" · ")}</span>
+                <span className={styles.changedFileCount}>{file.count}</span>
+              </button>
+              {expanded ? (
+                <div className={styles.changedFileDiff} data-testid="changed-file-diff">
+                  {loadingPath === file.path ? (
+                    <p className={styles.cardEmpty}>加载改动…</p>
+                  ) : (
+                    (args[file.path] ?? []).map((call, index) => <DiffBody key={index} hunks={diffHunks(call)} maxLines={6} />)
+                  )}
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -1225,7 +1321,14 @@ function AssistantAnswer({
   return <Markdown text={text} />;
 }
 
-function buildActivityNodes(activities: Activity[], taskId: string, streamingSeq: number, seg: number, onEdited: () => void): React.ReactNode[] {
+function buildActivityNodes(
+  activities: Activity[],
+  taskId: string,
+  streamingSeq: number,
+  seg: number,
+  onEdited: () => void,
+  turnFiles: Readonly<Record<number, readonly TurnChangedFile[]>> = {},
+): React.ReactNode[] {
   const resultByUse = new Map<string, Activity>();
   for (const activity of activities) {
     if (activity.kind === "tool_result" && activity.tool_use_id) resultByUse.set(activity.tool_use_id, activity);
@@ -1326,6 +1429,9 @@ function buildActivityNodes(activities: Activity[], taskId: string, streamingSeq
       // not emit a separate text frame for it). Rendering only the turn-end footer
       // is what made every reply look like it never arrived.
       const answer = (activity.summary ?? "").trim();
+      // 回合末尾的改动文件卡（DSH ui-deliverables 把这张卡注册在
+      // conversation.chat.turnTail，见 index.ts:64-84）。没有改动的回合不渲染。
+      const changed = turnFiles[activity.seq] ?? [];
       nodes.push(
         <React.Fragment key={`result-${activity.seq}`}>
           {answer ? (
@@ -1333,6 +1439,7 @@ function buildActivityNodes(activities: Activity[], taskId: string, streamingSeq
               <AssistantAnswer taskId={taskId} seq={activity.seq} summary={answer} />
             </div>
           ) : null}
+          {changed.length > 0 ? <ChangedFilesCard files={changed} taskId={taskId} /> : null}
           <div className={styles.footer} data-seq={activity.seq} data-turn-end={activity.seq}>
             Turn 结束{tokens > 0 ? ` · ${fmtTokens(tokens)} tokens` : ""}
           </div>
@@ -1766,6 +1873,42 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
     if (current.rows.length > 0) groups.push(current);
     return groups;
   }, [transcript]);
+
+  // 每个回合的改动文件（键 = 收尾该回合的 result seq；0 = 进行中的回合）。
+  // 数据只由后端从记录下来的成功改写调用推导（DSH turn-deliverables.ts:1-7），
+  // 前端不做任何文件名解析。回合边界一变（新 result 行落库）就重取一次。
+  const [turnFiles, setTurnFiles] = React.useState<Record<number, TurnChangedFile[]>>({});
+  const resultSignature = React.useMemo(
+    () =>
+      transcript
+        .filter((activity) => activity.kind === "result")
+        .map((activity) => activity.seq)
+        .join(","),
+    [transcript],
+  );
+  React.useEffect(() => {
+    if (!currentKey.startsWith("main:")) {
+      setTurnFiles({}); // 只有主 Agent 会话有「回合」；planner/worker 车道不渲染这张卡
+      return;
+    }
+    const seg = mainSegOf(currentKey);
+    let live = true;
+    void api
+      .turnFiles(taskId, seg)
+      .then((response) => {
+        if (!live) return;
+        const byTurn: Record<number, TurnChangedFile[]> = {};
+        for (const turn of response.turns) byTurn[turn.end] = turn.files;
+        setTurnFiles(byTurn);
+      })
+      .catch(() => {
+        // 端点不可用（老后端 / 任务已删）时静默退化为「没有卡片」，不影响会话本身。
+        if (live) setTurnFiles({});
+      });
+    return () => {
+      live = false;
+    };
+  }, [taskId, currentKey, resultSignature]);
 
   const [activeTurn, setActiveTurn] = React.useState(0);
   // Hovered turn mark, for the rail's preview card.
@@ -2576,7 +2719,11 @@ export function TaskWorkspaceDsh({ taskId }: { readonly taskId: string }) {
                         <span>本回合 {processCount} 步过程已折叠</span>
                       </button>
                     ) : null}
-                    {buildActivityNodes(rows, taskId, streamingSeq, mainSegOf(currentKey), () => { void loadActivity(currentKey); })}
+                    {buildActivityNodes(rows, taskId, streamingSeq, mainSegOf(currentKey), () => { void loadActivity(currentKey); }, turnFiles)}
+                    {/* 进行中的回合（还没有 result 行）：改动文件卡挂在当前内容末尾。 */}
+                    {isLiveTurn && (turnFiles[0]?.length ?? 0) > 0 ? (
+                      <ChangedFilesCard files={turnFiles[0]} taskId={taskId} />
+                    ) : null}
                   </React.Fragment>
                 );
               })}

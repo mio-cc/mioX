@@ -687,6 +687,26 @@ export interface Activity {
   cache_write_tokens?: number;
 }
 
+// 一个回合里被改写的文件。数据只由后端从记录下来的 Write/Edit/MultiEdit 调用
+// 推导（DSH ui-deliverables turn-deliverables.ts:1-7：绝不解剖模型回复文本）。
+export interface TurnChangedFileCall {
+  seq: number; // 记录该调用的 tool_use 活动 id（用它按需读 detail 渲染 diff）
+  op: string; // write | edit
+}
+
+export interface TurnChangedFile {
+  path: string;
+  ops: string[]; // 去重、按首次出现排序
+  count: number; // 改写调用次数
+  calls: TurnChangedFileCall[];
+}
+
+// 一个回合的改动文件集合；end = 收尾该回合的 result 活动 id，0 = 回合仍在进行。
+export interface TurnChangedFiles {
+  end: number;
+  files: TurnChangedFile[];
+}
+
 export interface LLMAuditProfile {
   id: number;
   name: string;

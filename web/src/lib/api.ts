@@ -103,6 +103,7 @@ import type {
   TrafficEvidenceRole,
   TrafficHost,
   TrafficResp,
+  TurnChangedFiles,
   UpdateCheck,
   UsageStats,
   WorkspaceFile,
@@ -800,6 +801,13 @@ export const api = {
     }));
   },
   activityDetail: (id: number, task?: string) => get<{ detail: string }>(`/exploration/activity/${id}${tq(task)}`),
+  // 每个主 Agent 回合的「改动文件卡」。后端只从记录下来的成功 Write/Edit/MultiEdit
+  // 调用推导（DSH ui-deliverables turn-deliverables.ts:1-7），不看回复文本；没改文件
+  // 的回合返回空数组。all=1 一次取该分段全部回合，聊天流据此给每个回合各渲染一张卡。
+  turnFiles: (task: string, seg: number) =>
+    get<{ seg: number; turns: TurnChangedFiles[] }>(
+      `/tasks/${encodeURIComponent(task)}/turn-files?seg=${seg}&all=1`,
+    ).then((r) => ({ seg: r.seg ?? seg, turns: arr(r.turns) })),
   // Reverse-paginated session history. session = "main" | "plan" | "intent:<id>".
   // before=0 → latest page; before=<id> → the older page ending before that id.
   // snapshotCursor is the TASK-level max id at query time — open the task SSE at

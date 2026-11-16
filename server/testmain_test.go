@@ -21,6 +21,10 @@ func TestMain(m *testing.M) {
 	if testDSN, derr := db.TestDatabaseDSN(dsn); derr == nil {
 		dsn = testDSN
 	}
+	// Publish it: NewManager and every other helper call db.DSN() internally, so the
+	// only way to keep the whole suite off the live database is to set the env var they
+	// read. Without this, 48 NewManager call sites wrote fixtures into production (v0.88).
+	os.Setenv("ARTEX_PG_DSN", dsn)
 
 	conn, err := sql.Open("pgx", dsn)
 	if err != nil || conn.Ping() != nil {
