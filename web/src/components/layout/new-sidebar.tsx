@@ -759,9 +759,10 @@ export function NewSidebar() {
         return;
       }
       // Ctrl/Cmd+, opens settings — the hint shown in the palette must be real.
+      // 卡7: toggle（DSH settings.open 已开时 closeTopModal 语义）
       if (mod && event.key === ",") {
         event.preventDefault();
-        setSettingsOpen(true);
+        setSettingsOpen((value) => !value);
         return;
       }
       // Ctrl+B is intentionally NOT handled here: AppFrame owns it (and guards

@@ -414,6 +414,20 @@
   background: var(--ax-bg-subtle);
 }
 
+/* 卡7: 轨道态设置/账户按钮只显图标（DSH rail 36px 触发语义） */
+.root.collapsed .footerGrow {
+  display: none;
+}
+
+.root.collapsed .footer {
+  align-items: center;
+}
+
+.root.collapsed .footerRow {
+  justify-content: center;
+  width: 36px;
+}
+
 
 
 .taskRow {
