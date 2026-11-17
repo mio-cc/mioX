@@ -1143,7 +1143,19 @@ export function NewSidebar() {
               // Untouched groups default to COLLAPSED (DSH root-group semantics).
               const collapsed = touchedGroups.has(group.key) ? collapsedGroups.has(group.key) : true;
               const showAll = showAllGroups.has(group.key);
-              const watermark = 5; // DSH SESSION_WATERMARK_BASE
+              // 卡4: attention 自动抬水位（DSH WorkspaceBrowser.tsx:77-94
+              // requiredWatermark：running / 等待用户 / 已完成 / 当前任务的行把
+              // 水位抬到它的位置，≤ AUTO_MAX=50）。
+              let attentionWatermark = 0;
+              group.tasks.forEach((task, index) => {
+                if (index >= 50) return;
+                const attention =
+                  (task.status === "running" && !task.paused) ||
+                  task.status === "done" ||
+                  task.id === activeTaskId;
+                if (attention) attentionWatermark = index + 1;
+              });
+              const watermark = Math.max(5, attentionWatermark); // DSH SESSION_WATERMARK_BASE=5
               const shownTasks = showAll ? group.tasks : group.tasks.slice(0, watermark);
               const hiddenCount = group.tasks.length - shownTasks.length;
               return (
