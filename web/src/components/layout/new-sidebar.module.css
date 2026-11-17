@@ -419,6 +419,37 @@
   display: none;
 }
 
+/* 卡3: 新建任务行 + 添加工作区按钮 */
+.newTaskRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.newTaskRow .newTask {
+  flex: 1;
+  min-width: 0;
+}
+
+.addWorkspace {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ax-text-tertiary);
+  cursor: pointer;
+}
+
+.addWorkspace:hover {
+  color: var(--ax-text-primary);
+  background: var(--ax-bg-subtle);
+}
+
 .root.collapsed .footer {
   align-items: center;
 }

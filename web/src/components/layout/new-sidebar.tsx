@@ -20,11 +20,13 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
+  FolderPlus,
   X,
 } from "lucide-react";
 
 import { useAppLayout } from "@/components/layout/app-frame";
 import { SettingsDialog } from "@/components/settings/settings-dialog";
+import { DirPicker } from "@/app/(main)/function/tasks/new/dir-picker";
 import { api } from "@/lib/api";
 import type { Task } from "@/lib/types";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
@@ -590,6 +592,9 @@ export function NewSidebar() {
   // 卡1: 内联搜索框（DSH WorkspaceBrowser.tsx:1074-1092 searchExpanded）——
   // 点击搜索按钮在头部展开输入框、本地过滤任务列表，不再打开全屏面板。
   const [searchExpanded, setSearchExpanded] = React.useState(false);
+  // 卡3: 添加工作区（DSH WorkspaceBrowser.tsx:1298-1313 `+` → requestAddWorkspace
+  // → WorkspacePickFlow 目录选择 → onPick startSession）。我们复用 DirPicker。
+  const [addWorkspaceOpen, setAddWorkspaceOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [activeResult, setActiveResult] = React.useState(0);
   const [modLabel, setModLabel] = React.useState("Ctrl");
@@ -1037,10 +1042,25 @@ export function NewSidebar() {
         )}
       </div>
 
-      <Link href="/function/tasks/new" className={styles.newTask} title="新建任务" data-tooltip="新建任务">
-        <Plus className={styles.quickIcon} />
-        <span className={styles.newTaskLabel}>新建任务</span>
-      </Link>
+      <div className={styles.newTaskRow}>
+        <Link href="/function/tasks/new" className={styles.newTask} title="新建任务" data-tooltip="新建任务">
+          <Plus className={styles.quickIcon} />
+          <span className={styles.newTaskLabel}>新建任务</span>
+        </Link>
+        {/* 卡3: 添加工作区（DSH WorkspaceBrowser.tsx:1298-1313 头部 `+`）。
+            一个动作：选目录 → 建任务 → 进入详情。 */}
+        <button
+          type="button"
+          className={styles.addWorkspace}
+          title="从目录新建任务"
+          data-tooltip="从目录新建任务"
+          aria-label="从目录新建任务"
+          data-testid="sidebar-add-workspace"
+          onClick={() => setAddWorkspaceOpen(true)}
+        >
+          <FolderPlus size={14} aria-hidden="true" />
+        </button>
+      </div>
 
       <button
         ref={searchButtonRef}
@@ -1345,6 +1365,30 @@ export function NewSidebar() {
         open={settingsOpen}
         onClose={closeSettings}
         returnFocusRef={settingsButtonRef}
+      />
+
+      {/* 卡3: 添加工作区（DSH WorkspacePicker 语义：选目录 → createWorkspace → 进入） */}
+      <DirPicker
+        open={addWorkspaceOpen}
+        initial=""
+        onClose={() => setAddWorkspaceOpen(false)}
+        onPick={(path) => {
+          setAddWorkspaceOpen(false);
+          void (async () => {
+            try {
+              const created = await api.createTask({
+                description: "从目录创建",
+                goal: "",
+                workDir: path,
+              });
+              await refreshTasks();
+              toast.success(`已创建任务 #${created.id}`);
+              router.push(`/function/tasks/detail?id=${encodeURIComponent(created.id)}`);
+            } catch (pickError) {
+              toast.error(`创建任务失败：${(pickError as Error).message}`);
+            }
+          })();
+        }}
       />
 
       {hoveredRow ? <TaskHoverCard task={hoveredRow.task} anchor={hoveredRow.anchor} /> : null}
