@@ -20,6 +20,7 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
+  X,
 } from "lucide-react";
 
 import { useAppLayout } from "@/components/layout/app-frame";
@@ -31,23 +32,27 @@ import { toast } from "sonner";
 
 import styles from "./new-sidebar.module.css";
 
-// D2: 侧边栏不常驻页面链接（DSH 侧边栏没有固定页面链接区，只有工作区树 +
-// 可 pin 面板 + More 菜单）。全局页面入口全部收进 More 菜单。
-const quickLinks: ReadonlyArray<{ href: string; label: string; icon: typeof LayoutDashboard }> = [];
+// D2 卡1-②: 面板注册表（DSH ui-sidebar/index.ts:56-71 槽位投影）取代两份 const 数组。
+// 全局页面入口 + 工作区功能页全部注册进表，由 order 决定顺序；More 菜单消费同一张表。
+import { registerPanel, visiblePanels, FIXED_PANEL_ID } from "./panel-registry";
 
-// D2: 侧边栏只留工作区/功能导航；系统配置类（LLM/Agent/MCP/Skill/工具/通知/
-// 拦截/审批/日志）收进设置页的「系统」组（DSH settings.section 语义）。
-// 全局页面入口（任务总览/发现/资产/流量）也收进 More（DSH 侧边栏无常驻页面链接）。
-const moreLinks = [
-  { href: "/dashboard", label: "任务总览" },
-  { href: "/function/findings", label: "发现" },
-  { href: "/function/assets", label: "资产" },
-  { href: "/function/traffic", label: "流量" },
-  { href: "/function/commands", label: "工具执行" },
-  { href: "/function/llm-records", label: "LLM 录制" },
-  { href: "/function/workspace", label: "工作空间" },
-  { href: "/function/sync", label: "资产同步" },
+const PANEL_DEFINITIONS: ReadonlyArray<{ id: string; label: string; href: string; order: number }> = [
+  { id: "dashboard", label: "任务总览", href: "/dashboard", order: 1 },
+  { id: "findings", label: "发现", href: "/function/findings", order: 2 },
+  { id: "assets", label: "资产", href: "/function/assets", order: 3 },
+  { id: "traffic", label: "流量", href: "/function/traffic", order: 4 },
+  { id: "commands", label: "工具执行", href: "/function/commands", order: 10 },
+  { id: "llm-records", label: "LLM 录制", href: "/function/llm-records", order: 11 },
+  { id: "workspace", label: "工作空间", href: "/function/workspace", order: 12 },
+  { id: "sync", label: "资产同步", href: "/function/sync", order: 13 },
 ];
+
+// 注册（幂等；registerPanel 对同 id 覆盖）
+for (const panel of PANEL_DEFINITIONS) registerPanel(panel);
+
+// 兼容层：quickLinks 清空（无常驻页面链接，D2 v1.6.0）；moreLinks 由注册表投影。
+const quickLinks: ReadonlyArray<{ href: string; label: string; icon: typeof LayoutDashboard }> = [];
+const moreLinks = visiblePanels().map((p) => ({ href: p.href, label: p.label }));
 
 interface SidebarMenuItem {
   readonly id: string;
@@ -582,6 +587,9 @@ export function NewSidebar() {
   }, []);
   const [onlyRunning, setOnlyRunning] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
+  // 卡1: 内联搜索框（DSH WorkspaceBrowser.tsx:1074-1092 searchExpanded）——
+  // 点击搜索按钮在头部展开输入框、本地过滤任务列表，不再打开全屏面板。
+  const [searchExpanded, setSearchExpanded] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [activeResult, setActiveResult] = React.useState(0);
   const [modLabel, setModLabel] = React.useState("Ctrl");
@@ -951,9 +959,12 @@ export function NewSidebar() {
   };
 
   const rootClass = `${styles.root} ${sidebarCollapsed ? styles.collapsed : ""}`;
-  const visibleTasks = onlyRunning
+  // 卡1: 内联搜索过滤（本地过滤任务名，debounce 交给 React 受控渲染）
+  const searchNeedle = searchExpanded ? search.trim().toLowerCase() : "";
+  const visibleTasks = (onlyRunning
     ? tasks.filter((task) => task.status === "running" && !task.paused)
-    : tasks;
+    : tasks
+  ).filter((task) => (searchNeedle === "" ? true : taskName(task).toLowerCase().includes(searchNeedle)));
   // Group the list by task category (reference: DSH groups sessions under their
   // workspace/project with a collapsible folder row). Collapse state is per browser so
   // a folded group stays folded across reloads.
@@ -1034,18 +1045,58 @@ export function NewSidebar() {
         ref={searchButtonRef}
         type="button"
         className={styles.searchButton}
-        onClick={(event) => openSearch(event.currentTarget)}
-        title="搜索任务、面板或执行命令（Ctrl+K）"
-        aria-label="搜索任务、面板或执行命令"
-        aria-haspopup="dialog"
-        aria-expanded={searchOpen}
+        onClick={() => {
+          // 卡1: 切换内联搜索框（DSH 内联过滤）；Ctrl+K 仍打开命令面板
+          setSearchExpanded((value) => {
+            if (!value) setSearch("");
+            return !value;
+          });
+          if (!searchExpanded) window.requestAnimationFrame(() => searchInputRef.current?.focus());
+        }}
+        title="搜索任务（Ctrl+K 打开命令面板）"
+        aria-label="搜索任务"
+        aria-expanded={searchExpanded}
         aria-keyshortcuts="Control+K Meta+K"
         data-testid="sidebar-search"
       >
         <Search className={styles.searchIcon} aria-hidden="true" />
-        <span className={styles.searchButtonLabel}>搜索或执行命令…</span>
+        <span className={styles.searchButtonLabel}>搜索任务…</span>
         <span className={styles.shortcut}>{modLabel} K</span>
       </button>
+      {searchExpanded ? (
+        <div className={styles.inlineSearch} data-testid="sidebar-inline-search">
+          <input
+            ref={searchInputRef}
+            className={styles.inlineSearchInput}
+            type="text"
+            value={search}
+            placeholder="过滤任务…"
+            aria-label="过滤任务"
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setSearch("");
+                setSearchExpanded(false);
+                searchButtonRef.current?.focus();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className={styles.inlineSearchClear}
+            aria-label="清除并收起搜索"
+            data-testid="sidebar-search-clear"
+            onClick={() => {
+              setSearch("");
+              setSearchExpanded(false);
+              searchButtonRef.current?.focus();
+            }}
+          >
+            <X size={12} aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
 
       <div className={styles.taskScroll} data-testid="task-scroll">
         <div className={`${styles.sectionLabel} ${styles.taskSectionLabel}`}>
