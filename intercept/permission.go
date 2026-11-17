@@ -80,6 +80,19 @@ var destructiveTools = map[string]bool{
 	"delete_assets_by_host": true,
 }
 
+// riskTools require explicit human confirmation regardless of the
+// permission preset (D10-T3, DSH risk-confirmation flow). These perform
+// irreversible global operations — no preset silently allows them.
+var riskTools = map[string]bool{
+	"delete_assets_by_host": true,
+}
+
+// RequiresConfirmation reports whether the tool always needs a human
+// approve/deny decision, independent of the session permission level.
+func RequiresConfirmation(tool string) bool {
+	return riskTools[tool]
+}
+
 // PresetDenied returns true when the level forbids the tool outright.
 // Explicit intercept rules still win: the caller checks rules first.
 func (l PermissionLevel) PresetDenied(tool string) bool {

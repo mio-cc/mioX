@@ -100,6 +100,14 @@ func (g *Guard) applyIntercept(ctx context.Context, ev hook.Event) hook.Result {
 		}
 	}
 	if !matched {
+		// D10-T3: 危险工具默认人工确认（DSH 风险确认流）——不可逆的全局
+		// 操作（如全局资产库硬删）无论权限档都不静默放行，必须人工决定。
+		if intercept.RequiresConfirmation(ev.ToolName) {
+			dec = intercept.Decision{Action: "ask", Message: "危险操作需要人工确认"}
+			matched = true
+		}
+	}
+	if !matched {
 		// No rule matched. Ask the LLM fallback judge (if enabled); when it is off
 		// or unwired, keep current behavior and allow.
 		d, judged := g.interceptor.Judge(ctx, ev.ToolName, ev.Input)
