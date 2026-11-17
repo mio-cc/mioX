@@ -35,6 +35,7 @@ import {
   Moon,
   Palette,
   RefreshCw,
+  Settings,
   Shield,
   Sun,
   X,
@@ -71,6 +72,7 @@ const SECTIONS = [
   { id: "models", label: "模型", icon: Cpu },
   { id: "permissions", label: "权限", icon: Shield },
   { id: "notifications", label: "通知", icon: Bell },
+  { id: "system", label: "系统", icon: Settings },
   { id: "about", label: "关于", icon: Info },
 ] as const;
 
@@ -524,6 +526,48 @@ function PermissionsSection() {
 
 /* ── Notifications ──────────────────────────────────────────────────────── */
 
+/* ── System (D2: system config entries moved here from the sidebar, DSH settings.section) ── */
+
+const SYSTEM_ENTRIES = [
+  { href: "/system/llm", label: "LLM 配置", desc: "模型列表、API 地址、推理档位" },
+  { href: "/system/agents", label: "Agent", desc: "自定义 Agent 与提示词" },
+  { href: "/system/mcp", label: "MCP", desc: "MCP 服务器与工具接入" },
+  { href: "/system/skills", label: "Skill", desc: "技能清单" },
+  { href: "/system/tools", label: "工具", desc: "工具可见性与解析" },
+  { href: "/system/notify", label: "通知推送", desc: "IM/邮件渠道" },
+  { href: "/system/intercept", label: "拦截规则", desc: "工具调用拦截与审批规则" },
+  { href: "/system/intercept/approvals", label: "审批记录", desc: "历史审批与审计" },
+  { href: "/system/logs", label: "日志", desc: "系统日志" },
+] as const;
+
+function SystemSection() {
+  return (
+    <div className={styles.section}>
+      <div className={styles.sectionIntro}>
+        <h2 className={styles.sectionTitle}>系统</h2>
+        <p className={styles.sectionDesc}>
+          系统配置入口（DSH settings.section 语义：配置类从侧边栏收进设置页，侧边栏只留工作区导航）。
+        </p>
+      </div>
+      <div className={styles.systemEntries} role="list" aria-label="系统配置入口">
+        {SYSTEM_ENTRIES.map((entry) => (
+          <Link
+            key={entry.href}
+            href={entry.href}
+            className={styles.systemEntry}
+            role="listitem"
+            data-testid={`system-entry-${entry.label}`}
+          >
+            <span className={styles.systemEntryLabel}>{entry.label}</span>
+            <span className={styles.systemEntryDesc}>{entry.desc}</span>
+            <ArrowUpRight size={12} aria-hidden="true" className={styles.systemEntryArrow} />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function NotificationsSection() {
   const [state, setState] = React.useState<Loaded<EffectiveSettings>>({ status: "loading" });
   const [saving, setSaving] = React.useState(false);
@@ -958,6 +1002,7 @@ export function SettingsDialog({ open, onClose, returnFocusRef }: SettingsDialog
           {activeSection.id === "models" ? <ModelsSection /> : null}
           {activeSection.id === "permissions" ? <PermissionsSection /> : null}
           {activeSection.id === "notifications" ? <NotificationsSection /> : null}
+          {activeSection.id === "system" ? <SystemSection /> : null}
           {activeSection.id === "about" ? <AboutSection /> : null}
         </div>
       </div>

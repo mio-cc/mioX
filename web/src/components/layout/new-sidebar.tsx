@@ -38,20 +38,13 @@ const quickLinks = [
   { href: "/function/traffic", label: "流量", icon: Activity },
 ];
 
+// D2: 侧边栏只留工作区/功能导航；系统配置类（LLM/Agent/MCP/Skill/工具/通知/
+// 拦截/审批/日志）收进设置页的「系统」组（DSH settings.section 语义）。
 const moreLinks = [
   { href: "/function/commands", label: "工具执行" },
   { href: "/function/llm-records", label: "LLM 录制" },
   { href: "/function/workspace", label: "工作空间" },
   { href: "/function/sync", label: "资产同步" },
-  { href: "/system/llm", label: "LLM 配置" },
-  { href: "/system/agents", label: "Agent" },
-  { href: "/system/mcp", label: "MCP" },
-  { href: "/system/skills", label: "Skill" },
-  { href: "/system/tools", label: "工具" },
-  { href: "/system/notify", label: "通知推送" },
-  { href: "/system/intercept", label: "拦截规则" },
-  { href: "/system/intercept/approvals", label: "审批记录" },
-  { href: "/system/logs", label: "日志" },
 ];
 
 interface SidebarMenuItem {

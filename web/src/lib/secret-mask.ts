@@ -53,6 +53,8 @@ export const RUN = 0;
 export const BOUNDED = 1;
 /** 至少 `min`，且前 256 个字符里有一个数字。 */
 export const SK = 2;
+/** 精确 `min` 个（D14-T2，DSH GOOGLE shape：AIza 35 位）。 */
+export const GOOGLE = 3;
 /** 三段，用 `.eyJ` 和 `.` 连接。 */
 export const JWT = 4;
 
@@ -86,6 +88,9 @@ const prefixed = (literal: string, shape: number, run: number, min: number, max 
  * 256 个字符里必须有数字（credential-formats.ts:71 的注释：模型服务的 key 带数字，
  * 连字符标识符一般不带），但验收样本 `sk-abcdefghijklmnopqrstuvwxyz` 全字母，按 SK
  * 会漏遮。这里改成"20 个以上 KEY 类字符"——长度本身就足够特异，误报面没变大。
+ *
+ * D14-T2（v1.5.0）：补到 28 条，与 DSH credential-formats.ts:67-99 逐条对齐
+ * （AIza 用 GOOGLE 形状精确 35 位；其余按 DSH 原形状）。
  */
 export const CREDENTIAL_FORMATS: readonly CredentialFormat[] = [
   // 私钥块：`-----BEGIN ... PRIVATE KEY-----` 到 `-----END ... PRIVATE KEY-----`。
@@ -94,16 +99,33 @@ export const CREDENTIAL_FORMATS: readonly CredentialFormat[] = [
   { literal: "://", kind: ADDRESS, shape: RUN, run: 0, min: 0, max: 0 },
   // 模型服务：`sk-` 同时覆盖 OpenAI 的 `sk-` 和 Anthropic 的 `sk-ant-`（`-` 属于 KEY 类）。
   prefixed("sk-", RUN, KEY, 20),
-  // 代码托管。
+  prefixed("AIza", GOOGLE, KEY, 35),
+  // 代码托管与包注册表。
   prefixed("ghp_", RUN, ALNUM, 36),
   prefixed("gho_", RUN, ALNUM, 36),
+  prefixed("ghu_", RUN, ALNUM, 36),
+  prefixed("ghs_", RUN, ALNUM, 36),
+  prefixed("ghr_", RUN, ALNUM, 36),
   prefixed("github_pat_", RUN, WORD, 22),
+  prefixed("glpat-", RUN, KEY, 20),
+  prefixed("npm_", RUN, ALNUM, 36),
+  prefixed("hf_", RUN, ALNUM, 30),
   // 云访问密钥 ID。
   prefixed("AKIA", BOUNDED, UPPER_ALNUM, 16, 16),
   prefixed("ASIA", BOUNDED, UPPER_ALNUM, 16, 16),
-  // 协作服务。
+  prefixed("LTAI", BOUNDED, ALNUM, 12, 20),
+  prefixed("AKID", BOUNDED, ALNUM, 28, 36),
+  // 协作与支付服务。
+  prefixed("xoxa-", RUN, ALNUM_DASH, 10),
   prefixed("xoxb-", RUN, ALNUM_DASH, 10),
   prefixed("xoxp-", RUN, ALNUM_DASH, 10),
+  prefixed("xoxr-", RUN, ALNUM_DASH, 10),
+  prefixed("xoxs-", RUN, ALNUM_DASH, 10),
+  prefixed("sk_live_", RUN, ALNUM, 16),
+  prefixed("sk_test_", RUN, ALNUM, 16),
+  prefixed("rk_live_", RUN, ALNUM, 16),
+  prefixed("rk_test_", RUN, ALNUM, 16),
+  prefixed("whsec_", RUN, ALNUM, 24),
   // JWT：`eyJ...` 三段。
   prefixed("eyJ", JWT, KEY, 8, 2048),
 ];
@@ -290,6 +312,7 @@ function prefixedEnd(text: string, format: CredentialFormat, at: number): number
   if (length < min) return -1;
   if (format.shape === RUN) return end;
   if (format.shape === BOUNDED) return length <= format.max && !isWordAt(text, end) ? end : -1;
+  if (format.shape === GOOGLE) return length === format.min ? end : -1;
   // JWT：`eyJ` 之后 `{8,2048}\.eyJ{8,}\.{8,}`
   if (length > format.max || !text.startsWith(".eyJ", end)) return -1;
   const payloadStart = end + ".eyJ".length;

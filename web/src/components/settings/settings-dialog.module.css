@@ -333,6 +333,46 @@
   color: var(--ax-text-secondary);
 }
 
+/* ── System entries (D2: moved from sidebar) ─────────────────────────── */
+
+.systemEntries {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.systemEntry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--ax-text-primary);
+}
+
+.systemEntry:hover {
+  background: var(--ax-bg-subtle);
+}
+
+.systemEntryLabel {
+  flex: 0 0 auto;
+  min-width: 96px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.systemEntryDesc {
+  flex: 1;
+  font-size: var(--ax-font-size-secondary);
+  color: var(--ax-text-secondary);
+}
+
+.systemEntryArrow {
+  flex: 0 0 auto;
+  color: var(--ax-text-tertiary);
+}
+
 /* ── Theme cubes ──────────────────────────────────────────────────────── */
 
 .cubeRow {
