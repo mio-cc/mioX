@@ -445,34 +445,40 @@ function ModelsSection() {
 /* ── Permissions ────────────────────────────────────────────────────────── */
 
 function PermissionsSection() {
+  // D10-T4: 权限档是任务级命令（DSH ui-permission-presets 会话级语义），
+  // 设置页不再放假开关，改为四档说明 + 用法指引。
+  const levels: Array<{ value: string; label: string; desc: string }> = [
+    { value: "auto", label: "auto", desc: "规则 + LLM 裁决（默认）" },
+    { value: "read-only", label: "read-only", desc: "状态变更工具全部拒绝" },
+    { value: "workspace-write", label: "workspace-write", desc: "工作区可写，全局副作用工具拒绝" },
+    { value: "danger-full", label: "danger-full", desc: "不拦截（不可逆操作仍要人工确认）" },
+  ];
   return (
     <div className={styles.section}>
       <div className={styles.sectionIntro}>
         <h2 className={styles.sectionTitle}>权限</h2>
         <p className={styles.sectionDesc}>
-          审批与工具拦截目前是「按规则」生效的：后端没有全局审批模式字段，因此这里的开关显式禁用，避免出现无效控件。
+          权限档是任务级的：在任务对话里输入 <code>/permission</code> 切换，下一轮生效。显式拦截规则始终优先于档位预设。
         </p>
       </div>
 
       <div className={styles.group}>
         <div className={styles.groupHead}>
-          <h3 className={styles.groupTitle}>审批模式</h3>
-          <span className={styles.badge}>后端未提供</span>
+          <h3 className={styles.groupTitle}>权限档</h3>
+          <span className={styles.badge}>任务级命令</span>
         </div>
-        <p className={styles.groupDesc}>
-          审批由拦截规则与工具拦截范围逐条决定（询问 / 自动允许写在规则里），没有可切换的全局档位。
-        </p>
-        <div className={`${styles.segmented} ${styles.segmentedDisabled}`} role="group" aria-label="审批模式（不可用）">
-          <button type="button" className={styles.segment} disabled aria-describedby="permission-note">
-            仅询问
-          </button>
-          <button type="button" className={styles.segment} disabled aria-describedby="permission-note">
-            自动允许
-          </button>
+        <p className={styles.groupDesc}>四个档位（在任务对话里用 /permission 切换）：</p>
+        <div className={styles.permissionLevels} role="list" aria-label="权限档列表">
+          {levels.map((level) => (
+            <div className={styles.permissionLevelRow} role="listitem" key={level.value} data-testid={`perm-level-${level.value}`}>
+              <code className={styles.permissionLevelValue}>{level.label}</code>
+              <span className={styles.permissionLevelDesc}>{level.desc}</span>
+            </div>
+          ))}
         </div>
         <div className={styles.note} id="permission-note">
           <Shield className={styles.noteIcon} size={14} aria-hidden="true" />
-          <span>要改审批行为，请在「拦截规则」页按规则配置；已发生的审批见「审批记录」。</span>
+          <span>不可逆的全局操作（如全局资产库硬删）无论档位都要人工确认；已发生的审批见「审批记录」。</span>
         </div>
         <div className={styles.linkRow}>
           <Link href="/system/intercept" className={styles.inlineLink}>

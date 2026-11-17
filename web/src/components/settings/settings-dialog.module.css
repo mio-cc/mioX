@@ -302,6 +302,37 @@
   color: var(--ax-text-secondary);
 }
 
+/* ── Permission levels (D10-T4) ──────────────────────────────────────── */
+
+.permissionLevels {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 12px;
+}
+
+.permissionLevelRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.permissionLevelValue {
+  flex: 0 0 auto;
+  min-width: 128px;
+  font-family: var(--ax-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-primary);
+}
+
+.permissionLevelDesc {
+  font-size: var(--ax-font-size-secondary);
+  color: var(--ax-text-secondary);
+}
+
 /* ── Theme cubes ──────────────────────────────────────────────────────── */
 
 .cubeRow {
