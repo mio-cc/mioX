@@ -366,6 +366,14 @@
   color: var(--ax-text-secondary);
 }
 
+/* D2: More 菜单独立容器（页面链接全收进 More 后，quickList 可为空） */
+.moreList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+
 
 .taskRow {
   height: 32px;

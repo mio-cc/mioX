@@ -31,16 +31,18 @@ import { toast } from "sonner";
 
 import styles from "./new-sidebar.module.css";
 
-const quickLinks = [
-  { href: "/dashboard", label: "任务总览", icon: LayoutDashboard },
-  { href: "/function/findings", label: "发现", icon: Bug },
-  { href: "/function/assets", label: "资产", icon: Network },
-  { href: "/function/traffic", label: "流量", icon: Activity },
-];
+// D2: 侧边栏不常驻页面链接（DSH 侧边栏没有固定页面链接区，只有工作区树 +
+// 可 pin 面板 + More 菜单）。全局页面入口全部收进 More 菜单。
+const quickLinks: ReadonlyArray<{ href: string; label: string; icon: typeof LayoutDashboard }> = [];
 
 // D2: 侧边栏只留工作区/功能导航；系统配置类（LLM/Agent/MCP/Skill/工具/通知/
 // 拦截/审批/日志）收进设置页的「系统」组（DSH settings.section 语义）。
+// 全局页面入口（任务总览/发现/资产/流量）也收进 More（DSH 侧边栏无常驻页面链接）。
 const moreLinks = [
+  { href: "/dashboard", label: "任务总览" },
+  { href: "/function/findings", label: "发现" },
+  { href: "/function/assets", label: "资产" },
+  { href: "/function/traffic", label: "流量" },
   { href: "/function/commands", label: "工具执行" },
   { href: "/function/llm-records", label: "LLM 录制" },
   { href: "/function/workspace", label: "工作空间" },
@@ -1124,24 +1126,29 @@ export function NewSidebar() {
         {/* 视觉标题已去掉（DSH 里「全局面板」只是 aria-label，不是可见标题），省 36px 固定开销 */}
       </div>
 
-      <div className={styles.quickList}>
-        {quickLinks.map((item) => {
-          const Icon = item.icon;
-          const active = isActivePath(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`${styles.quickItem} ${active ? styles.quickItemActive : ""}`}
-              title={item.label}
-              data-tooltip={item.label}
-              aria-current={active ? "page" : undefined}
-            >
-              <Icon className={styles.quickIcon} />
-              <span className={styles.quickLabel}>{item.label}</span>
-            </Link>
-          );
-        })}
+      {/* D2: 页面链接全部收进 More 菜单，不常驻渲染（DSH 侧边栏无常驻页面链接区） */}
+      {quickLinks.length > 0 ? (
+        <div className={styles.quickList}>
+          {quickLinks.map((item) => {
+            const Icon = item.icon;
+            const active = isActivePath(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`${styles.quickItem} ${active ? styles.quickItemActive : ""}`}
+                title={item.label}
+                data-tooltip={item.label}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon className={styles.quickIcon} />
+                <span className={styles.quickLabel}>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className={styles.moreList}>
         <SidebarMenu
           ariaLabel="更多面板"
           menuId="sidebar-more-menu"
