@@ -32,6 +32,7 @@ import { TrafficDataPage } from "@/components/v2/data-pages/TrafficDataPage";
 import { FindingsDataPage } from "@/components/v2/findings/FindingsDataPage";
 import { LogsPage } from "@/components/v2/logs/LogsPage";
 import { LlmRecordsPage } from "@/components/v2/llm/LlmRecordsPage";
+import { MemoriesPage } from "@/components/v2/memories/MemoriesPage";
 import { SyncPage } from "@/components/v2/sync/SyncPage";
 import { ToolsPage } from "@/components/v2/tools/ToolsPage";
 import { WorkspacePage } from "@/components/v2/workspace/WorkspacePage";
@@ -41,6 +42,7 @@ import {
   IconFolderOpenOutlineRegular,
   IconGaugeOutlineRegular,
   IconGlobeOutlineRegular,
+  IconLightOutlineRegular,
   IconListPenOutlineRegular,
   IconRefreshOutlineRegular,
   IconShieldOutlineRegular,
@@ -139,6 +141,14 @@ const PAGES: readonly MainPage[] = [
     order: 150,
     group: "数据",
     Component: CommandsPage,
+  },
+  {
+    id: "memories",
+    label: "记忆",
+    Icon: IconLightOutlineRegular,
+    order: 160,
+    group: "数据",
+    Component: MemoriesPage,
   },
   {
     id: "logs",
