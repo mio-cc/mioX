@@ -1,0 +1,504 @@
+.thread {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Jump-to-latest chip: shown once the reader leaves the floor while the stream
+   grows. Mirrors the reference chat lane's "back to bottom" affordance. */
+.jumpLatest {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+  cursor: pointer;
+  z-index: 2;
+}
+
+@media (hover: hover) {
+  .jumpLatest:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.userRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+/* Message actions row mirroring the reference chrome: 28px hit target, 15px
+   glyph, one hairline-tight row under the message. */
+.userActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+}
+
+.copyAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px + var(--dsh-content-font-delta, 0px));
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+  padding: 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+/* Reveal on hover or focus-within; devices without hover keep every row
+   visible. Opacity keeps layout stable. */
+@media (hover: hover) {
+  .userRow[data-actions-reveal="hover"] .userActions {
+    opacity: 0;
+    transition: opacity 80ms ease;
+  }
+
+  .userRow[data-actions-reveal="hover"]:hover .userActions,
+  .userRow[data-actions-reveal="hover"]:focus-within .userActions {
+    opacity: 1;
+  }
+
+  .copyAction:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.meta {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.assistantHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.actionLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .fold:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.foldList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 4px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--dsw-alias-border-l2);
+}
+
+.foldItem {
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.statsBar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 24px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.cardSlot { display: block; }
+
+/* ---- Older history pager (top edge) ------------------------------------ */
+
+.historyRow {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 6px;
+}
+
+.historyButton {
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .historyButton:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.historyButton:disabled {
+  cursor: default;
+}
+
+/* ---- Assistant answer + rating row ------------------------------------- */
+
+.answerRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assistantActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+}
+
+.ratingAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .ratingAction:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.ratingOn {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* ---- Inline edit / resend ---------------------------------------------- */
+
+.editRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.editInput {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.editError {
+  margin: 0;
+  align-self: flex-start;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.editActions {
+  display: flex;
+  gap: 8px;
+}
+
+.editSave,
+.editCancel,
+.dialogSubmit,
+.dialogCancel {
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.dialogSubmit {
+  border-color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.editSave:disabled,
+.editCancel:disabled,
+.dialogSubmit:disabled,
+.dialogCancel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---- Tool-call detail disclosure --------------------------------------- */
+
+.detailWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.detailToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .detailToggle:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.detailBody {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* P1:E1 — Markdown bodies end in real block elements, so the preformatted
+   whitespace of the old plain-text detail box would double the newlines. */
+.detailBody:has(> :not(.detailPlaceholder)) {
+  font-family: var(--dsw-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: normal;
+}
+
+.detailPlaceholder {
+  margin: 0;
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Markdown message body (P1:E1) ------------------------------------- */
+
+/* The block that replaced the plain `<p>`: no own typography, `MarkdownText`
+   carries the document styles; this only keeps wide tables/code scrollable
+   inside the message column instead of widening the thread. */
+.messageBody {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The `unknown tool` row borrows the tertiary action-line text; its body has to
+   stay readable, so it re-inks the Markdown to primary on a left rule that
+   separates it from the icon and the tool name. */
+.actionLine > .messageBody {
+  margin-top: 2px;
+  padding-left: 8px;
+  border-left: 2px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Reasoning disclosure body: the expanded row is secondary text. */
+[data-open] > .messageBody {
+  margin-top: 4px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---- Turn rail (right edge, fixed pitch) ------------------------------- */
+
+.turnRail {
+  position: absolute;
+  top: 12px;
+  right: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  padding: 2px;
+  z-index: 2;
+}
+
+.turnRailNav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+.turnNavButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .turnNavButton:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.turnNavButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.turnMark {
+  width: 8px;
+  height: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: var(--dsw-alias-border-l2);
+  cursor: pointer;
+}
+
+.turnMark[data-active="true"] {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+@media (hover: hover) {
+  .turnMark:hover {
+    background: var(--dsw-alias-label-tertiary);
+  }
+}
+
+/* ---- Feedback form ----------------------------------------------------- */
+
+.dialogForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 260px;
+}
+
+.dialogField {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dialogSelect {
+  height: 30px;
+  padding: 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.dialogTextarea {
+  min-height: 88px;
+  padding: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+  resize: vertical;
+}

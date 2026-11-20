@@ -1,0 +1,369 @@
+/* 流量页（A08）。只用 --dsw-* 语义变量。 */
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.advanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.rangeRow {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tableWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.selectionBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 0.5px solid var(--dsw-alias-border-selected);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-multi-select);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.scrollX {
+  overflow-x: auto;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--dsw-font-xxs-12, 12px);
+}
+
+.table thead th {
+  padding: 7px 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-tertiary);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: 7px 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-primary);
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (hover: hover) {
+  .table tbody tr:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.rowSelected {
+  background: var(--dsw-alias-bg-multi-select);
+}
+
+.checkCell {
+  width: 34px;
+  padding-left: 10px;
+}
+
+/* P2:K1 每行「预览」列：宽度随按钮，不参与数字列的对齐。 */
+.actionCell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--ds-font-family-code);
+}
+
+.urlCell {
+  max-width: 460px;
+}
+
+.urlButton {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-state-business-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .urlButton:hover {
+    text-decoration: underline;
+  }
+}
+
+.urlText {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.captureLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.captureMeta {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.warnLine {
+  margin: 0 0 10px;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.hintLine {
+  margin: 0 0 10px;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.errorLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.hostActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.hostList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.hostRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+}
+
+@media (hover: hover) {
+  .hostRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.hostName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-primary);
+}
+
+.detailWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rawBox {
+  max-height: 60vh;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.time {
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 关联到漏洞弹窗（A13）。 */
+.linkWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.findingList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.findingRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .findingRow:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.findingRow:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.findingRowActive {
+  border-color: var(--dsw-alias-border-selected);
+  background: var(--dsw-alias-bg-multi-select);
+}
+
+.findingHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.findingTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.findingTags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.findingSummary {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-word;
+}
+
+.pageInfo {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 流量选择弹窗（A12）。 */
+.pickerWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pickerTag {
+  margin-left: 6px;
+}

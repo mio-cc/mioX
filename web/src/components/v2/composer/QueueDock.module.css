@@ -1,0 +1,159 @@
+/**
+ * Queued-submission dock styles.
+ *
+ * Sits inside the composer card above the draft, as a quiet inset strip: the
+ * same `--dsw-*` semantic aliases the rest of the card uses. Metrics follow the
+ * source (`QueueDock.module.css:61-135,205-247`): a 36px header button
+ * (`padding: 4px 12px`, `gap: 10px`), a 13px/500 count line, 36px rows
+ * (`padding: 4px 5px 4px 12px`, `gap: 10px`), a 180px list cap, and the 28px
+ * remove action (0.45 opacity while disabled). The source's panel chrome
+ * (floating menu fill + backdrop blur + attached top radius) is not copied
+ * because this dock lives inside the card instead of docking above it.
+ */
+
+.dock {
+  min-width: 0;
+  margin: 0 8px;
+  padding: 2px 4px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+/* mioX hold notice: the stopped turn kept the rows. */
+.held {
+  padding: 0 12px 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.header {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 4px 12px;
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.header:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.lead {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.count {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 24px;
+}
+
+.chevron {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.status {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.list {
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 5px 4px 12px;
+  border-radius: var(--dsw-radius-md);
+  color: var(--dsw-alias-label-primary-dimmed);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.row + .row {
+  box-shadow: inset 0 1px 0 var(--dsw-alias-border-l1);
+}
+
+.preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* 28px circular action, as the source's row actions (`QueueDock.module.css` .action). */
+.remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.remove:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .remove:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.remove:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

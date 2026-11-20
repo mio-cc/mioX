@@ -1,0 +1,57 @@
+/* 资产表（D8）：勾选列 + 各类型列 + 行内删除。颜色/边框只用 --dsw-* 变量。 */
+
+.wrap {
+  overflow-x: auto;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.th {
+  padding: 8px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  text-align: left;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.td {
+  padding: 9px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tdMuted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.emptyCell {
+  padding: 28px 12px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowSelected {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.colCheck {
+  width: 28px;
+  padding-right: 0;
+}
+
+.colAction {
+  width: 32px;
+  padding-left: 0;
+}

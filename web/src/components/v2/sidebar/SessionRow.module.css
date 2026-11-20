@@ -1,0 +1,359 @@
+/* Sidebar task row. One line for the title, an optional second line for the
+   status word and two or three useful counts. Status is a colored dot on the
+   first line and an inked word on the second — a full Tag on a 264px row
+   truncated every title. Menu trigger floats over the time on hover/focus. */
+
+.row {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: var(--dsw-radius-md);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+  outline: none;
+  transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.row:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-alias-border-selected);
+  outline-offset: -2px;
+}
+
+.row:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+/* Persistent selection: a stronger fill than hover so the two never read alike
+   (DSH review case S1: selection beside temporary hover). */
+.rowActive {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .rowActive:hover {
+    background: var(--dsw-alias-interactive-bg-active);
+  }
+}
+
+.rowActive .label {
+  font-weight: 500;
+}
+
+/* Two-line variant: title line + status/summary line. */
+.rowTall {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  padding: 6px 9px 6px;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* ---- Status dot ---------------------------------------------------------- */
+
+.statusDot {
+  position: relative;
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.tone_success {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.tone_info {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.tone_warning {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.tone_danger {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.tone_neutral {
+  background: var(--dsw-alias-label-tertiary);
+}
+
+/* A running task's dot breathes, so live work is visible at a glance. */
+.statusDotLive::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: inherit;
+  opacity: 0.35;
+  animation: row-live 1.6s var(--ds-ease-in-out) infinite;
+}
+
+@keyframes row-live {
+  0%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.35;
+  }
+
+  50% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.dot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.pin {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.time {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  transition: opacity var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+/* Row menu trigger: floats over the time stamp; shown on hover, keyboard focus,
+   or while its menu is open. */
+.more {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  box-shadow: var(--dsw-elevation-stroke);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.row:not(.rowTall) .more {
+  top: 5px;
+}
+
+.row:focus-within .more,
+.more[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.row:focus-within .time,
+.row:has(.more[aria-expanded="true"]) .time {
+  opacity: 0;
+}
+
+@media (hover: hover) {
+  .row:hover .more {
+    opacity: 1;
+  }
+
+  .row:hover .time {
+    opacity: 0;
+  }
+
+  .more:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+@media (hover: none) {
+  .more {
+    opacity: 1;
+  }
+
+  .time {
+    display: none;
+  }
+}
+
+/* ---- Second line --------------------------------------------------------- */
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.metaStatus {
+  flex: 0 0 auto;
+  font-weight: 500;
+}
+
+.ink_success {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.ink_info {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.ink_warning {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.ink_danger {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.ink_neutral {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.metaItem {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.metaItem::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- Rename / archive dialogs ------------------------------------------- */
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.stopped {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.stoppedLabel {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stoppedRow {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.danger {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-border-l2);
+}
+
+/* ---- C10 P1:A16 multi-select ------------------------------------------- */
+
+.checkSeat {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.rowCheck {
+  gap: 0;
+}
+
+.rowCheck input {
+  width: 14px;
+  height: 14px;
+}
+
+.rowSelected {
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .more,
+  .time {
+    transition: none;
+  }
+
+  .statusDotLive::after {
+    animation: none;
+  }
+}

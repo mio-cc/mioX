@@ -1,0 +1,126 @@
+/* 车道下拉（P1:B25 / P1:B27 / P1:B28）：tab 行右端一个 24px 高的触发器，
+   菜单由 DSH `Menu` 本体绘制（`102-UI-UX规范.md` §3–§5：浮层外观归 Menu，
+   这里只给宽度与行内排版）。只用 --dsw-* token；字号只用 11/12/13 档并配行高。 */
+.laneMenuWrap {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  margin-left: auto;
+}
+
+.laneAnchor {
+  flex: none;
+}
+
+/* 紧凑控件（H24）→ --dsw-radius-sm（规范 §3）。与同一会话头里的计划模式按钮
+   （ConversationRoot.module.css `.planChip`）同一套语言：无边框、透明底、悬停/展开
+   才出填充——一行里只该有一种控件材质（规范 §6.2 同角色同外观）。 */
+.laneTrigger {
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 4px;
+  max-width: 168px;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .laneTrigger:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.laneTrigger[aria-expanded="true"] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.laneTrigger:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.laneValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.laneChevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 120ms ease;
+}
+
+.laneTrigger[aria-expanded="true"] .laneChevron {
+  transform: rotate(180deg);
+}
+
+/* 宽度钩子；卡片材质、圆角、阴影由 Menu 组件自己决定（规范 §4）。 */
+.laneMenu {
+  width: 280px;
+  max-width: calc(100vw - 24px);
+  max-height: min(440px, calc(100vh - 120px));
+}
+
+/* 具体车道行：标题 + 状态，两者同一行、超出截断。 */
+.laneRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.laneRowTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.laneRowState {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* 车道列表三态（规范 §8）：读取中 / 失败 / 空，统一块内居中。 */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  text-align: center;
+}
+
+.stateTitle {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.stateText {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.stateError {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}

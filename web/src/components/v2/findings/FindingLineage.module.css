@@ -1,0 +1,50 @@
+/* 发现链路图（A14）。只用 --dsw-* 语义变量。 */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.state {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateError {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 0;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.hint {
+  margin-left: auto;
+}
+
+.canvas {
+  height: 380px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-2);
+}

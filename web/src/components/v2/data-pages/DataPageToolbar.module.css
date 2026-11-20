@@ -1,0 +1,87 @@
+/**
+ * Data page toolbar: geometry from ui-lab DataPages.module.css:8-96 (title/lead
+ * block, 30px hairline-bordered actions and filter field), search internals from
+ * DSH ui-trajectory TrajectoryToolbar.module.css:181-230 (icon + borderless
+ * input, focus-within border). Tokens only.
+ */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.lead {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headActions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 10px;
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 280px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.filter:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.filterIcon {
+  flex: none;
+}
+
+.filterInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.filterInput::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.filterInput::-webkit-search-cancel-button {
+  width: 12px;
+  height: 12px;
+  cursor: pointer;
+}
+
+.count {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}

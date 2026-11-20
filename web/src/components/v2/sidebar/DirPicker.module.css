@@ -1,0 +1,100 @@
+/* 工作目录选择器（A05）。只用 --dsw-* 语义变量。 */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  font-family: var(--dsw-font-family);
+  color: var(--dsw-alias-label-primary);
+}
+
+.pathRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pathInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  outline: none;
+}
+
+.current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.roots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rootChip {
+  padding: 3px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  cursor: pointer;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.entry {
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: var(--dsw-font-xs-13, 13px);
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .entry:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.hint {
+  padding: 10px 8px;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.errorLine {
+  padding: 8px;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-state-error-primary);
+  word-break: break-word;
+}

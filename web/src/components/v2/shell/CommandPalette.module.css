@@ -1,0 +1,102 @@
+/* 命令面板（P1:E5）：搜索结果列表、键盘选中行与底部提示行。
+   只用 --dsw-* 变量（总表 §6），不含颜色字面量。 */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  /* 面板固定一个舒适宽度：结果行是「名称 + 右侧提示」两栏。 */
+  width: min(560px, 70vw);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+
+/* 分组标题行（页面 / 任务）：与侧栏分组标题同款小字三级色。 */
+.groupLabel {
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowActive {
+  background: var(--dsw-alias-bg-multi-select);
+}
+
+.rowLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowHint {
+  flex: 0 0 auto;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.empty {
+  padding: 18px 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* 任务列表还没就绪时的真实状态（读取中 / 未连接），不伪装成「没有任务」。 */
+.phase {
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.keys {
+  color: var(--dsw-alias-label-tertiary);
+}

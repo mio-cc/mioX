@@ -1,0 +1,932 @@
+/* Trajectory View 鈥?structure mirrors `ui-trajectory/src/client`:
+   - views.module.css:5-31        root/ledger host
+   - TrajectoryToolbar.module.css sticky 32px toolbar
+   - TrajectoryTimeline.module.css 44px labels + 3脳14px lanes overview
+   - TrajectoryTable.module.css:101-161 30px two-column ledger rows
+   - TrajectoryTable.module.css:888-1045 details split and its tab strip
+   ARTEX adds a wall-clock column to each ledger row (activity rows only carry
+   timestamps, not per-request durations). */
+
+.root {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.placeholder {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- toolbar (TrajectoryToolbar.module.css:1-230) ---- */
+
+.toolbar {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 4px 8px;
+  gap: 4px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.toolbarActions {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbarButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  gap: 4px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  cursor: pointer;
+  font: var(--dsw-font-xxs-12);
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .toolbarButton:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.toolbarButton[aria-pressed="true"] {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.toolbarButton:focus-visible {
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.toolbarCount {
+  flex: none;
+  padding-left: 4px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.search {
+  display: flex;
+  flex: 0 1 164px;
+  align-items: center;
+  min-width: 84px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 6px;
+  gap: 4px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-caption);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+@media (hover: hover) {
+  .search:hover {
+    border-color: var(--dsw-alias-label-caption);
+  }
+}
+
+.search:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.searchIcon {
+  flex: none;
+}
+
+.searchInput {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  font: var(--dsw-font-xxs-12);
+}
+
+.searchInput::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.matchCount {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+/* ---- overview timeline (TrajectoryTimeline.module.css:1-154) ---- */
+
+.timeline {
+  display: grid;
+  flex: none;
+  grid-template-columns: 44px minmax(0, 1fr);
+  height: 50px;
+  overflow: hidden;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+  user-select: none;
+}
+
+.laneLabels {
+  position: relative;
+  border-right: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-caption);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.laneLabels span {
+  position: absolute;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 8px;
+  text-align: right;
+}
+
+.laneLabels span:nth-child(1) {
+  top: 7px;
+}
+
+.laneLabels span:nth-child(2) {
+  top: 21px;
+}
+
+.laneLabels span:nth-child(3) {
+  top: 35px;
+}
+
+.timelineTrack {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.boundary {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--trajectory-turn-left);
+  width: 0.5px;
+  background: var(--dsw-alias-border-l2);
+  pointer-events: none;
+}
+
+.timelineSpan {
+  position: absolute;
+  top: calc(var(--trajectory-span-lane) * 14px + 7px);
+  left: var(--trajectory-span-left);
+  width: max(2px, var(--trajectory-span-width));
+  min-width: 2px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  background: var(--dsw-alias-label-secondary);
+  opacity: 0.78;
+  cursor: pointer;
+}
+
+.timelineSpan[data-kind="user"] {
+  background: var(--dsw-alias-state-business-primary);
+  opacity: 1;
+}
+
+.timelineSpan[data-kind="text"],
+.timelineSpan[data-kind="result"] {
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-brand-primary-new-colorprimary-new-color) 62%,
+    var(--dsw-alias-state-error-primary)
+  );
+  opacity: 1;
+}
+
+.timelineSpan[data-kind="thinking"] {
+  background: color-mix(in srgb, var(--dsw-alias-label-secondary) 72%, var(--dsw-alias-border-l2));
+  opacity: 1;
+}
+
+.timelineSpan[data-kind="tool_use"],
+.timelineSpan[data-kind="tool_result"] {
+  background: var(--dsw-alias-state-warn-label);
+  opacity: 1;
+}
+
+.timelineSpan[data-kind="intent"],
+.timelineSpan[data-kind="plan"] {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 68%, var(--dsw-alias-label-secondary));
+  opacity: 1;
+}
+
+.timelineSpan[data-kind="intercept_request"],
+.timelineSpan[data-kind="plan_review"] {
+  background: var(--dsw-alias-state-warn-label);
+  opacity: 1;
+}
+
+.timelineSpan[data-kind="llm_switch"],
+.timelineSpan[data-kind="llm_failover"] {
+  background: var(--dsw-alias-label-tertiary);
+  opacity: 1;
+}
+
+.timelineSpan[data-error="true"] {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.timelineSpan[data-match="false"] {
+  opacity: 0.14;
+}
+
+@media (hover: hover) {
+  .timelineSpan:hover {
+    z-index: 2;
+    opacity: 1;
+    box-shadow:
+      0 0 0 1px var(--dsw-alias-bg-layer-2),
+      0 0 0 2px var(--dsw-alias-state-business-primary);
+  }
+}
+
+.timelineSpan[data-selected="true"] {
+  z-index: 1;
+  opacity: 1;
+  box-shadow:
+    0 0 0 1px var(--dsw-alias-bg-layer-2),
+    0 0 0 2px var(--dsw-alias-state-business-primary);
+}
+
+.timelineSpan:focus-visible {
+  z-index: 2;
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* ---- ledger / details split (TrajectoryTable.module.css:1-23, 888-899) ---- */
+
+.split {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+/* The ledger scrollport and its floating "back to latest" chip. */
+.tableViewport {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tablePane {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+
+/* Chat-style jump chip (ThreadView.module.css `.jumpLatest`): floats over the
+   ledger while the reader is away from the floor. */
+.jumpLatest {
+  position: absolute;
+  z-index: 4;
+  right: 16px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 10px;
+  gap: 4px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-panel);
+  cursor: pointer;
+  font: var(--dsw-font-xs-13);
+}
+
+@media (hover: hover) {
+  .jumpLatest:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.jumpLatest:focus-visible {
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+.turn {
+  width: 100%;
+}
+
+.turn + .turn {
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+/* Sticky turn bar: the whole bar is the fold control, so its aria-expanded is
+   the one the row of headers reports. Button chrome is reset here. */
+.turnHeader {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 10px 0 4px;
+  gap: 8px;
+  border: 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  color: inherit;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: inset 2px 0 0 var(--dsw-alias-trajectory-accent);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  appearance: none;
+}
+
+@media (hover: hover) {
+  .turnHeader:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.turnHeader:disabled {
+  cursor: default;
+}
+
+.turnHeader:focus-visible {
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.turnToggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 22px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.turnTitle {
+  flex: none;
+  max-width: 42%;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.turnDescription {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.turnMetrics {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.turnMetric {
+  white-space: nowrap;
+}
+
+.turnBody {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 30px ledger row: kind tag | content | wall clock | disclosure. */
+.row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 58px 14px;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  padding: 0 10px 0 6px;
+  gap: 8px;
+  border: 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  cursor: pointer;
+  font: var(--dsw-font-xxs-12);
+  text-align: left;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.row[data-selected="true"] {
+  background: var(--dsw-alias-interactive-bg-active);
+  box-shadow: inset 3px 0 0 var(--dsw-alias-state-business-primary);
+}
+
+.row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+}
+
+.kindCell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.kindTag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  height: 19px;
+  padding: 0 5px;
+  gap: 4px;
+  border-radius: var(--dsw-radius-xs);
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  line-height: 16px;
+  user-select: none;
+}
+
+.kindTag[data-kind="user"] {
+  color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 82%, var(--dsw-alias-label-tertiary));
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, var(--dsw-alias-bg-layer-1));
+}
+
+.kindTag[data-kind="text"],
+.kindTag[data-kind="result"] {
+  color: color-mix(
+    in srgb,
+    var(--dsw-alias-brand-primary-new-colorprimary-new-color) 62%,
+    var(--dsw-alias-label-tertiary)
+  );
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-brand-primary-new-colorprimary-new-color) 10%,
+    var(--dsw-alias-bg-layer-1)
+  );
+}
+
+.kindTag[data-kind="thinking"] {
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.kindTag[data-kind="tool_use"],
+.kindTag[data-kind="tool_result"] {
+  color: color-mix(in srgb, var(--dsw-alias-state-warn-label) 72%, var(--dsw-alias-label-tertiary));
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-tertiary) 58%, var(--dsw-alias-bg-layer-1));
+}
+
+.kindTag[data-kind="intent"],
+.kindTag[data-kind="plan"] {
+  color: color-mix(in srgb, var(--dsw-alias-state-success-primary) 72%, var(--dsw-alias-label-tertiary));
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, var(--dsw-alias-bg-layer-1));
+}
+
+.kindTag[data-kind="intercept_request"],
+.kindTag[data-kind="plan_review"],
+.kindTag[data-kind="llm_switch"],
+.kindTag[data-kind="llm_failover"] {
+  color: color-mix(in srgb, var(--dsw-alias-state-warn-label) 72%, var(--dsw-alias-label-tertiary));
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-tertiary) 58%, var(--dsw-alias-bg-layer-1));
+}
+
+.kindIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+}
+
+.kindLabel {
+  display: inline-block;
+  max-width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowContent {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.rowText {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row[data-kind="thinking"] .rowText {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.row[data-kind="intent"] .rowText,
+.row[data-kind="plan"] .rowText,
+.row[data-kind="plan_review"] .rowText {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.row[data-kind="tool_result"] .rowText {
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.toolName {
+  flex: none;
+  color: var(--dsw-alias-label-primary);
+  font: 500 12px / 18px var(--ds-font-family-code);
+}
+
+.toolArgs {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowResult {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: baseline;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.rowArrow {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+}
+
+.rowResultText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row[data-error="true"] .rowResult {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.rowTime {
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rowDisclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dsw-alias-label-caption);
+  opacity: 0;
+  transition: opacity 120ms var(--ds-ease-in-out);
+}
+
+@media (hover: hover) {
+  .row:hover .rowDisclosure {
+    opacity: 1;
+  }
+}
+
+.row[data-selected="true"] .rowDisclosure,
+.row:focus-visible .rowDisclosure {
+  opacity: 1;
+}
+
+.noMatches {
+  padding: 28px 16px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+  text-align: center;
+}
+
+/* ---- details pane (TrajectoryTable.module.css:888-1093) ---- */
+
+.details {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: clamp(300px, 34%, 420px);
+  min-width: 0;
+  min-height: 0;
+  border-left: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+@container (max-width: 620px) {
+  .details {
+    position: absolute;
+    z-index: 6;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(420px, 100%);
+    box-shadow: var(--dsw-elevation-panel);
+  }
+}
+
+.detailsHeader {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 6px 0 12px;
+  gap: 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.detailsTitle {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.detailsLocation {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font: 11px / 16px var(--ds-font-family-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .close:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.close:focus-visible,
+.detailTab:focus-visible {
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.detailTabs {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  gap: 1px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  white-space: nowrap;
+}
+
+.detailTab {
+  position: relative;
+  flex: none;
+  padding: 0 9px;
+  border: 0;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  cursor: pointer;
+  font: var(--dsw-font-xs-13);
+}
+
+@media (hover: hover) {
+  .detailTab:hover {
+    color: var(--dsw-alias-label-primary);
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.detailTabActive {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.detailTabActive::after {
+  position: absolute;
+  right: 9px;
+  bottom: 0;
+  left: 9px;
+  height: 2px;
+  border-radius: 1px 1px 0 0;
+  background: var(--dsw-alias-state-business-primary);
+  content: "";
+}
+
+.detailBody {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+.overview {
+  margin: 0;
+  padding: 6px 0;
+  font: var(--dsw-font-xxs-12);
+}
+
+.overview > div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  min-height: 22px;
+  padding: 0 12px;
+  gap: 8px;
+}
+
+.overview dt {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.overview dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailSection {
+  padding: 2px 12px 8px;
+}
+
+.detailHeading {
+  margin: 8px 0 4px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-strong-13);
+  user-select: none;
+}
+
+.detailPre {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 420px;
+  overflow: auto;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.muted {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.monospace {
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Narrow hosts: drop the kind label, keep the icon + content. */
+@container (max-width: 620px) {
+  .row {
+    grid-template-columns: 26px minmax(0, 1fr) 50px 12px;
+    padding-right: 8px;
+  }
+
+  .kindTag {
+    justify-content: center;
+    padding: 0 3px;
+  }
+
+  .kindLabel {
+    display: none;
+  }
+
+  .turnDescription {
+    display: none;
+  }
+
+  .turnMetrics {
+    gap: 7px;
+  }
+}

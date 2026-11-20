@@ -7,6 +7,11 @@
 :root {
   /* surfaces */
   --ax-bg-canvas: #ffffff;
+  /* Alias: 22 call sites use --ax-bg-base but it was never defined, so
+     `background: var(--ax-bg-base)` fell back to the UA default and
+     `color: var(--ax-bg-base)` left text the same shade as its surface
+     (invisible buttons). Alias to the canvas surface in both themes. */
+  --ax-bg-base: var(--ax-bg-canvas);
   --ax-bg-subtle: #f7f8fa;
   --ax-bg-surface: #ffffff;
   --ax-bg-elevated: #ffffff;

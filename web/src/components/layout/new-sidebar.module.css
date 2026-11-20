@@ -414,10 +414,9 @@
   background: var(--ax-bg-subtle);
 }
 
-/* 卡7: 轨道态设置/账户按钮只显图标（DSH rail 36px 触发语义） */
-.root.collapsed .footerGrow {
-  display: none;
-}
+/* 卡7: 轨道态设置/账户按钮只显图标（DSH rail 36px 触发语义）。
+   维护者反馈：按钮文字不能丢——取消隐藏，轨道态保持文字。 */
+/* .root.collapsed .footerGrow { display: none; } */
 
 /* 卡3: 新建任务行 + 添加工作区按钮 */
 .newTaskRow {
@@ -435,14 +434,20 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
+  gap: 4px;
   height: 28px;
+  padding: 0 6px;
   border: none;
   border-radius: 6px;
   background: none;
   color: var(--ax-text-tertiary);
+  font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.addWorkspaceLabel {
+  font-size: 12px;
 }
 
 .addWorkspace:hover {
@@ -450,16 +455,12 @@
   background: var(--ax-bg-subtle);
 }
 
-.root.collapsed .footer {
-  align-items: center;
-}
-
-.root.collapsed .footerRow {
+/* Rail: the add-workspace control collapses to a 28x28 icon like its neighbours. */
+.collapsed .addWorkspace {
+  width: 28px;
+  padding: 0;
   justify-content: center;
-  width: 36px;
 }
-
-
 
 .taskRow {
   height: 32px;
@@ -1060,7 +1061,8 @@
 .collapsed .taskScroll,
 .collapsed .quickLabel,
 .collapsed .menuChevron,
-.collapsed .footerGrow {
+.collapsed .footerGrow,
+.collapsed .addWorkspaceLabel {
   display: none;
 }
 

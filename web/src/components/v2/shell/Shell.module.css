@@ -1,0 +1,890 @@
+/* /v2 shell: sidebar / main / right column.
+   Geometry and motion follow DSH's frame (`ui-layout/src/client/AppFrame.module.css`)
+   and sidebar (`ui-sidebar/src/client/SidebarRoot.module.css`): the columns ease
+   their width on discrete open/close (300ms, --ds-ease-in-out), content inside a
+   closing column keeps its width and is clipped rather than reflowed, and every
+   transition is dropped under prefers-reduced-motion. */
+
+.root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-family);
+}
+
+/* ---- Sidebar column ---------------------------------------------------- */
+
+/* The column owns three stacked regions: a fixed top (brand, new session,
+   launchers), the workspace region that takes every remaining pixel and scrolls
+   on its own, and a fixed foot (theme, settings). Width eases on collapse. */
+.sidebar {
+  --shell-sidebar-pad: 8px;
+
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  padding: 6px var(--shell-sidebar-pad) 8px;
+  overflow: hidden;
+  background: var(--dsw-specific-sidebar-fill);
+  border-right: 0.5px solid var(--dsw-alias-border-l3);
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.sidebarRail {
+  --shell-sidebar-pad: 10px;
+
+  align-items: center;
+}
+
+/* Collapsing phase: the track already eases to the rail width while the wide
+   content stays mounted at its frozen width; the labels fade out on the way so
+   nothing reflows mid-slide (DSH `SidebarRoot.module.css:141-152`). */
+.sidebarCollapsing .navLabel,
+.sidebarCollapsing .brandName,
+.sidebarCollapsing .wsRow,
+.sidebarCollapsing .region,
+.sidebarCollapsing .newSessionBtn > span {
+  opacity: 0;
+  transition: opacity var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.brandRow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 52px;
+  padding: 0 4px 0 8px;
+  box-sizing: border-box;
+}
+
+.sidebarRail .brandRow {
+  justify-content: center;
+  padding: 0;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.brandName {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .iconBtn:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* Rail toggle: the brand mark at rest; hovering swaps in the panel icon, the
+   expand affordance (DSH `SidebarRoot.tsx:281-305`). */
+.railToggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.railMark,
+.railPanelIcon {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.railPanelIcon {
+  opacity: 0;
+}
+
+.railToggle:focus-visible .railMark {
+  opacity: 0;
+}
+
+.railToggle:focus-visible .railPanelIcon {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .railToggle:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .railToggle:hover .railMark {
+    opacity: 0;
+  }
+
+  .railToggle:hover .railPanelIcon {
+    opacity: 1;
+  }
+}
+
+/* ---- New session -------------------------------------------------------- */
+
+.newSessionRow {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.sidebarRail .newSessionRow {
+  margin-top: 6px;
+}
+
+/* DSH `.newSession` (`SidebarRoot.module.css:434`): 38px, radius-md, elevated fill. */
+.newSessionBtn {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.sidebarRail .newSessionBtn {
+  flex: none;
+  width: 36px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+@media (hover: hover) {
+  .newSessionBtn:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.newSessionIconBtn {
+  flex: 0 0 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .newSessionIconBtn:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* ---- Launchers (插件 / 页面 / the page on screen) ------------------------ */
+
+.nav {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+}
+
+.sidebarRail .nav {
+  align-items: center;
+  gap: 4px;
+}
+
+/* DSH `.panelRow` (`SidebarRoot.module.css:708-726`): 32px, radius-md, primary
+   ink, 22px line box. On the rail it is a 36px square around an 18px glyph. */
+.navRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 22px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.sidebarRail .navRow {
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+@media (hover: hover) {
+  .navRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.navRow:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-alias-border-selected);
+  outline-offset: -2px;
+}
+
+.navRowOpen {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* The page on screen: persistent selection fill (DSH `.panelEntryActive`). */
+.navRowActive {
+  background: var(--dsw-alias-interactive-bg-active);
+  font-weight: 500;
+}
+
+.navIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.navRowActive .navIcon {
+  color: var(--dsw-alias-label-primary);
+}
+
+.navLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navHint {
+  flex: none;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 「回到会话」 inside the on-screen page row: hidden until the row is hovered or focused. */
+.navClose {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0;
+  transition: opacity var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.navRow:focus-within .navClose,
+.navClose:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .navRow:hover .navClose {
+    opacity: 1;
+  }
+
+  .navClose:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.pagesAnchor {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarRail .pagesAnchor {
+  align-items: center;
+}
+
+.pagesMenu {
+  width: 232px;
+  max-height: min(560px, calc(100vh - 48px));
+}
+
+/* ---- Workspace region --------------------------------------------------- */
+
+/* The region takes every remaining pixel of the column. Its head stays put;
+   only the body scrolls, so the current / archived switch and the tools are
+   always reachable no matter how long the list is. */
+.region {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.railSpacer {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.regionHead {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+
+.regionBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--shell-sidebar-pad));
+  padding: 0 var(--shell-sidebar-pad) 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+
+.wsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 26px;
+  padding: 0 2px 0 9px;
+}
+
+.wsTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.wsActions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.wsIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  transition:
+    background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.wsIconBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.wsIconBtnOn {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .wsIconBtn:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.wsIconBtn:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-alias-border-selected);
+  outline-offset: -2px;
+}
+
+/* Search row: leading glyph, input, inline clear control. */
+.searchField {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+  animation: shell-reveal var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.searchField:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.sessionSearch {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  outline: none;
+}
+
+.searchClear {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.detailSeat {
+  flex: none;
+  max-height: 46%;
+  margin-bottom: 8px;
+  overflow-y: auto;
+  animation: shell-reveal var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.offlineRow {
+  padding: 10px 9px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.emptyRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 16px 9px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.showAll {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .showAll:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.linkBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-state-business-primary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .linkBtn:hover {
+    text-decoration: underline;
+  }
+}
+
+/* ---- Foot ----------------------------------------------------------------- */
+
+.footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.sidebarRail .footer {
+  align-items: center;
+  border-top-color: transparent;
+}
+
+.settingsRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settingsRow > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sidebarRail .settingsRow {
+  flex-direction: column;
+}
+
+/* 「有新版本」徽标：小圆点 + 版本号文字，点击打开设置的通用页。
+   旧页把呼吸点放在顶栏（旧:_components/update-badge.tsx:48-55）；这里做成静态圆点，
+   因为 /v2 顶栏由 ConversationRoot 拥有，Shell 只在侧栏占位（见 overlay note）。 */
+.updateDotBtn {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: none;
+  color: var(--dsw-alias-state-warn-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .updateDotBtn:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.updateDotBtnRail {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .updateDotBtnRail:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.updateDot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.updateDotText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Main column ---------------------------------------------------------- */
+
+.main {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Main-area page: replaces the Conversation column and owns its scroll.
+   版心 1200px：≤1280 宽仍是 40px 边距，更宽时内容居中。 */
+.mainPage {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 32px max(40px, calc((100% - 1200px) / 2)) 60px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-family);
+  animation: shell-fade-in var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+/* ---- Right column --------------------------------------------------------- */
+
+/* The column eases its width; its inner panel keeps the open width so a
+   closing panel is clipped, not reflowed (DSH freezes content the same way). */
+.rightWrap {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-start;
+  overflow: hidden;
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.rightWrapClosed {
+  border-left-color: transparent;
+}
+
+.rightInner {
+  flex: none;
+  display: flex;
+  height: 100%;
+  min-width: 0;
+}
+
+.rightInner > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Below 1024 the right panel is an overlay sheet sliding in from the right. */
+.sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 70;
+  display: flex;
+  max-width: calc(100vw - 48px);
+  background: var(--dsw-alias-bg-base);
+  box-shadow: var(--dsw-elevation-prominent);
+  transform: translateX(100%);
+  visibility: hidden;
+  transition:
+    transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    visibility 0s linear var(--ds-transition-duration-slow);
+}
+
+.sheet > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sheetOpen {
+  transform: none;
+  visibility: visible;
+  transition:
+    transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    visibility 0s;
+}
+
+.sheetMask {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  background: var(--dsw-alias-bg-mask-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.sheetMaskOpen {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---- Sidebar drawer (<768) ------------------------------------------------ */
+
+.drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 60;
+  width: 280px;
+  box-shadow: var(--dsw-elevation-prominent);
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition:
+    transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    visibility 0s linear var(--ds-transition-duration-slow);
+}
+
+.drawerOpen {
+  transform: none;
+  visibility: visible;
+  transition:
+    transform var(--ds-transition-duration-slow) var(--ds-ease-in-out),
+    visibility 0s;
+}
+
+.drawer > aside {
+  height: 100%;
+}
+
+.mask {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: var(--dsw-alias-bg-mask-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.maskOpen {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---- Motion --------------------------------------------------------------- */
+
+@keyframes shell-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shell-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .rightWrap,
+  .sheet,
+  .sheetOpen,
+  .sheetMask,
+  .drawer,
+  .drawerOpen,
+  .mask,
+  .navRow,
+  .navClose,
+  .newSessionBtn,
+  .wsIconBtn,
+  .railMark,
+  .railPanelIcon {
+    transition: none;
+  }
+
+  .searchField,
+  .detailSeat,
+  .mainPage {
+    animation: none;
+  }
+}

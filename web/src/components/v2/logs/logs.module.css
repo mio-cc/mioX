@@ -1,0 +1,240 @@
+/**
+ * 系统日志页。几何照抄 `components/v2/workspace/workspace.module.css:8-48`
+ * （标题 + 说明 + 右侧动作）与 `data-pages/*.module.css` 的状态块写法；
+ * 日志列表用等宽字体。主区在右栏打开时只有约 513px 宽，工具条与每行都允许换行、
+ * 正文 `overflow-wrap: anywhere`，不产生横向滚动（总表 §4.1 第 4 步）。
+ * 只使用 --dsw-* 变量。
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.lead {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.filterBar > :first-child {
+  flex: 1 1 220px;
+  min-width: 160px;
+}
+
+.levelGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.pauseGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.pauseLabel {
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.summaryTotal {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.summaryWarn {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.summaryError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.summaryFiltered {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.errorLine {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.olderRow {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: 62vh;
+  padding: 6px 2px;
+  overflow: auto;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  min-width: 0;
+  padding: 1px 6px;
+  border-radius: var(--dsw-radius-sm);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.dot[data-level="warn"] {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.dot[data-level="error"] {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.levelTag {
+  flex: none;
+}
+
+.tag {
+  flex: none;
+}
+
+.text {
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.row[data-logs-level="warn"] .text {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.row[data-logs-level="error"] .text {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateError {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 120px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 160px;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.emptyTitle {
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.emptyText {
+  max-width: 380px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}

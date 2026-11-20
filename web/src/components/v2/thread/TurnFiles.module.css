@@ -1,0 +1,127 @@
+/* Turn-level changed-files card (P1:B31). Tokens only — no literal colors. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.title {
+  color: var(--dsw-alias-label-primary);
+}
+
+.meta {
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.path {
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.count {
+  flex: 0 0 auto;
+  min-width: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  text-align: right;
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 6px 18px;
+}
+
+.stateLine {
+  margin: 0;
+  padding: 2px 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.stateError {
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.failRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.toggle {
+  align-self: flex-start;
+}

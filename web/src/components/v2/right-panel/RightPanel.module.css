@@ -1,0 +1,315 @@
+/*
+ * Right panel chrome: the pane layout, each pane's tab strip and the seam
+ * between two panes.
+ *
+ * Ported from the DSH right Sidebar, which owns no header of its own: each
+ * pane's tab strip is the top edge of that pane, and the panel chrome rides the
+ * top-right pane's strip end (`ui-sidebar-right SidebarRight.tsx:272-306`,
+ * `:370-373`). The split geometry follows the docking kit: panes share one grid
+ * row with a 0px divider column, so pane widths plus the painted seam are
+ * exactly the surface width (`ui-dockkit TabLayout.tsx:139-158`,
+ * `dockkit.module.css` `.tabLayout` / `.tabLayoutDivider`). Chip geometry
+ * matches `dockkit.module.css:239-291` for the strip and `:359-410` for a chip:
+ * a 38px row whose 28px chip band sits at its bottom, chips shrinking before
+ * any control moves. Tokens only.
+ *
+ * One deviation from the kit's chip: its 80px floor suits a few user-opened
+ * tabs with long titles, while mioX's seven pages are fixed and every label is
+ * two Han characters (规范 §0 B). The floor is 48px here, so the strip fits all
+ * seven at common widths; whatever still does not fit moves into the More
+ * launcher (`RightPanel.tsx`) instead of scrolling out of reach.
+ */
+
+.root {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* Fullscreen presentation: the panel leaves the column track and covers the
+   frame (`SidebarRight.tsx:9-15, :345-355` draws the same tree at the viewport
+   width). The DSH frame re-allocates the track itself; here the shell owns the
+   track, so a fixed box is the presentation that reaches the viewport without
+   changing the frame. `rightWrap` has `overflow: hidden` but no transform, so a
+   fixed descendant is positioned against the viewport. The layer sits above the
+   shell's drawer (60) and its mask (55). */
+.root[data-sidebar-right-panel="fullscreen"] {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* The pane row: one pane normally, two panes plus the 0px seam once split. */
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The split row is the kit's grid (`TabLayout.tsx:139-144`): equal-track panes
+   separated by a zero-width column that paints the divider over the seam. */
+.bodySplit {
+  display: grid;
+}
+
+/* One docked pane: its strip, then its page body. The kit's pane box
+   (`dockkit.module.css` `.pane`) is the same flex column with its own
+   background so the two panes read as separate surfaces. */
+.pane {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* The strip: 10px of air above the 28px chip band, so chips end flush with the
+   strip's bottom edge and every control centres on the band's centre line. */
+.strip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 10px 6px 0 10px;
+}
+
+/* The chips band takes the strip's free space so its measured width *is* the
+   width the chip budget divides (`RightPanel.tsx` `visibleChipLimit`), and the
+   More launcher and chrome controls after it stay `flex: none`. A narrow pane
+   still scrolls the chips if the budget is ever outstripped
+   (`dockkit.module.css:259-289`). */
+.chips {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+/* One page chip: bare text at rest, filled capsule while selected. The 48px
+   floor holds two 13px Han characters plus the 10px inset on each side; the
+   170px ceiling is the kit's, for a label that outgrows it. */
+.chip {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 48px;
+  max-width: 170px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .chip:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+/* The active chip is the filled page, in the tag fill (dockkit `.tabActive`). */
+.chipActive {
+  background: var(--dsw-alias-markdown-tag);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .chipActive:hover {
+    background: var(--dsw-alias-markdown-tag);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-selected);
+  outline-offset: 1px;
+}
+
+/* The More launcher for the pages the chip budget could not seat: the 22px
+   compact icon button the conversation header uses for its View tabs
+   (`ConversationRoot.module.css` `.viewsMore`), H20–28 → --dsw-radius-sm. */
+.moreAnchor {
+  flex: none;
+}
+
+.moreButton {
+  box-sizing: border-box;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.moreButton svg {
+  width: 13px;
+  height: 13px;
+}
+
+.moreButton[aria-expanded="true"] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The kit's empty spacer stays in the DOM as its seat, but the chips band now
+   owns the free space (see `.chips`), so this box paints nothing and takes
+   none. */
+.stripFill {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+/* The kit's chrome seat at the strip's end (`TabPanel.tsx:449-461`):
+   embedder controls, spaced from each other by the strip's own rhythm. */
+.stripChrome {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  margin-left: 4px;
+}
+
+/* A 28px circle around a 15px glyph: one strip-end control (`SidebarRight.tsx:134-158`
+   for the same box around the DSH controls). */
+.iconButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.iconButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-selected);
+  outline-offset: 1px;
+}
+
+/* A split the room rule refuses: drawn, untouchable, with the reason in its
+   label (`TabPanel.tsx:423-448` disables the kit control the same way). */
+.iconButton:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+/* The collapse glyph points back into the conversation, as in the DSH panel. */
+.collapseGlyph {
+  transform: scaleX(-1);
+}
+
+/* A pane's page area under its strip. The page inside owns its own scroll
+   region, so two panes scroll independently. */
+.paneBody {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* One mounted page: its own header, scroll region and empty states live inside. */
+.pageSlot {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The seam between two panes: a painted hairline in the 0px grid column, with
+   an 8px transparent hit band (`dockkit.module.css` `.tabLayoutDivider`:
+   `width: 0`, hairline on `::before`, `left/right: -4px` band on `::after`). */
+.splitDivider {
+  position: relative;
+  width: 0;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.splitDivider::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -0.25px;
+  width: 0.5px;
+  background: var(--dsw-alias-border-l3);
+}
+
+.splitDivider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+}
+
+.splitDivider:focus {
+  outline: none;
+}
+
+/* The drag affordance: the seam thickens to the selection colour while the
+   pointer is on it or the divider holds keyboard focus. */
+.splitDivider:focus-visible::before {
+  left: -1px;
+  width: 2px;
+  background: var(--dsw-alias-border-selected);
+}
+
+@media (hover: hover) {
+  .splitDivider:hover::before {
+    left: -1px;
+    width: 2px;
+    background: var(--dsw-alias-border-selected);
+  }
+}

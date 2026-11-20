@@ -1,0 +1,892 @@
+/**
+ * 总览页（主区整页 `?page=dashboard`）。
+ * 几何照抄 `components/v2/findings/FindingsDataPage.module.css:11-44` 的页头与工具条间距：
+ * 主区在右栏打开时只有约 513px 宽，所以 KPI 与两块一组的区块都用 wrap 网格，
+ * 任务表放在可横向滚动的容器里（总表 §4.1 第 4 步）。
+ * C03 追加的类在文件末尾（`.chartGrid` 起）：图表卡同样是 wrap 网格，宽度 100%，
+ * 窄主区纵向堆叠；每日趋势是内联 svg（`viewBox` 固定 + 宽度 100%）。
+ * 只使用 --dsw-* 变量，不写颜色字面量。
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.lead {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+/* ---- KPI 卡 ---- */
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kpiLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kpiValue {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 26px;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.kpiUnit {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kpiMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kpiError {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ---- 卡片 ---- */
+
+.pairGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px 14px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-base);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cardCount {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 四种状态 ---- */
+
+.state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateError {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 72px;
+  font-size: 12px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 72px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+/* ---- 活动流 ---- */
+
+.kindBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.activityList,
+.findingList,
+.pendingList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.activityRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 2px;
+  min-width: 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.activityMain {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.activityTitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activitySummary {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activityMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: none;
+  gap: 2px;
+}
+
+/* ---- 最近发现 ---- */
+
+.findingRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 2px;
+  border: 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.findingRow:hover,
+.findingRow:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+}
+
+.findingMain {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.findingTitle {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.findingTask,
+.findingSummary {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  flex: none;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- 最近任务表 ---- */
+
+.tableWrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.table thead th {
+  padding: 6px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: 7px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  vertical-align: middle;
+}
+
+@media (hover: hover) {
+  .table tbody tr:hover {
+    background: var(--dsw-alias-bg-layer-1);
+  }
+}
+
+.cellTask {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 180px;
+}
+
+.taskDesc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+}
+
+.cellNum {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cellTime {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.progressTrack {
+  display: inline-block;
+  width: 56px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.progressText {
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---- 系统状态 ---- */
+
+.statusList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.statusLabel {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.statusValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.pendingBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pendingHead {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.pendingRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-state-warn-tertiary);
+  min-width: 0;
+}
+
+.pendingTool {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.pendingAgent {
+  flex: none;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- 系统静态计数 ---- */
+
+.countGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.countItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.countItem dt {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.countItem dd {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.countSub {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- 通用小件 ---- */
+
+.mono {
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.dim {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.warn {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+/* ---- C03 图表区 ---- */
+
+/* 窄主区（右栏打开时约 513px）纵向堆叠；宽屏两列。每张卡宽度 100%，不横向溢出。 */
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.chartCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px 14px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-base);
+}
+
+.chartHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chartTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 工具条在窄主区里换行，不压扁分段控件。 */
+.chartTools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chartCount {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.chartHint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.chartFoot {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  padding-top: 6px;
+}
+
+/* ---- 条形图 ---- */
+
+.chartBars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.barGroupTitle {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  margin-top: 2px;
+}
+
+.barRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.barLabel {
+  flex: none;
+  width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.barTrack {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dsw-alias-label-tertiary);
+  transition: width 200ms ease;
+}
+
+.barFill[data-tone="info"] {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.barFill[data-tone="success"] {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.barFill[data-tone="warning"] {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.barFill[data-tone="danger"] {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.barFill[data-tone="neutral"] {
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.barValue {
+  flex: none;
+  min-width: 40px;
+  text-align: right;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- token 合计与三段占比 ---- */
+
+.tokenStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.tokenStat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.tokenStatLabel {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.tokenStatValue {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tokenStatMeta {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+/* ---- 每日趋势（内联 svg） ---- */
+
+.chartLegend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legendSwatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.legendSwatch[data-tone="input"] {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.legendSwatch[data-tone="output"] {
+  background: var(--dsw-alias-label-secondary);
+}
+
+.legendSwatch[data-tone="cacheRead"] {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.dailyChart {
+  display: block;
+  width: 100%;
+  height: 180px;
+  min-width: 0;
+}
+
+.chartAxis {
+  stroke: var(--dsw-alias-border-l1);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.chartBar {
+  opacity: 0.85;
+}
+
+.chartBar[data-tone="input"] {
+  fill: var(--dsw-alias-state-business-primary);
+}
+
+.chartBar[data-tone="output"] {
+  fill: var(--dsw-alias-label-secondary);
+}
+
+.chartBar[data-tone="cacheRead"] {
+  fill: var(--dsw-alias-state-success-primary);
+}
+
+.chartLine {
+  fill: none;
+  stroke: var(--dsw-alias-label-primary);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.chartTick {
+  fill: var(--dsw-alias-label-tertiary);
+  font-size: 9px;
+}
+
+/* ---- 流量状态码柱 ---- */
+
+.codeBars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+  height: 76px;
+  padding-top: 4px;
+}
+
+.codeBar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 0;
+  gap: 2px;
+  min-width: 0;
+  height: 100%;
+}
+
+.codeBarValue {
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.codeBarTrack {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 4px;
+}
+
+.codeBarTrack .barFill {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  transition: height 200ms ease;
+}
+
+/* ---- 最近请求 ---- */
+
+.trafficList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.trafficRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 2px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.trafficUrl {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+}
+

@@ -1,0 +1,65 @@
+/* 流量证据查看器（A11）。只用 --dsw-* 语义变量。 */
+
+.modalContent {
+  width: min(920px, calc(100vw - 48px));
+}
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.state {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateError {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-state-error-primary);
+  border-radius: var(--dsw-radius-sm);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-state-error-primary);
+  word-break: break-word;
+}
+
+.empty {
+  padding: 14px 0;
+  text-align: center;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.meta {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.body {
+  max-height: 56vh;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

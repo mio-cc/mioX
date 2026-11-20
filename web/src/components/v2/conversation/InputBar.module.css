@@ -1,0 +1,19 @@
+/**
+ * Composer bar shell inside the conversation seat.
+ *
+ * Mirrors `ui-conversation/src/client/skeleton/InputBar.module.css:1-34`: the
+ * bar centers the card horizontally, carries the side clearance, and owns the
+ * small bottom pad; the docked variant keeps a footer pad because ARTEX has no
+ * status strip below the card yet.
+ */
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 0 var(--dsh-composer-side-clearance, 16px) 14px;
+}
+
+.hero {
+  padding: 0 var(--dsh-composer-side-clearance, 16px);
+}

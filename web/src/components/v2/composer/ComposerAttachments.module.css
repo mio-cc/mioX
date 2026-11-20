@@ -1,0 +1,281 @@
+/**
+ * Draft-attachment rail styles.
+ *
+ * Port of `ui-attachment/src/client/ComposerAttachments.module.css` and
+ * `AttachmentRail.module.css` (rail) plus `FileCard.module.css` (card): the
+ * rail sits inside the card above the draft with the source's 2px/10px offset
+ * and pulls its bottom edge 6px closer to the text. The rail is one line —
+ * `flex: nowrap` with a hidden horizontal scrollbar (`AttachmentRail.module.css:6-28`).
+ * File cards are 240×64 with a 28px glyph seat; image drafts are the source's
+ * 64×64 thumbnail tiles (`ComposerAttachments.module.css:9-24`). The remove
+ * control is an 18px circle that is transparent until hover or `:focus-visible`
+ * (`FileCard.module.css:84-118`). Upload tracks are the source's indeterminate
+ * 2px bars; percentages only ever come from real progress, which this API does
+ * not report.
+ */
+
+.rail {
+  min-width: 0;
+  padding: 2px 10px 0;
+  /* The card's flex gap (12px) separates every row pair; the rail sits closer
+     to the draft text than the other rows, so pull back 6 here. */
+  margin-bottom: -6px;
+}
+
+.scroller {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  /* The rail scrolls on the composer's elevated input surface; bind the l2
+     scrollbar pair so a drawn thumb matches the surface. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.card {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  width: 240px;
+  height: 64px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-specific-input-major, transparent);
+  text-align: left;
+}
+
+.failed {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+/* Indeterminate upload glyph: the source's 20px ring (`FileCard.module.css:29-41`). */
+.spinner {
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: file-card-spin 0.8s linear infinite;
+}
+
+@keyframes file-card-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 8px 0;
+}
+
+/* A failed card's body is the retry control, so it keeps the body layout but
+   drops the button chrome (`FileCard.module.css:51-59`). */
+.retry {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Names are ellipsized by CSS only; the full name stays in the card title. */
+.name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.metaFailed {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Image draft tile (`ComposerAttachments.module.css:9-24,33-52`). */
+.imageItem {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 64px;
+}
+
+.thumbnail {
+  display: block;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 0.5px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border-radius: var(--dsw-radius-xl);
+  background: var(--dsw-alias-interactive-bg-hover);
+  cursor: default;
+}
+
+.thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbnailFailed {
+  position: relative;
+  border-color: var(--dsw-alias-state-error-primary);
+  cursor: pointer;
+}
+
+.thumbnailFailed img {
+  opacity: 0.4;
+}
+
+.failureGlyph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--dsw-alias-button-contrast-fill);
+  color: var(--dsw-alias-label-primary-inverted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.imageItem .remove {
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+}
+
+.remove:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .card:hover .remove,
+  .imageItem:hover .remove {
+    opacity: 1;
+  }
+
+  .card:hover .name {
+    padding-right: 18px;
+  }
+}
+
+/* Touch surfaces have no hover to reveal the control. */
+@media (hover: none), (pointer: coarse) {
+  .remove {
+    opacity: 1;
+  }
+}
+
+.card:focus-within .name {
+  padding-right: 18px;
+}
+
+.progressTrack {
+  position: absolute;
+  right: 12px;
+  bottom: 5px;
+  left: 12px;
+  overflow: hidden;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dsw-specific-file-upload-track);
+}
+
+/* Image tiles carry the same track inset differently (`ComposerAttachments.module.css:54-64`). */
+.imageTrack {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  left: 8px;
+  overflow: hidden;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dsw-specific-file-upload-track);
+  pointer-events: none;
+}
+
+/* Indeterminate sweep: no inline width, because this upload reports no bytes. */
+.progressBar {
+  display: block;
+  width: 35%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dsw-alias-brand-primary);
+  animation: file-card-progress 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes file-card-progress {
+  from {
+    transform: translateX(-70%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remove {
+    transition: none;
+  }
+
+  .spinner,
+  .progressBar {
+    animation: none;
+  }
+}

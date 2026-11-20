@@ -1,0 +1,392 @@
+/**
+ * 工作区文件页。几何照抄 `components/v2/findings/FindingsDataPage.module.css:11-48`
+ * （标题 + 说明 + 右侧动作、工具条间距）：主区在右栏打开时只有约 513px 宽，
+ * 所以列表放在可横向滚动的容器里（总表 §4.1 第 4 步）。
+ * 只使用 --dsw-* 变量。
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.lead {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.fileInput {
+  display: none;
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.crumbItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.crumbSep {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.crumb {
+  max-width: 180px;
+  padding: 1px 5px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .crumb:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.crumbCurrent {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+  cursor: default;
+}
+
+.errorLine {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.tableWrap {
+  min-width: 0;
+  overflow-x: auto;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.table {
+  width: 100%;
+  min-width: 380px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.table thead th {
+  padding: 7px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: 7px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  vertical-align: middle;
+}
+
+@media (hover: hover) {
+  .table tbody tr:hover {
+    background: var(--dsw-alias-bg-layer-1);
+  }
+}
+
+.cellName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.nameBtn {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .nameBtn:hover {
+    text-decoration: underline;
+  }
+}
+
+.nameText {
+  min-width: 0;
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.colSize {
+  width: 88px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.colTime {
+  width: 132px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateError {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 120px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 160px;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.emptyTitle {
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.emptyText {
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- B10（P2:F5–P2:F8）新增类，上面 B09 的类未改动 ---- */
+
+/* 行内操作列：下载 / 删除 两个图标按钮（旧页 page.tsx:253-276）。 */
+.colActions {
+  width: 84px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .iconBtn:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.iconBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.iconBtnDanger {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+@media (hover: hover) {
+  .iconBtnDanger:hover:not(:disabled) {
+    color: var(--dsw-alias-state-error-primary);
+  }
+}
+
+/* 文件查看 / 编辑面板的编辑区。 */
+.editorWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.editorHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editorHint {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.editor {
+  width: 100%;
+  min-height: 320px;
+  max-height: 52vh;
+  padding: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  tab-size: 2;
+  resize: vertical;
+}
+
+.editor:focus {
+  outline: none;
+  border-color: var(--dsw-alias-border-l2);
+}
+
+/* 二进制 / 过大时只读说明。 */
+.readOnly {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.readOnlyIcon {
+  display: inline-flex;
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.readOnlyText {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.readOnlyHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 删除确认弹窗里的后果说明。 */
+.confirmBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.confirmWarn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-state-warn-primary);
+  overflow-wrap: anywhere;
+}
+
+/* 删除确认弹窗里的一行结果信息（文件大小）。 */
+.deleteMeta {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+}

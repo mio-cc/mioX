@@ -1,0 +1,432 @@
+/**
+ * 命令记录页（对照表 P2:G1–P2:G3）。几何照抄
+ * `components/v2/companies/companies.module.css:8-42`（页头）与
+ * `components/v2/findings/FindingsDataPage.module.css:38-276`（工具条 / 四态 / 分页条）。
+ * 主区在右栏打开时只有约 513px 宽，所以列表放在可横向滚动的容器里（总表 §4.1 第 4 步），
+ * 详情弹窗里的命令与输出各用 `max-height` 限高并自带滚动（卡片第 3 条「超长可滚动」）。
+ * 只使用 --dsw-* 变量，不写颜色字面量。
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.lead {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+/* ---- 工具条（搜索 / worker / tool / 只看错误） ---- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 280px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.searchIcon {
+  flex: none;
+}
+
+.searchInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.searchInput::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.filterSelect {
+  max-width: 148px;
+  height: 30px;
+  padding: 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 列表 ---- */
+
+.tableWrap {
+  min-width: 0;
+  overflow-x: auto;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.table thead th {
+  padding: 7px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: 7px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  vertical-align: top;
+}
+
+.row {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .table tbody tr:hover {
+    background: var(--dsw-alias-bg-layer-1);
+  }
+}
+
+.row:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.colTime {
+  width: 116px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.colWorker {
+  width: 90px;
+}
+
+.colTool {
+  width: 110px;
+}
+
+.colState {
+  width: 56px;
+}
+
+.cellMain {
+  min-width: 220px;
+}
+
+.mono {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.summary {
+  display: block;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.summaryEmpty {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.taskChip {
+  padding: 0 4px;
+  height: 16px;
+  line-height: 16px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* ---- 四态 ---- */
+
+.state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateError {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 120px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 160px;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.emptyTitle {
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.emptyText {
+  max-width: 380px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- 分页条 ---- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagerActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- 弹窗（详情 / 统计） ---- */
+
+/* vendor Modal 卡片默认 width:min(380px, 100%)（`Modal.module.css:40`）；详情要放
+   长的命令与输出，用 className 覆盖成 720px，并在窄屏上收回到 100%。 */
+.detailModal {
+  width: min(720px, 100%);
+}
+
+.modalWide {
+  width: min(520px, 100%);
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.panel {
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.panelTitle {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.panelBody {
+  padding: 9px 10px;
+}
+
+/* 超长命令 / 输出：限高 + 自带滚动（卡片第 3 条），不撑破弹窗。 */
+.code {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.codeError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.muted {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- 统计表 ---- */
+
+.statsScroll {
+  max-height: 280px;
+  overflow: auto;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.statsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.statsTable thead th {
+  position: sticky;
+  top: 0;
+  padding: 6px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-2);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.statsTable tbody td {
+  padding: 6px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.statsNum {
+  width: 72px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.statsErrorNum {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.statsTotalRow td {
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.statsToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.statsCount {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}

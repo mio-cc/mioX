@@ -30,7 +30,16 @@ export class ScrollFollow {
   private target: number | null = null;
   private sampledTop: number | undefined;
 
-  constructor(private following: boolean) {}
+  /**
+   * @param following - initial follow intent.
+   * @param threshold - distance from the floor still counted as "at the bottom";
+   * the chat lane uses the 24px default, the trajectory ledger follows within 2px
+   * (`TrajectoryTable.tsx:48`).
+   */
+  constructor(
+    private following: boolean,
+    private readonly threshold: number = FOLLOW_THRESHOLD,
+  ) {}
 
   /** Whether content growth should keep the floor in view. */
   get active(): boolean {
@@ -44,7 +53,7 @@ export class ScrollFollow {
 
   /** Whether the position is within the follow threshold of the floor. */
   nearBottom(metrics: ViewportMetrics): boolean {
-    return Math.abs(metrics.floor - metrics.top) <= FOLLOW_THRESHOLD;
+    return Math.abs(metrics.floor - metrics.top) <= this.threshold;
   }
 
   /** Commit an externally decided follow intent without moving the scrollport. */

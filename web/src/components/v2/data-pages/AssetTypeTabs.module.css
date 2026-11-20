@@ -1,0 +1,59 @@
+/* 资产类型 tab 条（D2）：内容宽度的 tab + 计数 + 页级合计 + 删除已选。
+   几何照旧页 tab 行；颜色只用 --dsw-* 变量。 */
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.tablist {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border: 0.5px solid transparent;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tabActive {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.count {
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.total {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,189 @@
+/* 关联流量面板（A07）。只用 --dsw-* 语义变量。 */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title {
+  flex: 1 1 auto;
+  font-size: var(--dsw-font-xs-13, 13px);
+  font-weight: 500;
+}
+
+.caption {
+  margin: 0;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.state {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateError {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-state-error-primary);
+  border-radius: var(--dsw-radius-sm);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.empty {
+  margin: 0;
+  padding: 14px 0;
+  text-align: center;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 绑定流量入口（A12）。 */
+.bindBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.rowHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.index {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.method {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+}
+
+.bindingId {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.url {
+  margin: 0;
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  word-break: break-all;
+}
+
+.note {
+  margin: 0;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rowFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.time {
+  flex: 1 1 auto;
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: var(--dsw-font-xxs-12, 12px);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: var(--dsw-font-xs-13, 13px);
+  line-height: 20px;
+  resize: vertical;
+}
+
+.confirmText {
+  margin: 0;
+  font-family: var(--ds-font-family-code);
+  font-size: var(--dsw-font-xxs-12, 12px);
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-all;
+}

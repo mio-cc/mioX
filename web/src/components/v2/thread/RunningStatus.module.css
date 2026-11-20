@@ -1,0 +1,85 @@
+/* Port of `ui-chat/src/client/chat/ChatView.module.css:218-317` — the running
+   status row. Numbers are copied from the installed DSH build; the slots ARTeX
+   does not render (the holding state, the animated whale APNG) are omitted, so
+   the static SVG fallback is the only glyph. */
+
+.running {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  /* DSH's tail slot offset is 16px from the previous row (`ChatView.module.css:82-87,272`:
+     12px flow gap + 4px content margin). ARTeX's `.messages` flex gap already
+     contributes 10px, so this row adds the missing 2px: 10 + 2 + 4 = 16px. */
+  margin-top: 2px;
+
+  /* `ChatView.module.css:224`: the shimmer tint comes from the deep-diving pair. */
+  --dsw-alias-label-shimmer: var(--dsw-alias-label-deep-diving-shimmer);
+
+  color: var(--dsw-alias-label-deep-diving);
+  font-size: calc(var(--dsh-content-font-size, 14px) - 2px);
+  line-height: calc(22px + var(--dsh-content-font-delta, 0px));
+}
+
+/* `ChatView.module.css:249-258`: drawn inside the slot's top offset, so showing
+   or hiding it never changes the row height. */
+.runningDivider {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 0.5px;
+  background: color-mix(in srgb, var(--dsw-alias-border-l1) 75%, var(--dsw-alias-border-l2));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.running[data-divider] .runningDivider {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .runningDivider {
+    transition: opacity 160ms ease;
+  }
+}
+
+/* `ChatView.module.css:267-274`: same offset and height as the completed Turn's
+   tail actions row. */
+.runningContent {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+  margin-top: 4px;
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+}
+
+/* `ChatView.module.css:276-279`. */
+.runningText {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* `ChatView.module.css:281-290`; only the 14px footprint matters without the
+   animated mask layer. */
+.runningIcon {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: calc(14px + var(--dsh-content-font-delta, 0px));
+  height: calc(14px + var(--dsh-content-font-delta, 0px));
+  contain: strict;
+  overflow: hidden;
+}
+
+/* DSH's screen-reader-only live region (`accessibility.module.css:1-8`). */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

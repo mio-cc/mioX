@@ -1,0 +1,124 @@
+/* Goal bar: the composer-context strip that shows the task's `/goal` target.
+   Metrics from `ui-goal/GoalBar.module.css`: 36px bar (:19-35), 28px round icon
+   actions (:107-131), 13px label at 500 weight (:56-62), 13px dimmed objective
+   (:64-73), 12px error (:75-84).
+   Deviation: the source's `.dock` (:5-17) sizes itself from `--dsh-composer-*`
+   side-clearance/inset/card tokens, which this app does not define; the strip
+   keeps the docked width the composer column gives it and only `.bar` mirrors
+   the source metrics. */
+
+.dock {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.bar {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  margin: 0 auto;
+  padding: 4px 5px 4px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-elevation-panel);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Same family as the Todo/Queue panel titles (13/24 medium, primary). */
+.label {
+  flex: none;
+  font-size: 13px;
+  line-height: 24px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.objective {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary-dimmed);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Inline edit form (`GoalBar.tsx:89-128`) ---- */
+
+.editBar {
+  height: auto;
+  min-height: 36px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  outline: none;
+}
+
+/* ---- Icon actions ---- */
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .iconBtn:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.iconBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

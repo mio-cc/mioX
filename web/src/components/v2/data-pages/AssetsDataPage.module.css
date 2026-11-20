@@ -1,0 +1,65 @@
+/* 资产页主体（企业归属表 + 四态文本）。几何与颜色照 AssetTable，只用 --dsw-* 变量。 */
+
+.stateText {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateError {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.notice {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.companyWrap {
+  overflow-x: auto;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.companyTable {
+  width: 100%;
+  min-width: 360px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.companyTh {
+  padding: 8px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  text-align: left;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.companyThRight {
+  text-align: right;
+}
+
+.companyTd {
+  padding: 9px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.companyTdRight {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.companyEmpty {
+  color: var(--dsw-alias-label-tertiary);
+}

@@ -1,0 +1,224 @@
+/**
+ * 登录 / 初始化 / 修改密码的样式。
+ * 布局依据：旧页 (auth)/login/page.tsx:96-111 与 (auth)/setup/page.tsx:67-84 的
+ * 「整屏居中、标题 + 说明 + 表单」结构，改成 DSH 的居中卡片卡片形态；
+ * 卡片描边/底色照 components/v2/data-pages/DataPageToolbar.module.css 的做法，只用 --dsw-* 变量。
+ */
+
+/* ---- 守卫自身的等待态 ---- */
+
+.checkWrap {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--dsw-font-family);
+}
+
+.checkLine {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.checkBox {
+  width: 100%;
+  max-width: 420px;
+  padding: 18px 20px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.checkTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.checkText {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.checkActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ---- 整屏居中 ---- */
+
+.screen {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-family);
+}
+
+.card {
+  width: 100%;
+  max-width: 400px;
+  padding: 28px 28px 24px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.cardWide {
+  max-width: 420px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.lead {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Input 组件渲染成 inline-flex 的 span，这里拉满卡片宽度 */
+.field > span {
+  display: flex;
+  width: 100%;
+}
+
+.label {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* DSH Input 是受控 input 包在 span 里，禁用态由组件自身不提供，这里补一条 */
+.field input:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: not-allowed;
+}
+
+.readonlyField {
+  font-size: 13px;
+  line-height: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.actionsStretch {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.actionsStretch > button {
+  flex: 1;
+}
+
+.footNote {
+  margin: 16px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.footLink {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* 弹窗里的表单（ChangePasswordDialog） */
+.dialogForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 320px;
+}
+
+@media (max-width: 480px) {
+  .dialogForm {
+    min-width: 0;
+  }
+
+  .card {
+    padding: 22px 18px 18px;
+  }
+}

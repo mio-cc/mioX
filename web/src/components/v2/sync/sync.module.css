@@ -1,0 +1,443 @@
+/**
+ * 资产同步页（对照表 P2:H1–P2:H4）。几何照抄 `components/v2/llm/llm-records.module.css:9-177`
+ * （页头 / 工具条 / 表格；本文件在此基础上多出 `.card` 卡片、`.facts` 状态事实行、
+ * `.formRow` 地址与密钥两栏、`.resultGrid` 结果计数行这几组类）与 `:271-347`
+ * （四态 / 分页条 / 确认框体）。
+ * 主区在右栏打开时只有约 513px 宽，所以表格外层 `overflow-x: auto` 且表格有 `min-width`
+ * （总表 §4.1 第 4 步）。只使用 --dsw-* 变量，不写颜色字面量。
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.lead {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headActions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+/* ---- 卡片（连接状态 / 选择 / 结果） ---- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.cardSpacer {
+  margin-left: auto;
+}
+
+.cardHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.hintWarn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* ---- 状态字段列表 ---- */
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.factKey {
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.factValue {
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+/* ---- 表单行（地址 / 密钥） ---- */
+
+.formRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .formRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- 维度 / 资产类型 / 选项行 ---- */
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.optionLabel {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.searchField {
+  flex: 1 1 200px;
+  min-width: 160px;
+  max-width: 320px;
+}
+
+.toolbarSpacer {
+  margin-left: auto;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.summaryStrong {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.linkBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkBtn:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+/* ---- 表格 ---- */
+
+.tableWrap {
+  min-width: 0;
+  overflow-x: auto;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+}
+
+.table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 7px 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.table td {
+  padding: 6px 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-primary);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.colCheck {
+  width: 34px;
+}
+
+.colNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.row {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .row:hover td {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.rowActive td {
+  background: var(--dsw-alias-bg-multi-select);
+}
+
+.cellName {
+  min-width: 180px;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 卡片头里的一行弱信息（「合计入库 N 条」「已选 N」）。 */
+.mutedSmall {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* ---- 分页条 ---- */
+
+.pager {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pagerRight {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* ---- 四态 ---- */
+
+.state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateError {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 100px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 140px;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.emptyTitle {
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.emptyText {
+  max-width: 420px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.errorLine {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+/* ---- 结果块 ---- */
+
+.resultGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.resultItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.resultKey {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.resultNum {
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-primary);
+}
+
+.msgList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-warn-primary);
+  overflow-wrap: anywhere;
+}
+
+.msgListError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.confirmBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+.confirmWarn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.confirmList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}

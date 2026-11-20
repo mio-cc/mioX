@@ -1,0 +1,121 @@
+/* C11 P1:A26 / P1:A27 侧栏任务分类分组：组头（分类名 + 数量 + 折叠箭头）与行内「分类」按钮。
+   只用 --dsw-* 变量。 */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+/* 组头：与 ui-sidebar 的 section 标题行同款——一行小字、三级文字色、悬停才给底色。 */
+.groupHead {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 2px 0 0;
+}
+
+.groupToggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .groupToggle:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.groupName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+.groupCount {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowWrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+/* 行内「分类」按钮：悬停或键盘聚焦时显形，平时不占视觉注意力（侧栏很窄）。
+   行尾现在有两个浮起控件：SessionRow 自己的「⋯」（right: 6px、22×22）与这个「分类」，
+   所以它退到 right: 38px，两个 chip 之间留净空，不再互相盖住。 */
+.moveSeat {
+  position: absolute;
+  top: 50%;
+  right: 38px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rowWrap:focus-within .moveSeat {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: hover) {
+  .rowWrap:hover .moveSeat {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.moveBtn {
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-stroke);
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+@media (hover: hover) {
+  .moveBtn:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}

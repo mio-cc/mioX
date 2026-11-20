@@ -1,0 +1,148 @@
+/* 子会话列表（P1:B28）样式。只用 --dsw-* 变量；分组与行度量照旧页
+   `sessions-tab.tsx:1655-1729` 的列表区（组头 11px + 32px 行），颜色换到 DSH token。 */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+
+.state {
+  padding: 8px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.stateActions {
+  padding: 0 8px 8px;
+}
+
+.stateError {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.stateErrorText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.group + .group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+
+.groupTitle {
+  flex: none;
+}
+
+.groupCount {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.groupFoot {
+  padding: 2px 6px 4px;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rowItem {
+  display: flex;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.row[aria-current="true"] {
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.dot[data-state="running"] {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.rowLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}

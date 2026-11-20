@@ -1,0 +1,880 @@
+/*
+ * Right panel page bodies: findings, approvals, files and session.
+ *
+ * Each page is the DSH page layout — a 38px header row across the pane, one
+ * scrolling content region, and a centred empty/status state when the list has
+ * nothing to show (`ui-sidebar-files FilesBody.tsx:63-116`,
+ * `FilesBody.module.css:162-180`; `ui-approval ApprovalCard.tsx:53-90` for the
+ * card; `ui-sidebar-files FileTree.module.css` for a row). Tokens only.
+ */
+
+/* ------------------------------------------------------------------ */
+/* Page shell                                                          */
+/* ------------------------------------------------------------------ */
+
+.page {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.5;
+}
+
+/* The header row: context and count on the left, tools on the right. */
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 0 6px 0 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.headerMain {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.headerActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.count {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A 28px circle around a 15px glyph, the same control the DSH files page uses
+   in its header (`FilesBody.module.css:222-237`). */
+.tool {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tool svg {
+  width: 15px;
+  height: 15px;
+}
+
+@media (hover: hover) {
+  .tool:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.tool:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-selected);
+  outline-offset: 1px;
+}
+
+/* The pane's one scrolling region; the page chrome stays put above it. */
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-right: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+/* Screen-reader-only status text for the loading placeholders. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty and loading states                                            */
+/* ------------------------------------------------------------------ */
+
+.empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.emptyIcon {
+  display: inline-flex;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.emptyTitle {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}
+
+.emptyHint {
+  max-width: 260px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Three placeholder lines per row while the list is being read, on the
+   skeleton fill the DSH theme ships (`--dsw-alias-bg-skeleton`). */
+.skeletonRow {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+}
+
+.skeletonTag,
+.skeletonLine,
+.skeletonMeta {
+  display: block;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+.skeletonTag {
+  width: 42px;
+  height: 18px;
+}
+
+.skeletonLine {
+  width: 82%;
+  height: 12px;
+}
+
+.skeletonMeta {
+  width: 46%;
+  height: 10px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Findings                                                            */
+/* ------------------------------------------------------------------ */
+
+.tally {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.tallyItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.dot[data-tone="high"] {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.dot[data-tone="medium"] {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+}
+
+.listItem {
+  margin: 0;
+  padding: 0;
+}
+
+/* One finding row: severity tag, title, then the id and relative time. */
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-selected);
+  outline-offset: -2px;
+}
+
+.rowActive {
+  background: var(--dsw-alias-bg-multi-select);
+}
+
+.rowTop {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rowTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.rowChevron {
+  display: inline-flex;
+  flex: none;
+  padding-top: 3px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.rowMeta {
+  padding-left: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+/* The open row's detail: status and class line, summary, scrollable evidence. */
+.detail {
+  margin: 2px 0 4px;
+  padding: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.detailMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.detailClass {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.detailText {
+  margin: 8px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.detailEvidence {
+  max-height: 220px;
+  margin: 8px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ */
+/* Approvals                                                           */
+/* ------------------------------------------------------------------ */
+
+.approvalList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+/* One approval card: waiting strip, body and action row, as in the shared DSH
+   approval presentation (`ui-approval ApprovalCard.tsx:53-90`). */
+.approvalCard {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-state-warn-secondary);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.approvalStrip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px;
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-primary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.approvalDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.approvalAgent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+}
+
+.approvalId {
+  margin-left: auto;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.approvalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 0;
+}
+
+.approvalHeading {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.inlineCode {
+  padding: 1px 4px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-multi-select);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.approvalReason {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.command {
+  max-height: 132px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.approvalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px;
+}
+
+.rejectBtn,
+.allowBtn {
+  height: 28px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .rejectBtn:hover:not(:disabled) {
+    background: var(--dsw-alias-bg-multi-select);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .allowBtn:hover:not(:disabled) {
+    background: var(--dsw-alias-label-primary);
+    color: var(--dsw-alias-bg-base);
+  }
+}
+
+.allowBtn {
+  border-color: transparent;
+  background: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-bg-base);
+}
+
+.rejectBtn:disabled,
+.allowBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rejectBtn:focus-visible,
+.allowBtn:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-selected);
+  outline-offset: 1px;
+}
+
+/* Lit while at least one request is waiting. */
+.liveDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Files                                                               */
+/* ------------------------------------------------------------------ */
+
+.rootLabel {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.fileList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+}
+
+/* One workspace entry, after the DSH tree row (`FileTree.module.css` `.row`):
+   folder sheet or file-type sheet, name, then the kind or byte count. */
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--dsw-radius-md);
+}
+
+@media (hover: hover) {
+  .fileRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.fileIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.fileName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fileMeta {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Session                                                             */
+/* ------------------------------------------------------------------ */
+
+.sessionId {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+}
+
+/* One titled block; the last one keeps no rule below it. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.section:last-child {
+  border-bottom: 0;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.sectionIcon {
+  display: inline-flex;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.sessionTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.sessionDescription {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progressTrack {
+  flex: 1 1 auto;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-multi-select);
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.progressText {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metaList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.metaRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.metaLabel {
+  flex: none;
+  width: 64px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.metaValue {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tokenGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tokenCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.tokenLabel {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.tokenValue {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ */
+/* Evidence (C23)                                                      */
+/* ------------------------------------------------------------------ */
+
+/* One role section of the evidence page: a quiet caption row over its rows.
+   The section list reuses `.list`, each section's rows reuse `.fileList`. */
+.evidenceSection {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 6px;
+}
+
+.evidenceSection + .evidenceSection {
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  padding-top: 6px;
+}
+
+/* The role caption: a tag plus the role's row count. */
+.evidenceCaption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 18px 2px;
+}
+
+.evidenceCaptionCount {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* One bound traffic row: the HTTP line on top, the owning finding below.
+   Reuses `.row` for the hit area and `.rowTop` / `.rowTitle` / `.rowMeta` for
+   its two lines; these two classes only add the monospace request line. */
+.evidenceLine {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.evidenceMethod {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.evidenceStatus {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The partial-read notice: one line above the list, never a substitute for it. */
+.notice {
+  flex: none;
+  margin: 0;
+  padding: 6px 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-state-warn-primary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ */
+/* Task (P1:E8 close-out)                                              */
+/* ------------------------------------------------------------------ */
+
+/* The 任务 page reuses the session page's block layout (`.session` /
+   `.section` / `.sectionTitle` / `.metaList` / `.progressRow`), so these
+   classes only cover what that page never needed: a count beside a section
+   title, a compact two-column row for the constraint and scope lists, and the
+   three short status lines (尚余 / 读取失败 / 空态). */
+
+/* The row count after a section title: quiet, aligned to the title baseline. */
+.taskSectionCount {
+  margin-left: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* One constraint / scope row: a type tag, then the value on one line. */
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.taskRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+/* The row's value: clipped with an ellipsis, the full text stays in `title`. */
+.taskRowText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The tail of a list that was cut at the page's limit. */
+.taskRemain {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A section's read failure: the backend's own message, in the warning tone. */
+.taskError {
+  margin: 0;
+  color: var(--dsw-alias-state-warn-primary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+/* A section's honest empty line. */
+.taskEmpty {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+

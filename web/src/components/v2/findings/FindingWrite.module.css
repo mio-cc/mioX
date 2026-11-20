@@ -1,0 +1,298 @@
+/* Write controls of the finding detail: pickers, dialogs, retest panel.
+   Tokens only (--dsw-*), same material/geometry as FindingsDataPage.module.css. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.panelTitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.panelHint {
+  min-width: 0;
+  flex: 1 1 140px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  min-width: 0;
+}
+
+.muted {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.miniLink {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-business-primary);
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .miniLink:hover {
+    text-decoration: underline;
+  }
+}
+
+.errorLine {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.code {
+  margin: 0;
+  padding: 8px;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* --- header actions ----------------------------------------------------- */
+
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* --- picker ------------------------------------------------------------- */
+
+.pickerTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 92px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .pickerTrigger:hover:enabled {
+    border-color: var(--dsw-alias-label-tertiary);
+  }
+}
+
+.pickerTrigger:disabled {
+  cursor: default;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pickerValue {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.pickerCaret {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* --- copy --------------------------------------------------------------- */
+
+.copyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .copyBtn:hover {
+    color: var(--dsw-alias-label-primary);
+    border-color: var(--dsw-alias-label-tertiary);
+  }
+}
+
+/* --- dialogs ------------------------------------------------------------ */
+
+.dialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.input,
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 76px;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.input:disabled,
+.textarea:disabled {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.fieldHint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dialogText {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+.dialogStrong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.warnText {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* --- retest ------------------------------------------------------------- */
+
+.retestRow {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+}
+
+.retestHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
+.retestBadge {
+  flex: none;
+  padding: 0 6px;
+  height: 18px;
+  line-height: 18px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.retestDanger {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.retestText {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.retestDetails {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.retestDetails summary {
+  cursor: pointer;
+}

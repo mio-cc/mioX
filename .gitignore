@@ -66,3 +66,7 @@ artex.exe.*
 config.json.bak*
 # static export output is rebuilt, not source
 web/out/
+
+# 运行日志（dev server / 后端重定向输出，不进版本库）
+*.log
+web/.v2run.*

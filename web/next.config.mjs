@@ -15,6 +15,8 @@ const nextConfig = {
   // 避免父目录的 lockfile 影响根目录推断及资源路径生成。
   turbopack: { root: fileURLToPath(new URL(".", import.meta.url)) },
   reactCompiler: true,
+  // dev 指示器会盖住 /v2 右上角的模式按钮与面板开关，本地开发时关掉。
+  devIndicators: false,
   ...(skipTs ? { typescript: { ignoreBuildErrors: true } } : {}),
   // 允许从局域网 IP 访问 dev 资源（HMR），按需增删。
   // dev 阶段放开任意 IPv4 来源访问 /_next/* 与 HMR（局域网 IP 变动也不受影响）。

@@ -1,0 +1,80 @@
+/* C09 P1:A30 侧栏任务列表：排序条 + 可拖动行外壳。只用 --dsw-* 变量。 */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sortBar {
+  display: flex;
+  align-items: center;
+  padding: 0 4px 2px;
+}
+
+.sortBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .sortBtn:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.sortable {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  min-width: 0;
+}
+
+.rowBody {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 拖动把手只在悬停时显形，平时不占视觉注意力（旧页把手常驻，侧栏更窄所以收起）。 */
+.grip {
+  flex: 0 0 auto;
+  width: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: -1px;
+  opacity: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.grip:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .sortable:hover .grip {
+    opacity: 1;
+  }
+}
+
+.grip:active {
+  cursor: grabbing;
+}

@@ -1,0 +1,15 @@
+/* 资产删除确认弹窗的正文：条数与失败原因。颜色只用 --dsw-* 语义变量。 */
+
+.body {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.note {
+  margin: 0;
+}
+
+.error {
+  margin: 6px 0 0;
+  color: var(--dsw-alias-state-error-primary);
+}

@@ -98,6 +98,9 @@ export function DirPicker({
           <button type="button" className={styles.goBtn} onClick={() => load(manual)} data-testid="dirpicker-go">
             转到
           </button>
+          <button type="button" className={styles.goBtn} onClick={() => load("")} data-testid="dirpicker-root" title="回到根目录">
+            根目录
+          </button>
         </div>
 
         <div className={styles.list} data-testid="dirpicker-list">

@@ -1,0 +1,322 @@
+/**
+ * Composer styles, following `ui-conversation/src/client/skeleton/InputBar.module.css`
+ * and `input/editor/composer-editor.module.css`: one card, one draft scrollport
+ * capped at 14 lines of 24px, a toolbar row that puts attach + permission on the
+ * left and model + primary send on the right.
+ */
+
+.wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+/* Trigger suggestions sit above the card, anchored to its top edge. */
+.triggerMenu {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 880px;
+  bottom: calc(100% + 6px);
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-panel);
+  z-index: 30;
+}
+
+.triggerHead {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.triggerRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.triggerRowActive {
+  background: var(--dsw-alias-bg-multi-select);
+}
+
+@media (hover: hover) {
+  .triggerRow:hover {
+    background: var(--dsw-alias-bg-multi-select);
+  }
+}
+
+.triggerLabel {
+  flex: 0 0 auto;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.triggerDesc {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.ackRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The card: same seat and elevation semantics as the source input surface
+   (`InputBar.module.css` `.card`): elevated stroke in the shadow, no border. */
+.composer {
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 880px;
+  padding-top: 8px;
+  border: 0;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-panel);
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-soft);
+  /* The draft follows the content font-size preference, as the source card does;
+     with the default preference this is 14px/24px, so the 336px cap is 14 lines. */
+  font-size: var(--dsh-content-font-size, 14px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+}
+
+/* The draft's only scrolling box. 336px = 14 lines × 24px, the source cap. */
+.scroll {
+  box-sizing: border-box;
+  max-height: 336px;
+  overflow-y: auto;
+  margin-right: 4px;
+}
+
+/* Start the thumb's travel below the card's corner arc. */
+.scroll::-webkit-scrollbar-track {
+  margin-top: 8px;
+}
+
+/* Auto-grow anchor: the editable is in normal flow and sets the draft's height. */
+.grow {
+  position: relative;
+}
+
+/* The contenteditable draft surface; the block grows with its content and the
+   scrollport above caps and scrolls it. */
+.input {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 4px 8px 0 14px;
+  font-family: var(--dsw-font-family);
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  outline: none;
+  color: var(--dsw-alias-label-primary);
+  caret-color: var(--dsw-alias-state-business-primary);
+}
+
+.input[aria-disabled="true"] {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: not-allowed;
+}
+
+/* Fallback DOM shape: strip UA margins if a foreign edit ever produced blocks. */
+.input p {
+  margin: 0;
+}
+
+/* Placeholder: one ellipsized line, overlay only, never part of the caret model. */
+.placeholder {
+  position: absolute;
+  inset: 4px 8px auto 14px;
+  color: var(--dsw-alias-label-caption);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+}
+
+.input[data-composer-composing] + .placeholder {
+  visibility: hidden;
+}
+
+.notice {
+  padding: 0 12px 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Toolbar row: attach + permission left, model + send right. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 8px 6px;
+  min-width: 0;
+}
+
+.tools,
+.modes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.trailing {
+  display: flex;
+  align-items: center;
+  flex: none;
+  margin-left: auto;
+  gap: 12px;
+}
+
+.standardControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Attach circle (source `+` control): 28px, selector fill, primary glyph. */
+.add {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: var(--dsw-specific-selector);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .add:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover-solid);
+  }
+}
+
+.add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Permission chip: chip-like closed chrome, same metrics as the source select. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  max-width: 220px;
+  padding: 0 20px 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .chip:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+/* Primary send (source `.primary`): 34px circle, info fill, disabled 0.4. The
+   source lifts it 2px so it keeps its seat above the row's downward-shifted
+   chips; the same circle is the Stop control while a turn runs. */
+.primary {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 999px;
+  background: var(--dsw-alias-button-info-fill);
+  color: var(--dsw-alias-label-on-color);
+  cursor: pointer;
+  transition: background-color 100ms ease;
+  transform: translateY(-2px);
+}
+
+@media (hover: hover) {
+  .primary:hover:not(:disabled) {
+    background: var(--dsw-alias-button-info-hover);
+  }
+}
+
+.primary:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Sending: the message waits for the Host to accept it. The circle keeps its
+   full fill rather than the disabled fade, and an arc turns where the arrow was. */
+.primary[data-sending]:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+/* Stop: the same primary seat carries the source's rounded-square glyph while the
+   turn runs. A pending stop keeps the full fill too, like the sending state. */
+.primary[data-stopping]:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+.sendingSpinner {
+  animation: input-sending 800ms linear infinite;
+}
+
+@keyframes input-sending {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sendingSpinner {
+    animation-duration: 2400ms;
+  }
+}

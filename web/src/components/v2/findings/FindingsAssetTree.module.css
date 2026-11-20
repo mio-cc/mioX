@@ -1,0 +1,234 @@
+/**
+ * 「按资产」视图的左侧资产树（P2:B21）。样式只用 `--dsw-*` 变量；主区在右栏打开时
+ * 只有约 513px 宽，所以整棵树收成紧凑一行（箭头 + 图标 + 名称 + 严重/总数），
+ * 计数不换行，深层缩进 10px 一级。
+ */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 7px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.search:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.searchIcon {
+  flex: none;
+}
+
+.searchInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.searchInput::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.allRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.allRow:hover,
+.allRow:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+}
+
+.allRowSelected {
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.allCount {
+  flex: none;
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 24rem;
+  overflow: auto;
+}
+
+.nodeRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  border-radius: var(--dsw-radius-sm);
+}
+
+@media (hover: hover) {
+  .nodeRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.nodeRowSelected {
+  background: var(--dsw-alias-bg-multi-select);
+}
+
+.twisty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .twisty:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.twistyOpen {
+  transform: rotate(90deg);
+}
+
+.twistyPlaceholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 18px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.nodeLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nodeLabel:hover,
+.nodeLabel:focus-visible {
+  color: var(--dsw-alias-label-primary);
+  outline: none;
+}
+
+.nodeRowSelected .nodeLabel {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.nodeIcon {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.nodeText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeCounts {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  padding-right: 4px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.countCritical {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.countHigh {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.countTotal {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.hint {
+  margin: 0;
+  padding: 6px 2px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.truncated {
+  margin: 0;
+  padding: 4px 2px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}

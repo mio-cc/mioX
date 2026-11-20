@@ -232,6 +232,13 @@ function statusClass(task: Task): string {
   }
 }
 
+// 卡5: 等待用户（DSH Rows.tsx:384-434 sessionStatuses：pendingInteraction
+// approval/plan-review/question 优先级最高，warning 点 + 紧凑尾标）。
+function waitingUserLabel(pendingCount: number): string | undefined {
+  if (pendingCount <= 0) return undefined;
+  return pendingCount === 1 ? "待审批" : `待审批 ${pendingCount}`;
+}
+
 function statusLabel(task: Task): string {
   if (task.paused) return "已暂停";
   switch (task.status) {
@@ -1059,6 +1066,7 @@ export function NewSidebar() {
           onClick={() => setAddWorkspaceOpen(true)}
         >
           <FolderPlus size={14} aria-hidden="true" />
+          <span className={styles.addWorkspaceLabel}>从目录新建</span>
         </button>
       </div>
 

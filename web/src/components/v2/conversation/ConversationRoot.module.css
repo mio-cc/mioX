@@ -1,0 +1,969 @@
+/**
+ * Structural styles for the ported DSH conversation skeleton.
+ *
+ * Class names and layout intent follow
+ * `ui-conversation/src/client/skeleton/ConversationRoot.module.css` (line
+ * references in the comments); the composer/hero geometry is simplified to a
+ * flex column because ARTEX feeds a ready-made Composer card into the seat.
+ * Every color/typography value comes from the vendored `--dsw-*` tokens.
+ */
+
+/* ConversationRoot.module.css:1-8 */
+.root {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+.root[data-phase="hero"] {
+  isolation: isolate;
+}
+
+/* ConversationRoot.module.css:23-45 — 76px header: 10px top inset, the 30px
+   title row, the tab strip's 10px margin and its 25px row. */
+.header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  flex: none;
+  box-sizing: border-box;
+  min-height: 76px;
+  padding: 10px 28px 0 20px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.header:where(:not(:has(.tabs))) {
+  min-height: 0;
+  padding-bottom: 10px;
+}
+
+.headerBlank {
+  min-height: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* ConversationRoot.module.css:111-118 — the leading slot is a flex row that
+   collapses to zero width when empty, so the title row keeps the space. */
+.headerLeading {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ARTeX: drawer-mode sidebar toggle, rendered into the header leading slot
+   (`conversation.header.leading`, ConversationHeader.tsx:19-21). */
+.leadingButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .leadingButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+/* ConversationRoot.module.css:65-102 */
+.titleRow {
+  grid-column: 2;
+  container-type: inline-size;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-height: 30px;
+}
+
+.titleCluster {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  --title-cluster-fade: 20px;
+  margin: -4px calc(-1 * var(--title-cluster-fade)) -4px -4px;
+  padding: 4px var(--title-cluster-fade) 4px 4px;
+  overflow: clip;
+  mask-image: linear-gradient(
+    to left,
+    transparent calc(0.3 * var(--title-cluster-fade)),
+    var(--dsw-alias-label-primary) var(--title-cluster-fade)
+  );
+}
+
+.titleCluster:has(+ .headerUtilities:empty) {
+  --title-cluster-fade: 8px;
+}
+
+/* ConversationRoot.module.css:120-169 */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.crumbSeg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* ConversationRoot.module.css:136-141 — the "/" between hierarchy levels is
+   14px caption text, one tint lighter than the crumb names. */
+.crumbSep {
+  color: var(--dsw-alias-label-caption);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* ARTeX: the upstream cap is 220px; task descriptions are longer here, so the
+   current crumb keeps a wider cap while still ellipsizing. */
+.crumb {
+  display: inline-block;
+  max-width: 380px;
+  overflow: hidden;
+  padding: 4px 8px;
+  border: none;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* ConversationRoot.module.css:159-163 — only ancestor crumbs are buttons, and
+   only they take a hover fill; the current crumb never does. */
+@media (hover: hover) {
+  button.crumb:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.crumbCurrent {
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  cursor: default;
+}
+
+/* ConversationRoot.module.css:171-182 — title-adjacent Session actions. The
+   background-jobs chip and the plan chip live here, matching where ui-jobs
+   registers `conversation.session.header.actions`. */
+.headerActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+}
+
+@container (max-width: 460px) {
+  .headerActions {
+    gap: 8px;
+  }
+}
+
+/* ConversationRoot.module.css:184-206 — right-aligned utilities plus the More
+   launcher that ui-context-menu provides through `contextMenu.button`. */
+.headerUtilities {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: 20px;
+}
+
+.headerUtilities:empty {
+  display: none;
+}
+
+.headerMenuButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.headerMenuButton[aria-expanded="true"] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .headerMenuButton:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.headerMenuButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ARTeX: portaled list widths for the two header menus (a portaled list is
+   outside the header subtree, so it needs an explicit width hook). */
+.jobsMenu {
+  width: 320px;
+  max-width: calc(100vw - 24px);
+}
+
+.moreMenu {
+  width: 220px;
+  max-width: calc(100vw - 24px);
+}
+
+/* ConversationRoot.module.css:208-222 */
+.headerCorner {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: 8px;
+  margin-right: -16px;
+}
+
+.headerCorner:empty {
+  display: none;
+}
+
+.headerBlank .headerCorner {
+  margin-left: auto;
+}
+
+/* ConversationRoot.module.css:224-252 — one non-wrapping row: the View tabs,
+   then the More launcher for what did not fit, then the lane switch at the
+   right edge. Wrapping here is what pushed the header to two tab rows. */
+.tabs {
+  grid-column: 1 / -1;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-top: 10px;
+  padding-left: 8px;
+}
+
+.viewTabs {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  gap: 32px;
+  min-width: 0;
+  min-height: 25px;
+}
+
+/* ConversationRoot.module.css:254-318 — the 16px text line keeps 9px below it;
+   the press target reaches into the strip's margin through negative margins. */
+.tab {
+  --dsh-tab-hit-inline: 10px;
+
+  position: relative;
+  box-sizing: border-box;
+  min-height: 35px;
+  margin: -10px calc(-1 * var(--dsh-tab-hit-inline)) 0;
+  padding: 10px var(--dsh-tab-hit-inline) 9px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.tab::after {
+  content: "";
+  position: absolute;
+  right: var(--dsh-tab-hit-inline);
+  bottom: -1px;
+  left: var(--dsh-tab-hit-inline);
+  height: 2px;
+  border-radius: 2px;
+  background: transparent;
+}
+
+@media (hover: hover) {
+  .tab:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+/* ConversationRoot.module.css:288-297 — the selected tab rides the business blue. */
+.tabActive {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.tabActive::after {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.tabLabel {
+  display: block;
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ConversationSession.tsx:28-44, 240-252 — the More launcher for the Views the
+   row budget could not fit: a 22px compact icon button (H20–28 →
+   --dsw-radius-sm). `viewsMoreActive` only marks the one-seat row where the
+   selected View cannot be swapped in. */
+.viewsMoreAnchor {
+  flex: none;
+}
+
+.viewsMore {
+  box-sizing: border-box;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.viewsMore svg {
+  width: 13px;
+  height: 13px;
+}
+
+.viewsMore[aria-expanded="true"] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.viewsMoreActive {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* Width hook only: a portaled list renders outside the header subtree, while
+   the card material itself stays the Menu primitive's (规范 §4). */
+.viewsMoreMenu {
+  width: 200px;
+  max-width: calc(100vw - 24px);
+}
+
+/* ARTeX: plan-mode control kept from the previous /v2 header so the backend
+   toggle stays reachable; DSH owns it inside the composer toolbar instead. */
+.planChip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .planChip:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.planChipOn {
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* JobListAction.module.css:1-81 — the header chip renders its live glyph and a
+   count label in a 28px-tall trigger, and folds to the bare 28x28 icon button
+   when the title row is narrow (the title row is the inline-size container).
+   The live glyph is a 15px ring spinner in the same slot the layers icon uses. */
+.jobsTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 2px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.jobsTrigger[aria-expanded="true"] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .jobsTrigger:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.jobsActivity {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+}
+
+/* Live glyph: a 15px ring spinner (JobListAction shows one while jobs run). */
+.jobsSpinner {
+  box-sizing: border-box;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: jobsSpin 900ms linear infinite;
+}
+
+@keyframes jobsSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.jobsCount {
+  white-space: nowrap;
+}
+
+@container (max-width: 460px) {
+  .jobsCount {
+    display: none;
+  }
+
+  .jobsTrigger {
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .jobsTrigger[aria-expanded="true"] {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  @media (hover: hover) {
+    .jobsTrigger:hover {
+      background: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+}
+
+/* The portaled roster card (JobListAction.module.css:83-163): one live section
+   header and one filled row per running task. The MenuSurface paints the
+   material; these rules own the roster inside it. */
+.jobsMenu {
+  width: 340px;
+  max-width: calc(100vw - 24px);
+}
+
+.jobsSectionHeader {
+  margin: 0 4px 1px;
+  padding: 4px 0 3px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.jobsRoster {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jobsItem {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Live rows read as filled cards so running work outranks anything else on
+   the surface; the trailing pause control sits on the same fill. */
+.jobsRowLine {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  padding: 4px 8px 4px 2px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+@media (hover: hover) {
+  .jobsRowLine:hover {
+    background: color-mix(in srgb, var(--dsw-alias-label-primary) 9%, transparent);
+  }
+}
+
+.jobsRow {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 17px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jobsRow:focus-visible {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+}
+
+/* Ongoing dot shared with StateDot's running marker. */
+.jobsDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-business-primary);
+  animation: jobsPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes jobsPulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.jobsMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.jobsLabel {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.jobsMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.jobsState {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-specific-menu);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.jobsDuration {
+  flex: none;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Two-press pause affordance on running rows: the same persistent 20px
+   square the kill control uses (JobListAction.module.css:249-309). */
+.jobsStop {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-specific-menu);
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.jobsStop:focus-visible {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+@media (hover: hover) {
+  .jobsStop:hover {
+    border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+    color: var(--dsw-alias-state-error-primary);
+  }
+}
+
+/* The armed press widens into a labeled danger pill so the confirm step is
+   legible without hover. */
+.jobsStopArmed,
+.jobsStopArmed:focus-visible {
+  gap: 4px;
+  width: auto;
+  padding: 0 7px;
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+@media (hover: hover) {
+  .jobsStopArmed:hover {
+    gap: 4px;
+    width: auto;
+    padding: 0 7px;
+    border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent);
+    background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+    color: var(--dsw-alias-state-error-primary);
+  }
+}
+
+/* A rejected pause keeps the label so the failure is legible without hover
+   (the armed pill already widened; the failed one needs the same room). */
+.jobsStopFailed {
+  gap: 4px;
+  width: auto;
+  padding: 0 7px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.jobsStopLabel {
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+/* ConversationRoot.module.css:454-500 — band below the header. The column is a
+   flex stack so the active View and the composer seat never both scroll:
+   `.viewArea` owns the free space and the composer keeps the floor. */
+.body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+
+  --dsh-chat-content-width: var(
+    --dsh-chat-user-width,
+    clamp(680px, calc(var(--dsh-conversation-column-width, 0px) * 0.64), 920px)
+  );
+  --dsh-composer-card-max-width: calc(var(--dsh-chat-content-width) + 32px);
+  --dsh-composer-side-clearance: 16px;
+  --dsh-composer-dock-inset: 8px;
+}
+
+/* ARTeX: upstream `.scrollBody` is the transcript scrollport; the reused
+   ThreadView owns its own message scroller, so this box only stacks the View
+   and the seat. `data-conversation-scroll` keeps the upstream hook. */
+.scrollBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* DefaultConversationViews.tsx:32-43 */
+.viewArea {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.viewPlaceholder {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ConversationContent.tsx:184-188 — the composer seat keeps the floor of the
+   scroll body; in the hero phase the centered stack replaces the auto margin. */
+.composerSeat {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  margin-top: auto;
+}
+
+/* ConversationContent.tsx:165-172 — standalone dock cards share one rhythm. */
+.composerStack {
+  --dsh-composer-stack-gap: 6px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--dsh-composer-stack-gap);
+}
+
+/* ConversationRoot.module.css:595-606 — hero stack: centered in the column,
+   floating above true center by its own bottom padding. */
+.composerHero {
+  align-self: center;
+  gap: 8px;
+  padding: 0 8px 32px;
+  width: min(calc(var(--dsh-composer-card-max-width) + 2 * var(--dsh-composer-side-clearance)), 100%);
+  z-index: 1;
+}
+
+.root[data-phase="hero"] .scrollBody {
+  justify-content: center;
+}
+
+.root[data-phase="hero"] .composerSeat {
+  margin-top: 0;
+}
+
+/* ARTeX: EmptyHero — the blank-phase hero above the centered composer card
+   (upstream EmptyHero.tsx renders the brand mark, headline and preview pill). */
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px 8px;
+  text-align: center;
+}
+
+.heroTitle {
+  margin: 0;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 20px;
+}
+
+.heroLead {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ARTeX: compact trajectory ledger. TrajectoryView.tsx replaces the upstream
+   full TrajectoryTable with one row per recorded activity until the ledger is
+   ported; the View keeps its own scroller and sits below the header chrome. */
+.trajectory {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 20px 20px;
+}
+
+.trajectoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trajectoryRow {
+  display: grid;
+  grid-template-columns: 14px 58px 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px;
+  border-radius: var(--dsw-radius-sm);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .trajectoryRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.trajectoryTime {
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.trajectoryKind {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.trajectorySummary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* ---- Session lane chrome -----------------------------------------------------
+   The lane picker is a `Menu` trigger owned by `SessionLaneSwitcher` (its module
+   styles the button and the menu rows); the one lane class shared with the
+   transcript chrome is the live dot. */
+.laneDot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.laneDot[data-state="running"] {
+  background: var(--dsw-alias-state-success-primary, var(--dsw-alias-state-business-primary));
+}
+
+/* Selected sub-session (planner / worker): the lane's title and backend state,
+   replacing the old page's read-only composer notice
+   (`task-workspace-dsh.tsx:3225-3229`). */
+.laneStrip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.laneStripTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.laneStripState {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.laneStripHint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.laneStripBack {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .laneStripBack:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* Read-only lane composer: a sub-session transcript cannot be typed into. */
+.laneReadOnly {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 0.5px dashed var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.laneReadOnly strong {
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 600;
+}
