@@ -16,6 +16,7 @@ import type {
   AssetInterceptRule,
   ConstraintKind,
   Finding,
+  Stats,
   Task,
   TaskConstraint,
   TaskGoal,
@@ -117,6 +118,22 @@ const SCOPE_KIND_LABEL: Record<TaskScopeRow["kind"], string> = {
 function num(value: number | undefined | null): string {
   if (value === undefined || value === null || !Number.isFinite(value)) return "—";
   return value.toLocaleString("zh-CN");
+}
+
+/**
+ * 任务级统计里的流量条数（W-5）。
+ *
+ * `Stats`（types.ts）没声明 `traffic`，但 `GET /stats?task=` 实测返回（2026-11-20 用
+ * task=133 抓包核对过）；这是「类型声明与后端契约不一致」的反向版本——上次是后端不
+ * 返回、类型却声明（`findings_confirmed` 崩溃），这次是后端返回、类型没声明。红线禁
+ * 改 types.ts，所以在本地把字段补进交叉类型；后端真没给时按「—」诚实显示。
+ * @param stats - 任务级统计快照。
+ * @returns 流量条数；后端没给该字段时为 undefined。
+ */
+function statsTraffic(stats: Stats): number | undefined {
+  const withTraffic = stats as Stats & { traffic?: number };
+  const value = withTraffic.traffic;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -685,7 +702,7 @@ export function OverviewView({ task }: { task: Task }): ReactNode {
                   该卡换为本任务已捕获的流量条数（`GET /stats?task=` 是任务级口径，实测
                   traffic 字段真实存在），卡片语义与数据源一致。 */}
               <span className={css.statValue} data-overview-stat-traffic="">
-                {num(stats.traffic)}
+                {num(statsTraffic(stats))}
               </span>
             </div>
           </div>
@@ -1465,7 +1482,7 @@ export function OverviewView({ task }: { task: Task }): ReactNode {
               <span className={css.statLabel}>本任务流量</span>
               {/* W-5：roe_enabled 后端不存在（已核查 /stats、/settings、intercept 配置）；
                   该卡与本任务统计区一致换为真实的任务级流量条数。 */}
-              <span className={css.statValue}>{stats === null ? "—" : num(stats.traffic)}</span>
+              <span className={css.statValue}>{stats === null ? "—" : num(statsTraffic(stats))}</span>
             </div>
             {stats === null ? (
               <p className={css.empty} data-overview-stats-audit-stats-state="empty">

@@ -718,7 +718,7 @@ export function Composer({
         <SteeringDock
           history={sideHistory}
           onCancel={async (id) => {
-            const failure = await cancelSideQuestion(taskId ?? "", "main", id);
+            const failure = await cancelSideQuestion(taskId ?? "", "main", "cancel", id);
             if (failure !== null) setSteerNotice(failure);
             sideHistory.reload();
             return failure === null;
