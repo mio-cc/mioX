@@ -43,23 +43,15 @@ import type { FileMentionCandidate } from "@/v2/data/file-mentions";
 import { useFileMentions } from "@/v2/data/file-mentions";
 import type { GoalActions } from "@/v2/data/goal";
 import { useComposerAttachments } from "@/v2/data/composer-attachments";
-import { useIntents } from "@/v2/data/intents";
 import { profilesToOptions } from "@/v2/data/llm-map";
 import { useLlmProfiles } from "@/v2/data/llm-profiles";
 import type { SideQuestionChannel } from "@/v2/data/side-questions";
-import {
-  canReceiveWorkerQuestion,
-  isSideQuestionCommand,
-  sideQuestionBody,
-  useSideHistory,
-  useSideQuestionSubmit,
-} from "@/v2/data/side-questions";
+import { isSideQuestionCommand, mutateSideQuestions as cancelSideQuestion, sideQuestionBody, useSideHistory, useSideQuestionSubmit } from "@/v2/data/side-questions";
 import { useWorkspaceFiles } from "@/v2/data/workspace-files";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import {
   IconChevronDownOutlineRegular,
   IconPlusOutlineRegular,
-  IconQuestionOutlineRegular,
   IconSendOutlineRegular,
 } from "@/vendor/dsh/primitives/icons/index";
 import { Menu } from "@/vendor/dsh/primitives/Menu";
@@ -74,7 +66,7 @@ import { GoalBar } from "./GoalBar";
 import { MentionMenu } from "./MentionMenu";
 import { ModelPicker } from "./ModelPicker";
 import { QueueDock } from "./QueueDock";
-import { SideQuestionsPanel } from "./SideQuestionsPanel";
+import { SteeringDock } from "./SteeringDock";
 import { SideQuestionNotice } from "./SideQuestionNotice";
 import type { TriggerHit } from "./trigger";
 import { detectTrigger } from "./trigger";
@@ -105,16 +97,10 @@ const COMMANDS = [
 ];
 
 /**
- * `/btw`：给正在运行的会话提一条不打断它的追问（旧页 sessions-tab.tsx:1494-1527）。
- * 运行中才有目标车道，所以它不在静态指令表里，而是运行中才出现。
+ * `/btw`：静默兼容的旧入口（旧页 sessions-tab.tsx:1494-1527）。敲了前缀照旧走插话，
+ * 但命令表不再列出它 —— 运行中 Enter 本身就是插话，前缀只剩兼容意义。
  */
-const BTW_COMMAND = { id: "btw", label: "/btw", desc: "给正在运行的会话提一条不打断的追问" };
-
-/** 一次 `/btw` 能发出去的目标车道。 */
-interface SideTarget {
-  readonly channel: SideQuestionChannel;
-  readonly label: string;
-}
+const BTW_COMMAND = { id: "btw", label: "/btw", desc: "给正在运行的会话提一条不打断的追问（兼容写法：直接输入即可插话）" };
 
 /** One row of the `/` or `@` menu. */
 interface TriggerCandidate {
@@ -252,57 +238,23 @@ export function Composer({
     [workspaceState.entries],
   );
 
-  // ---- 旁路问题（/btw）：有可提问目标车道时才露出入口 ----------------------
-  // 旧页 sessions-tab.tsx:1262-1268 的父路径换算：主 Agent 车道走 chat，worker 车道走
-  // intents/{id}；:2007 只对 paused 且非继承的 worker 露出输入框，与后端
-  // intent_intervention.go:118-121 的「仅已暂停的 Worker 可以发送消息」一致。
-  const intentsState = useIntents(taskId);
-  const pausableWorkers = React.useMemo(
-    () => intentsState.intents.filter((node) => canReceiveWorkerQuestion(node)),
-    [intentsState.intents],
-  );
-  const sideTargets = React.useMemo<readonly SideTarget[]>(() => {
-    const targets: SideTarget[] = [];
-    if (running) targets.push({ channel: "main", label: "主 Agent" });
-    for (const node of pausableWorkers) {
-      targets.push({ channel: `worker:${node.id}`, label: `Worker #${node.id}（已暂停）` });
-    }
-    return targets;
-  }, [running, pausableWorkers]);
-  const [sideTargetIndex, setSideTargetIndex] = React.useState(0);
-  const sideTarget = sideTargets.length === 0 ? null : (sideTargets[Math.min(sideTargetIndex, sideTargets.length - 1)] ?? null);
-  // 车道消失（跑完/换任务）后高亮下标要收回，否则会一直指向一条不存在的车道。
-  React.useEffect(() => {
-    if (sideTargetIndex > sideTargets.length - 1) setSideTargetIndex(0);
-  }, [sideTargetIndex, sideTargets.length]);
+  // ---- 插话（W-2 重设计）：DSH 的 steer 语义用后端旁路问答通道承载 ----------------
+  // 运行中主 Agent 就是插话目标（后端 side-questions 的通道判定：running 主车道走 chat
+  // 端口的 request_id 提问，intent_intervention.go 的 worker 只收 paused 且本 UI 的 worker
+  // 车道只读，所以插话目标恒为 main）。空 dao 目标 = 没有 running 主 Agent = Enter 排队。
+  // 旧页依据：sessions-tab.tsx:1262-1268（主车道路径）、:1494-1527（/btw 接管）。
+  // DSH 依据：`submission-policy.ts:36`（running 且可插话 → 按偏好解析 queue/steer，
+  // 这里取 steer 为默认、排队保留在 Cmd/Ctrl+Enter，对齐 DSH 的加速 Enter 家族）。
+  const steerChannel: SideQuestionChannel | null = running ? "main" : null;
+  const steerAvailable = steerChannel !== null;
+  /** 没有可插话目标时的原因提示（仅 /btw 兼容路径需要）。 */
+  const [steerNotice, setSteerNotice] = React.useState<string | null>(null);
 
-  const [sideOpen, setSideOpen] = React.useState(false);
-  const [sideTargetOpen, setSideTargetOpen] = React.useState(false);
-  /** 没有可提问车道时的原因提示（点按钮或提交 `/btw` 时给出）。 */
-  const [sideNotice, setSideNotice] = React.useState<string | null>(null);
+  const sideHistory = useSideHistory(taskId, steerChannel);
+  const sideSubmit = useSideQuestionSubmit(taskId, steerChannel, sideHistory.reload);
 
-  /**
-   * 没有可提问车道的真实原因：主 Agent 跑着，或有已暂停的 worker 才算有目标
-   * （worker 后端只收 paused，见 `intent_intervention.go:118-121`）。
-   * @returns 原因文本；有目标时为 null。
-   */
-  const sideUnavailableReason = ((): string | null => {
-    if (taskId === null) return "先选择一个任务，才能发旁路问题。";
-    if (running) return null;
-    if (intentsState.phase === "loading") return "正在确认有没有可提问的会话…";
-    if (intentsState.phase === "offline") return `无法确认可提问的会话：${intentsState.error ?? "读取失败"}`;
-    if (pausableWorkers.length > 0) return null;
-    return "没有可提旁路问题的会话：主 Agent 不在运行、也没有已暂停的 Worker。（后端只接受运行中的主 Agent 或已暂停的 Worker）";
-  })();
-
-  const sideHistory = useSideHistory(taskId, sideTarget === null ? null : sideTarget.channel);
-  const sideSubmit = useSideQuestionSubmit(
-    taskId,
-    sideTarget === null ? null : sideTarget.channel,
-    sideHistory.reload,
-  );
-
-  // 历史里有「回答中」就按旧页节奏每 2 秒刷新一次（hooks/use-side-questions.ts:120-125）。
+  // 历史里有「回答中」就按旧页节奏每 2 秒刷新一次（hooks/use-side-questions.ts:120-125）；
+  // SteeringDock 吃同一份历史，所以 dock 的实时态就是这个轮询喂的（SSE 归 Phase 2 内联）。
   const sideRunning = sideHistory.items.some((item) => item.status === "running");
   React.useEffect(() => {
     if (!sideRunning) return;
@@ -314,14 +266,13 @@ export function Composer({
   const mentionQuery = hit !== null && hit.trigger === "@" ? hit.query : null;
   const mentions = useFileMentions(mentionQuery, mentionQuery !== null);
 
-  // `/` 指令表：`/btw` 只在有可提问车道时出现（旧页 running 时才露按钮）。
-  const hasSideTarget = running || pausableWorkers.length > 0;
+  // `/` 指令表：`/btw` 只在可插话时出现，且只是兼容提示（真入口是运行中 Enter）。
   const slashCandidates = React.useMemo<readonly TriggerCandidate[]>(() => {
     if (hit === null || hit.trigger !== "/") return [];
     const needle = hit.query.toLowerCase();
-    const table = hasSideTarget ? [...COMMANDS, BTW_COMMAND] : COMMANDS;
+    const table = steerAvailable ? [...COMMANDS, BTW_COMMAND] : COMMANDS;
     return table.filter((candidate) => candidate.label.toLowerCase().includes(needle));
-  }, [hit, hasSideTarget]);
+  }, [hit, steerAvailable]);
   const atCandidates = mentions.candidates;
   // 两条触发路径各自的候选集分开保存：`/` 只有指令，`@` 只有文件/记录，键盘与渲染
   // 都只读自己那一路，避免把 `@` 候选当成指令插入、或反过来。
@@ -441,46 +392,50 @@ export function Composer({
   };
 
   /**
-   * 发一条 `/btw` 旁路问题（旧页 sessions-tab.tsx:1497 `side.handleCommand` 的接管点）。
-   * 成功清稿并 toast；失败把稿子留在输入区，失败原因同时写进提示行。
-   * @param text - 已 trim 的整段草稿（含 `/btw` 前缀）。
+   * 发一条插话（W-2：原「旁路问题」。语义照旧页 /btw 分流，但入口合并进 Enter）。
+   * 成功清稿（答案出现在 SteeringDock），失败把稿子留在输入区并写进提示行。
+   * @param text - 已 trim 的整段草稿（可能含 `/btw` 兼容前缀）。
    */
-  const submitSide = (text: string): void => {
-    if (sideTarget === null) {
-      setSideNotice(sideUnavailableReason ?? "现在没有可以提旁路问题的车道。");
+  const submitSteer = (text: string): void => {
+    if (steerChannel === null) {
+      setSteerNotice("现在没有在运行的会话可插话。等主 Agent 跑起来，输入即插话；或按 Ctrl/Cmd+Enter 排队到下一轮。");
       return;
     }
     const body = sideQuestionBody(text);
     if (body === "") return;
-    // 附件走普通发送；旁路问答的端口不收附件（旧页 useSideQuestions 也没有附件参数）。
+    // 插话不带附件：旁路问答端口不收附件（旧页 useSideQuestions 也没有附件参数）。
     if (attachments.length > 0) {
-      setSendError("旁路问题不能带附件，请先去掉附件或改用普通发送。");
+      setSendError("插话不能带附件，请先去掉附件；要连附件一起发就排队到下一轮。");
       return;
     }
     setSendError(null);
-    setSideNotice(null);
+    setSteerNotice(null);
     void sideSubmit.ask(body).then((accepted) => {
       if (!accepted) {
-        // 失败留稿：`sideSubmit.error` 已经进了提示行（submit 里那段），稿子不清。
-        setSendError(sideSubmit.error ?? "旁路问题发送失败");
+        // 失败留稿：`sideSubmit.error` 已经进了提示行，稿子不清。
+        setSendError(sideSubmit.error ?? "插话发送失败");
         return;
       }
       editorRef.current?.clear();
       setDraft("");
       applyHit(null);
-      toast(`旁路问题已发给 ${sideTarget.label}`);
+      toast(`已插话给主 Agent（不打断当前工作）`);
     });
   };
 
   const submit = (): void => {
     if (taskId === null) return;
-    // `/btw` 先被接管：它是「给正在跑的会话追问」，不是新一轮对话，不走排队也不走 chat 端口。
+    // `/btw` 兼容接管：无论运行与否，敲了前缀就按插话语义走（旧行为保留）。
     if (isSideQuestionCommand(draft)) {
-      submitSide(draft.trim());
+      submitSteer(draft.trim());
       return;
     }
-    // Busy (turn running or the previous request in flight): the backend rejects
-    // a second turn with 409 and exposes no steer channel, so the draft is queued.
+    // 运行中且有草稿：普通 Enter = 插话（DSH submission-policy 的 steer 分支）；没有
+    // 插话目标（主 Agent 没在跑）时维持排队。发送中的请求期缓存 Enter 排队不变。
+    if (running && !sending && steerAvailable) {
+      submitSteer(draft.trim());
+      return;
+    }
     if (running || sending) {
       enqueueDraft();
       return;
@@ -512,6 +467,19 @@ export function Composer({
       })
       .catch((reason: unknown) => setSendError(reason instanceof Error ? reason.message : String(reason)))
       .finally(() => setSending(false));
+  };
+
+  /**
+   * 运行中把草稿排到下一轮（DSH 排队语义）：插话是 Enter 的默认，排队保留在
+   * Ctrl/Cmd+Enter。主按钮在排队场景（无可插话目标）下仍走 `submit` 的排队分支。
+   */
+  const submitQueueGesture = (): void => {
+    if (taskId === null) return;
+    if (isSideQuestionCommand(draft)) {
+      submitSteer(draft.trim());
+      return;
+    }
+    enqueueDraft();
   };
 
   /** Stop the turn in flight; a failed request surfaces through the notice row. */
@@ -606,6 +574,14 @@ export function Composer({
         return;
       }
       if (composing) return;
+      // W-2：运行中 Ctrl/Cmd+Enter 永远是排队（插话是默认的普通 Enter），
+      // 对齐 DSH 的加速 Enter 家族（`hub.ts:230` 的 shell.submit('queue', 'click', true)）。
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        if (event.repeat) return;
+        submitQueueGesture();
+        return;
+      }
       if (menuOpen) {
         event.preventDefault();
         commitActive();
@@ -671,26 +647,28 @@ export function Composer({
     editorRef.current?.focus();
   };
 
-  // The primary seat follows the source's label priority (`InputBar.tsx:386-394`): a
-  // running turn with an empty draft stops; a running turn with a draft queues it
-  // ("排队发送", `locales.ts:32`); a request in flight shows its spinner; otherwise the
-  // seat sends. As in the source's top-level session, queueing is a primary-seat
-  // action and no independent Stop appears beside it: `interruptible` requires the
-  // request in flight (`InputBar.tsx:383`), and with an empty draft the primary is
-  // already Stop (`:376`). Stopping a running turn that has a draft therefore means
-  // clearing the draft or pressing Escape twice. `input.stop` is "停止生成" in the
-  // source's zh locale (`locales.ts:28`).
+  // The primary seat follows DSH's label priority (`InputBar.tsx:386-394` + our
+  // W-2 split): a running turn with an empty draft stops; a running turn with a
+  // draft steers it into the live turn ("插话发送", the side-question channel:
+  // `submission-policy.ts:36` resolves running+steer-capable to the preferred
+  // mode, and Ctrl/Cmd+Enter keeps queue available); when no steer target
+  // exists the same seat queues ("排队发送", `locales.ts:32`). A request in
+  // flight shows its spinner; otherwise the seat sends.
   const hasDraft = draft.trim() !== "";
   const primaryStops = running && !sending && !hasDraft;
-  const primaryQueues = running && !sending && hasDraft;
+  const primarySteers = running && !sending && hasDraft && steerAvailable;
+  const primaryQueues = running && !sending && hasDraft && !steerAvailable;
   const primaryLabel = primaryStops
     ? "停止生成"
-    : primaryQueues
-      ? "排队发送"
-      : sending
-        ? "正在发送消息"
-        : "发送消息";
-  const primaryDisabled = primaryStops ? stopping : primaryQueues ? false : !canSubmit;
+    : primarySteers
+      ? "插话发送"
+      : primaryQueues
+        ? "排队发送"
+        : sending
+          ? "正在发送消息"
+          : "发送消息";
+  const primaryDisabled = primaryStops ? stopping : primarySteers || primaryQueues ? false : !canSubmit;
+  const primaryActs = primaryStops ? stop : primarySteers ? () => submit() : submit;
   // Independent Stop: only while the send request itself is in flight, matching the
   // source's `interruptible` minus the continuable-child arm (`InputBar.tsx:383`). A
   // running turn with a draft keeps queueing on the primary seat instead.
@@ -735,6 +713,17 @@ export function Composer({
           toolbar controls keep their own semantics. */}
       <div className={css.composer} data-composer-panel="" onMouseDown={onCardMouseDown}>
         <QueueDock rows={queue.items} onRemove={queue.remove} held={queue.hold === "stopped"} />
+
+        {/* W-2：插话问答栈——问题、回答中/终态、答案就地展开，跑的时候一直可见。 */}
+        <SteeringDock
+          history={sideHistory}
+          onCancel={async (id) => {
+            const failure = await cancelSideQuestion(taskId ?? "", "main", id);
+            if (failure !== null) setSteerNotice(failure);
+            sideHistory.reload();
+            return failure === null;
+          }}
+        />
 
         <ComposerAttachments
           attachments={attachments}
@@ -845,54 +834,6 @@ export function Composer({
                 onClose={() => setPermissionOpen(false)}
               />
             </div>
-
-            {/* 旁路问题入口：运行中才出现；有多个运行中的 worker 时先选目标车道。 */}
-            {sideTargets.length > 0 ? (
-              <div className={css.modes}>
-                <Menu
-                  open={sideTargetOpen}
-                  anchor={
-                    <button
-                      type="button"
-                      className={css.chip}
-                      title="旁路问题（/btw）：给正在运行的会话提一条不打断的追问"
-                      aria-haspopup="menu"
-                      aria-expanded={sideTargetOpen}
-                      aria-label="旁路问题"
-                      onMouseDown={keepEditorFocus}
-                      onClick={() => setSideTargetOpen((open) => !open)}
-                    >
-                      <IconQuestionOutlineRegular size={13} />
-                      {sideTarget === null ? "旁路问题" : `旁路 · ${sideTarget.label}`}
-                      <IconChevronDownOutlineRegular size={10} />
-                    </button>
-                  }
-                  items={sideTargets.map((target) => ({ id: target.channel, label: target.label }))}
-                  selectedId={sideTarget?.channel}
-                  selection="check"
-                  onSelect={(id) => {
-                    setSideTargetOpen(false);
-                    const index = sideTargets.findIndex((target) => target.channel === id);
-                    if (index >= 0) setSideTargetIndex(index);
-                    setSideOpen(true);
-                  }}
-                  onClose={() => setSideTargetOpen(false)}
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                className={css.chip}
-                title="旁路问题（/btw）：给正在运行的会话提一条不打断的追问"
-                aria-label="旁路问题"
-                data-side-question-unavailable=""
-                onMouseDown={keepEditorFocus}
-                onClick={() => setSideNotice(sideUnavailableReason)}
-              >
-                <IconQuestionOutlineRegular size={13} />
-                旁路问题
-              </button>
-            )}
           </div>
 
           <div className={css.trailing}>
@@ -929,9 +870,10 @@ export function Composer({
               data-running={primaryStops && !stopping ? "" : undefined}
               data-stopping={primaryStops && stopping ? "" : undefined}
               data-queued={primaryQueues ? "" : undefined}
+              data-steers={primarySteers ? "" : undefined}
               disabled={primaryDisabled}
               onMouseDown={keepEditorFocus}
-              onClick={primaryStops ? stop : submit}
+              onClick={primaryActs}
             >
               {primaryStops ? (
                 <StopGlyph />
@@ -959,19 +901,9 @@ export function Composer({
           </div>
         ) : null}
 
-        {/* `/btw` 或旁路按钮在没有可提问车道时给出的原因，不画假按钮也不静默。 */}
-        <SideQuestionNotice reason={sideNotice} onDismiss={() => setSideNotice(null)} />
+        {/* 插话不可用时（/btw 兼容路径敲进空闲会话）的原因提示；Enter 本身不会走到这。 */}
+        <SideQuestionNotice reason={steerNotice} onDismiss={() => setSteerNotice(null)} />
       </div>
-
-      {sideTarget !== null ? (
-        <SideQuestionsPanel
-          open={sideOpen}
-          taskId={taskId ?? ""}
-          channel={sideTarget.channel}
-          history={sideHistory}
-          onClose={() => setSideOpen(false)}
-        />
-      ) : null}
 
       <Modal
         open={confirmFull}

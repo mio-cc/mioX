@@ -1,7 +1,180 @@
 /**
  * 旁路问题面板与 `@` 引用下拉的样式。只用 `--dsw-*` 变量，不写颜色字面量。
- * 类名与 `SideQuestionsPanel.tsx`、`MentionMenu.tsx` 一一对应。
+ * 类名与 `SteeringDock.tsx`、`SideQuestionNotice.tsx`、`MentionMenu.tsx` 对应。
+ * W-2 后面板（`SideQuestionsPanel.tsx`）退役，`.list/.row*` 等旧类暂留待后续清理。
  */
+
+/* ---- W-2 插话栈（SteeringDock，镜像 QueueDock 的形态） ---- */
+
+.dock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 6px;
+  padding: 4px 6px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.dockHint {
+  padding: 2px 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dockError {
+  margin: 2px 4px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  word-break: break-word;
+}
+
+.dockRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  max-width: 100%;
+}
+
+.dockLead {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 26px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.dockState {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.steerToggle {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 4px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.steerToggle:disabled {
+  cursor: default;
+}
+
+.steerToggle:not(:disabled) {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+@media (hover: hover) {
+  .steerToggle:not(:disabled):hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.steerToggle:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-alias-border-selected);
+  outline-offset: -2px;
+}
+
+.steerQ {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.steerRunning {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.steerRunning::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  corner-shape: round;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  animation: dock-turn 0.9s linear infinite;
+}
+
+@keyframes dock-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.steerCancel {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .steerCancel:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.steerA {
+  flex: 1 1 100%;
+  margin: 2px 0 2px 26px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.dockLive {
+  height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .steerRunning::before {
+    animation: none;
+  }
+}
+
 
 /* ---- 旁路问题历史 ---- */
 .list {
