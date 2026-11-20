@@ -186,6 +186,35 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* W-3 原始报文下载：真 <a>（可中键/复制链接），几何对齐 vendor Button sm（H28/R8）。 */
+.blobBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.blobBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .blobBtn:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
 .errorLine {
   display: flex;
   align-items: center;

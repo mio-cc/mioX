@@ -209,3 +209,17 @@ export function deleteAllTraffic(): Promise<{ deleted: number; reclaimed: number
 export function trafficExchange(id: string): Promise<{ req: string; resp: string }> {
   return api.trafficExchange(id);
 }
+
+/**
+ * 拼一条流量原始报文的下载地址（W-3）。
+ *
+ * 后端 `server.go:837` 的 `GET /api/traffic/blob?hash=` 以 attachment 返回无损原件；
+ * `/traffic/exchange` 的正文是 `assembleRaw` 的拼装文本，两者互补。地址走与
+ * `api.ts` 相同的相对路径（Next 代理），浏览器直开即下载，不需要新契约函数。
+ * @param hash - 交换行上的 `req_hash` / `resp_hash`。
+ * @returns 下载 URL；空 hash 返回 null（调用方不画按钮，不造假）。
+ */
+export function trafficBlobUrl(hash: string | undefined | null): string | null {
+  if (hash === undefined || hash === null || hash === "") return null;
+  return `/api/traffic/blob?hash=${encodeURIComponent(hash)}`;
+}
