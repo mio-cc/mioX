@@ -369,3 +369,21 @@ export function summarizeArchiveBatch(items: readonly ArchiveBatchItem[]): Archi
   }
   return { ok, failed };
 }
+
+/**
+ * 探测一条归档还在不在（W-4：还原完成的判定）。
+ *
+ * `GET /task-archives/{id}`（api.ts:381）在旧页语义里（`page.tsx:1672-1690`）：
+ * 200 = 还在列表里（处理中 / 失败回退），404「归档不存在」= 已出列——
+ * 还原跑完后归档被移出列表、任务回到「当前」视图，所以调用方把 404 当完成信号。
+ * @param id - 归档 id。
+ * @returns 归档仍存在时的最新快照；404（已出列）返回 null；其它错误原样抛出。
+ */
+export async function taskArchiveStatus(id: number): Promise<TaskArchive | null> {
+  try {
+    return await api.taskArchive(id);
+  } catch (reason: unknown) {
+    if (reason instanceof Error && reason.message.includes("归档不存在")) return null;
+    throw reason;
+  }
+}

@@ -64,6 +64,7 @@ import {
   restoreTaskArchive,
   restoreTaskArchives,
   summarizeArchiveBatch,
+  taskArchiveStatus,
   useTaskArchives,
   type ArchiveBatchSummary,
   type ArchiveFailure,
@@ -156,6 +157,58 @@ export function TaskArchiveView({ onChanged }: TaskArchiveViewProps): React.Reac
   const [deleteTargets, setDeleteTargets] = React.useState<TaskArchive[] | null>(null);
   const [deleting, setDeleting] = React.useState(false);
 
+  // W-4：还原完成探测。还原是后端异步队列（行先进 restore_queued/restoring），跑完后
+  // 归档出列、任务回「当前」视图；`GET /task-archives/{id}` 的 404「归档不存在」在旧页
+  // 语义里（page.tsx:1672-1690）就是完成信号。轮询只跟 pending 的 id，空集不排定时器，
+  // 上限 10 分钟防呆（超过就停探测，列表行还在，用户手动刷新也能看到终态）。
+  const [pendingRestore, setPendingRestore] = React.useState<ReadonlySet<number>>(() => new Set<number>());
+  const restoreProbeStart = React.useRef(0);
+
+  const trackRestore = (ids: readonly number[]): void => {
+    if (ids.length === 0) return;
+    setPendingRestore((current) => {
+      const next = new Set(current);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+  };
+
+  React.useEffect(() => {
+    if (pendingRestore.size === 0) return;
+    if (restoreProbeStart.current === 0) restoreProbeStart.current = Date.now();
+    if (Date.now() - restoreProbeStart.current > 10 * 60 * 1000) {
+      restoreProbeStart.current = 0;
+      setPendingRestore(new Set<number>());
+      return;
+    }
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      const ids = [...pendingRestore];
+      void Promise.allSettled(ids.map((id) => taskArchiveStatus(id))).then((results) => {
+        if (!alive) return;
+        const done = new Set<number>();
+        for (let index = 0; index < ids.length; index += 1) {
+          const result = results[index];
+          if (result.status === "fulfilled" && result.value === null) done.add(ids[index]);
+        }
+        if (done.size === 0) return;
+        setPendingRestore((current) => {
+          const next = new Set([...current].filter((id) => !done.has(id)));
+          if (next.size === 0) restoreProbeStart.current = 0;
+          return next;
+        });
+        list.reload();
+        onChanged?.();
+        toast(`${done.size} 个归档已完成还原，任务回到「当前」列表`);
+      });
+    }, 2000);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+    // pendingRestore 逐轮收敛：done 后集合变小，effect 重排下一轮；空集自然停表。
+  }, [pendingRestore, list, onChanged]);
+
   const pageCount = Math.max(1, Math.ceil(list.total / ARCHIVE_PAGE_SIZE));
 
   // 当前页变了就把已选收敛到这一页里还存在的行（旧页 page.tsx:1672-1675 同口径）。
@@ -209,6 +262,7 @@ export function TaskArchiveView({ onChanged }: TaskArchiveViewProps): React.Reac
         setBusyId(null);
         toast(`已将任务「${archiveTitle(row)}」加入还原队列`);
         afterWrite({ ok: [row.id], failed: [] });
+        trackRestore([row.id]);
       })
       .catch((reason: unknown) => {
         setBusyId(null);
@@ -232,6 +286,7 @@ export function TaskArchiveView({ onChanged }: TaskArchiveViewProps): React.Reac
         setBusyId(null);
         toast("已重新加入处理队列");
         afterWrite({ ok: [row.id], failed: [] });
+        if (row.state === "restore_failed") trackRestore([row.id]);
       })
       .catch((reason: unknown) => {
         setBusyId(null);
@@ -255,6 +310,7 @@ export function TaskArchiveView({ onChanged }: TaskArchiveViewProps): React.Reac
         if (summary.ok.length > 0) toast(`已将 ${summary.ok.length} 个任务加入还原队列`);
         if (summary.failed.length > 0) toast(`${summary.failed.length} 个任务无法还原`);
         afterWrite(summary);
+        trackRestore(summary.ok);
       })
       .catch((reason: unknown) => {
         setBusyId(null);
