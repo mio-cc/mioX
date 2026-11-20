@@ -655,11 +655,14 @@ export function OverviewView({ task }: { task: Task }): ReactNode {
               <span className={css.statValue}>{num(stats.assets)}</span>
             </div>
             <div className={css.statCard}>
-              <span className={css.statLabel}>确认发现</span>
-              {/* 后端不提供全库确认数（`/stats` 无 findings_confirmed），这里如实显示「—」，
-                  本任务发现数在下一格由任务自己的发现列表统计。 */}
-              <span className={css.statValue} title="后端统计接口未提供该字段">
-                {num(stats.findings_confirmed)}
+              <span className={css.statLabel}>本任务已确认</span>
+              {/* W-5：后端 `/stats` 从不返回 findings_confirmed（types.ts 声明为必填但 Go 端
+                  没有这个统计），此前直接 num() 把概览页打崩过。这里改用本任务发现列表里
+                  status==="confirmed" 的计数，与下一格「本任务发现」互补，全是真实数据。 */}
+              <span className={css.statValue} data-overview-stat-confirmed="">
+                {summary.phase === "ready"
+                  ? num(summary.findings.filter((finding) => finding.status === "confirmed").length)
+                  : "—"}
               </span>
             </div>
             <div className={css.statCard}>
@@ -677,10 +680,12 @@ export function OverviewView({ task }: { task: Task }): ReactNode {
               <span className={css.statValue}>{stats.llm_configured ? "是" : "否"}</span>
             </div>
             <div className={css.statCard}>
-              <span className={css.statLabel}>规则审计</span>
-              {/* 同上：`/stats` 不返回 roe_enabled，缺字段时显示「—」而不是假装「关」。 */}
-              <span className={css.statValue} title="后端统计接口未提供该字段">
-                {stats.roe_enabled === undefined ? "—" : stats.roe_enabled ? "开" : "关"}
+              <span className={css.statLabel}>本任务流量</span>
+              {/* W-5：`/stats` 从不返回 roe_enabled（全库端点已核查无此字段），不造假；
+                  该卡换为本任务已捕获的流量条数（`GET /stats?task=` 是任务级口径，实测
+                  traffic 字段真实存在），卡片语义与数据源一致。 */}
+              <span className={css.statValue} data-overview-stat-traffic="">
+                {num(stats.traffic)}
               </span>
             </div>
           </div>
@@ -1456,12 +1461,11 @@ export function OverviewView({ task }: { task: Task }): ReactNode {
               <span className={css.statLabel}>模型已配置</span>
               <span className={css.statValue}>{stats === null ? "—" : stats.llm_configured ? "是" : "否"}</span>
             </div>
-            <div className={css.statCard} data-overview-stats-audit-stat="roe_enabled">
-              <span className={css.statLabel}>规则审计</span>
-              {/* `/stats` 不返回 roe_enabled；缺字段显示「—」，不假装「关」。 */}
-              <span className={css.statValue}>
-                {stats === null || stats.roe_enabled === undefined ? "—" : stats.roe_enabled ? "开" : "关"}
-              </span>
+            <div className={css.statCard} data-overview-stats-audit-stat="traffic">
+              <span className={css.statLabel}>本任务流量</span>
+              {/* W-5：roe_enabled 后端不存在（已核查 /stats、/settings、intercept 配置）；
+                  该卡与本任务统计区一致换为真实的任务级流量条数。 */}
+              <span className={css.statValue}>{stats === null ? "—" : num(stats.traffic)}</span>
             </div>
             {stats === null ? (
               <p className={css.empty} data-overview-stats-audit-stats-state="empty">

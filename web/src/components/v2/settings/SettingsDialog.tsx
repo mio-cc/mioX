@@ -376,7 +376,7 @@ export function SettingsDialog({
             {page === "runtime" ? <RuntimePage /> : null}
             {page === "intercept" ? <InterceptPage /> : null}
             {page === "notify" ? <NotifyPage /> : null}
-            {page === "plugins" ? <NotWiredPage title="内置插件" reason="插件清单接口尚未移植到 /v2" /> : null}
+            {page === "plugins" ? <NotWiredPage title="内置插件" reason="后端暂未提供插件清单接口（/api/plugin* 路由不存在，已全量核查）" /> : null}
             {page === "presets" ? <AgentPresetsPage /> : null}
             {page === "tools" ? <ToolsPage /> : null}
             {page === "mcp" ? <McpPage /> : null}
