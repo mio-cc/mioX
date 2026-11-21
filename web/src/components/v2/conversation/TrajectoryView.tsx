@@ -876,7 +876,7 @@ export function TrajectoryView({
       data-following={away || matchedSeqs !== null ? "false" : "true"}
       data-search-active={matchedSeqs === null ? undefined : "true"}
     >
-      <div className={css.toolbar} role="toolbar" aria-label="轨迹工具栏">
+      <div className={css.toolbar} role="toolbar" aria-label="轨迹工具栏" data-trajectory-toolbar="">
         <div className={css.toolbarActions}>
           <button
             type="button"
@@ -937,7 +937,7 @@ export function TrajectoryView({
               <span key={label}>{label}</span>
             ))}
           </div>
-          <div className={css.timelineTrack}>
+          <div className={css.timelineTrack} data-trajectory-track="">
             {timeline.boundaries
               .filter((boundary) => boundary.at > timeline.start)
               .map((boundary) => (

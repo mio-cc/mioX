@@ -279,9 +279,14 @@
   display: flex;
   flex: 0 1 auto;
   flex-wrap: nowrap;
+  /* DSH ConversationSession 同款 tab 间距（ConversationRoot.module.css:254-318
+     的 gap: 32px）——12 个视图的 tab 条视觉节奏靠 32px，不是收紧。 */
   gap: 32px;
   min-width: 0;
   min-height: 25px;
+  /* DSH tab strip 本体可纵向裁切：被预算淘汰的 tab 直接不渲染，列宽只装
+     放得下的那批（selected 交换入场），不做横向滚动（DSH 解法）。 */
+  overflow: hidden;
 }
 
 /* ConversationRoot.module.css:254-318 — the 16px text line keeps 9px below it;
@@ -789,7 +794,8 @@
   margin: 0;
   font-size: 24px;
   line-height: 32px;
-  font-weight: 600;
+  /* 102 规范 §1：字重只用 400/500。 */
+  font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -813,61 +819,8 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* ARTeX: compact trajectory ledger. TrajectoryView.tsx replaces the upstream
-   full TrajectoryTable with one row per recorded activity until the ledger is
-   ported; the View keeps its own scroller and sits below the header chrome. */
-.trajectory {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 12px 20px 20px;
-}
-
-.trajectoryList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.trajectoryRow {
-  display: grid;
-  grid-template-columns: 14px 58px 64px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  padding: 5px 6px;
-  border-radius: var(--dsw-radius-sm);
-  font-size: 12px;
-  color: var(--dsw-alias-label-secondary);
-}
-
-@media (hover: hover) {
-  .trajectoryRow:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
-  }
-}
-
-.trajectoryTime {
-  font-family: var(--ds-font-family-code);
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.trajectoryKind {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.trajectorySummary {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-primary);
-}
+/* （轨迹页死样式清理：TrajectoryView 自带 module，这里的 .trajectory* 六段
+   无任何 TSX 引用，随全面精修删除。） */
 
 /* ---- Session lane chrome -----------------------------------------------------
    The lane picker is a `Menu` trigger owned by `SessionLaneSwitcher` (its module
@@ -908,7 +861,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dsw-alias-label-primary);
-  font-weight: 600;
+  /* 102 规范 §1：字重只用 400/500。 */
+  font-weight: 500;
 }
 
 .laneStripState {
@@ -965,5 +919,6 @@
 
 .laneReadOnly strong {
   color: var(--dsw-alias-label-secondary);
-  font-weight: 600;
+  /* 102 规范 §1：字重只用 400/500。 */
+  font-weight: 500;
 }

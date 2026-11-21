@@ -4,26 +4,36 @@
  * 探索图视图（会话视图 tab「探索图」，对照表 P1:C16、P2:L1）。
  * 旧页面依据：ARTEX/web/src/app/(main)/function/tasks/detail/_tabs/graph-tab.tsx（旧页用 @antv/g6 画探索图）
  * DSH 依据：DSH 无探索图，按「会话视图 tab 扩展」实现（100-实施计划总表 §4.2）。
- * 接口：全量图 `api.explorationGraph(task?)`（api.ts:795）→ `{ nodes: TaskNode[]; edges: Edge[] }`，
- * 用已安装的 @xyflow/react 自绘（实现在 `v2/data/exploration.ts`）；
- * 按节点分页浏览 `api.explorationNodes(task, {page,size,kinds})`（api.ts:797，只读复用
- * `v2/data/exploration-nodes.ts:67` 的 `useBroadcastPage`），分页口径照旧页
- * broadcast-tab.tsx:548-555（pageCount = ceil(total/size)、页码越界回落到末页）
- * 与 :705-729（`start–end / total`、上一页 / 页号 / 下一页）。
+ * 接口：全量图 `api.explorationGraph(task?)`（api.ts:795）→ `{ nodes: TaskNode[]; edges: Edge[] }`；
+ * 画布直接迁移旧版 ExplorationGraph（components/exploration-graph.tsx，用户要求「别重写，迁移旧版适配」）；
+ * U2：原「按节点分页浏览」块与「探索 ▸ 时间线」同一接口同一 hook（useBroadcastPage），
+ * 已删去，按时间翻节点请用时间线（.tmp/d6-ia-inventory.md §4.2）。
+ *
+ * D2 版式：宽页 → PageHead（统计 + 刷新）→ 筛选条 → 画布卡（定高画布 + 底部图例条）
+ * →「图中节点」卡。只重排画布之外，画布组件不改。
  */
 import { type ReactNode, useMemo, useState } from "react";
 
-import { Background, Controls, ReactFlow, type Edge as FlowEdge, type Node as FlowNode } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-
-import type { ExploreKind, Task } from "@/lib/types";
+import type { Task, TaskNode } from "@/lib/types";
+import { ExplorationGraph } from "@/components/exploration-graph";
 import {
-  IconChevronLeftOutlineRegular,
-  IconChevronRightOutlineRegular,
-} from "@/vendor/dsh/primitives/icons/index";
+  Badge,
+  Card,
+  Empty,
+  FilterBar,
+  IconButton,
+  kit,
+  Meta,
+  Notice,
+  Page,
+  PageHead,
+  Row,
+  Section,
+  Skeleton,
+  type KitTone,
+} from "@/components/v2/design/Kit";
+import { IconBranchOutlineRegular, IconRefreshOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 import { Button } from "@/vendor/dsh/primitives/Button";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
 import {
   exploreKindLabel,
   exploreStateLabel,
@@ -34,7 +44,6 @@ import {
   useExplorationGraph,
   type ExplorationFilter,
 } from "@/v2/data/exploration";
-import { BROADCAST_PAGE_SIZES, useBroadcastPage } from "@/v2/data/exploration-nodes";
 
 import css from "./GraphView.module.css";
 
@@ -45,30 +54,55 @@ const FILTER_OPTIONS = [
   { value: "finding", label: "只看漏洞" },
 ] as const;
 
-/** 分页浏览用的每页条数档位（照旧页 broadcast-tab.tsx:37 的 PAGE_SIZES 与播报板口径一致）。 */
-const PAGE_SIZE_OPTIONS = BROADCAST_PAGE_SIZES.map((value) => ({ value: String(value), label: `${value} / 页` }));
-
-/** 分页档位默认每页条数（播报板默认也是 20）。 */
-const DEFAULT_PAGE_SIZE = BROADCAST_PAGE_SIZES[0] ?? 20;
-
-/** 节点框宽度（布局用，px）。 */
-const NODE_W = 220;
-/** 节点框高度（布局用，px）。 */
-const NODE_H = 64;
+/**
+ * 状态的 kit 色调（旧 Tag 的 outline 归为中性）。
+ * @param state - 后端状态。
+ * @returns Badge 色调。
+ */
+function stateTone(state: string): KitTone {
+  const tone = exploreStateTone(state);
+  return tone === "outline" ? "neutral" : tone;
+}
 
 /**
- * 简单分层布局：按节点下标每 5 个换一层，够读即可；不引额外布局库。
- * @param nodes - 保留的节点。
- * @param titles - 节点显示文本。
- * @returns React Flow 节点。
+ * 种类的 kit 色调：漏洞醒目、意图/目标用强调色，其余中性（与播报页一致）。
+ * @param kind - 节点类型。
+ * @returns Badge 色调。
  */
-function layoutNodes(nodes: readonly { id: string }[], titles: readonly string[]): FlowNode[] {
-  return nodes.map((node, index) => ({
-    id: node.id,
-    position: { x: (index % 5) * (NODE_W + 40), y: Math.floor(index / 5) * (NODE_H + 60) },
-    data: { label: titles[index] ?? node.id },
-    type: "default",
-  }));
+function kindTone(kind: string): KitTone {
+  if (kind === "finding") return "danger";
+  if (kind === "intent") return "info";
+  if (kind === "goal") return "done";
+  return "neutral";
+}
+
+/**
+ * 一个节点的卡内行：标题 + 种类，#id · 优先级，右侧状态。
+ * @param props.node - 节点。
+ * @param props.data - 校验钩子。
+ * @returns 行。
+ */
+function NodeRow({ node, data }: { node: TaskNode; data: Record<`data-${string}`, string> }): ReactNode {
+  const title = explorationNodeTitle(node);
+  return (
+    <Row
+      data={data}
+      label={<span title={title}>{title}</span>}
+      labelAdornment={<Badge tone={kindTone(node.type)}>{exploreKindLabel(node.type)}</Badge>}
+      description={
+        <Meta
+          items={[
+            <span key="id" className={kit.mono}>
+              #{node.id}
+            </span>,
+            `优先级 ${node.priority}`,
+          ]}
+        />
+      }
+    >
+      <Badge tone={stateTone(node.state)}>{exploreStateLabel(node.state)}</Badge>
+    </Row>
+  );
 }
 
 /**
@@ -79,26 +113,6 @@ function layoutNodes(nodes: readonly { id: string }[], titles: readonly string[]
 export function GraphView({ task }: { task: Task }): ReactNode {
   const graph = useExplorationGraph(task.id);
   const [filter, setFilter] = useState<ExplorationFilter>("all");
-  // 分页浏览（P2:L1）：真实后端分页，页码从 1 起，换每页条数回到第 1 页（旧页 broadcast-tab.tsx:554-556）。
-  const [page, setPage] = useState(1);
-  const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
-
-  // 过滤档位与播报板的 kind 口径一致：只看意图 → kinds=["intent"]，只看漏洞 → kinds=["finding"]。
-  const pageKinds = useMemo<ExploreKind[]>(() => (filter === "all" ? [] : [filter]), [filter]);
-  const pageState = useBroadcastPage(
-    task.id,
-    // states / q / order 固定：分页浏览不做状态/关键词筛选，顺序与整图一致（后端默认最新在前）。
-    { page, size, kinds: pageKinds, states: [], q: "", order: "desc" },
-    false,
-  );
-  const pageTotal = pageState.data === null ? 0 : pageState.data.total;
-  const pageCount = Math.max(1, Math.ceil(pageTotal / size));
-  const pageStart = pageTotal === 0 ? 0 : (page - 1) * size + 1;
-  const pageEnd = (page - 1) * size + (pageState.data?.items.length ?? 0);
-
-  // 页码越界（换档位前的旧页码 / 数据被删）：回落到末页（旧页 broadcast-tab.tsx:553-555）。
-  if (page > pageCount) setPage(pageCount);
-
   const kept = useMemo(
     () => (graph.data === null ? [] : filterExplorationNodes(graph.data.nodes, filter)),
     [graph.data, filter],
@@ -107,190 +121,152 @@ export function GraphView({ task }: { task: Task }): ReactNode {
     () => (graph.data === null ? [] : filterExplorationEdges(graph.data.edges, kept)),
     [graph.data, kept],
   );
-  const titles = useMemo(() => kept.map((node) => explorationNodeTitle(node)), [kept]);
-  const flowNodes = useMemo(() => layoutNodes(kept, titles), [kept, titles]);
-  const flowEdges = useMemo<FlowEdge[]>(
-    () =>
-      keptEdges.map((edge, index) => ({
-        id: `e${index}-${edge.src}-${edge.dst}`,
-        source: edge.src,
-        target: edge.dst,
-        label: edge.rel,
-      })),
-    [keptEdges],
-  );
   const relList = useMemo(
     () => [...new Set((graph.data?.edges ?? []).map((edge) => String(edge.rel)))].sort(),
     [graph.data],
   );
+  const kindList = useMemo(() => [...new Set(kept.map((node) => node.type))], [kept]);
 
-  if (graph.phase === "loading") return <div className={css.state}>加载探索图…</div>;
+  const head = (lead: ReactNode): ReactNode => (
+    <PageHead
+      title="探索图"
+      lead={lead}
+      actions={
+        <IconButton label="刷新" spinning={graph.phase === "loading"} onClick={graph.reload}>
+          <IconRefreshOutlineRegular size={14} />
+        </IconButton>
+      }
+    />
+  );
+
+  if (graph.phase === "loading") {
+    return (
+      <Page width="wide">
+        {head("Agent 的目标、意图、事实与漏洞之间的派生关系。")}
+        <Card>
+          <Skeleton label="加载探索图" />
+        </Card>
+      </Page>
+    );
+  }
   if (graph.phase === "offline") {
     return (
-      <div className={css.stateError} role="alert">
-        <span>探索图读取失败：{graph.error}</span>
-        <Button variant="outline" size="sm" onClick={graph.reload}>
-          重试
-        </Button>
-      </div>
+      <Page width="wide">
+        {head("Agent 的目标、意图、事实与漏洞之间的派生关系。")}
+        <Notice
+          tone="danger"
+          action={
+            <Button variant="ghost" size="sm" onClick={graph.reload}>
+              重试
+            </Button>
+          }
+        >
+          探索图读取失败：{graph.error}
+        </Notice>
+      </Page>
     );
   }
   if (graph.data === null || graph.data.nodes.length === 0) {
     return (
-      <div className={css.empty} data-exploration-empty="">
-        <Tag tone="neutral">暂无探索图数据</Tag>
-        <span>这个任务还没有产生探索节点。</span>
-      </div>
+      <Page width="wide">
+        {head("Agent 的目标、意图、事实与漏洞之间的派生关系。")}
+        <Card>
+          <Empty
+            data={{ "data-exploration-empty": "" }}
+            icon={<IconBranchOutlineRegular size={18} />}
+            title="暂无探索图数据"
+            text="这个任务还没有产生探索节点；Agent 开始探索后，节点与关系会画在这里。"
+          />
+        </Card>
+      </Page>
     );
   }
 
   return (
-    <div className={css.wrap} data-exploration-graph={graph.data.nodes.length}>
-      <div className={css.toolbar}>
-        <SegmentedControl
+    <Page width="wide" data={{ "data-exploration-graph": String(graph.data.nodes.length) }}>
+      {head("Agent 的目标、意图、事实与漏洞之间的派生关系；点节点看属性、关联与原始数据。")}
+
+      <div className={css.bar}>
+        <FilterBar
           id="exploration-graph-filter"
           value={filter}
           options={FILTER_OPTIONS}
-          onChange={(next) => {
-            setFilter(next);
-            setPage(1);
-          }}
+          onChange={setFilter}
           label="探索图节点过滤"
         />
         <span className={css.count}>
-          节点 {kept.length} / {graph.data.nodes.length} · 关系 {keptEdges.length}
+          <Meta
+            items={[
+              <span key="n">
+                节点 <span className={css.num}>{kept.length}</span>
+                {kept.length === graph.data.nodes.length ? null : ` / ${graph.data.nodes.length}`}
+              </span>,
+              <span key="e">
+                关系 <span className={css.num}>{keptEdges.length}</span>
+              </span>,
+            ]}
+          />
         </span>
-        <Button variant="outline" size="sm" onClick={graph.reload}>
-          刷新
-        </Button>
       </div>
 
       {kept.length === 0 ? (
-        <div className={css.empty} data-exploration-filter-empty="">
-          <Tag tone="neutral">当前筛选没有匹配的节点</Tag>
-          <span>切换到「全部节点」可以看完整探索图。</span>
-        </div>
+        <Card>
+          <Empty
+            data={{ "data-exploration-filter-empty": "" }}
+            icon={<IconBranchOutlineRegular size={18} />}
+            title="当前筛选没有匹配的节点"
+            text="切换到「全部节点」可以看完整探索图。"
+            action={
+              <Button variant="outline" size="sm" onClick={() => setFilter("all")}>
+                看全部节点
+              </Button>
+            }
+          />
+        </Card>
       ) : (
-        <div className={css.canvas}>
-          <ReactFlow nodes={flowNodes} edges={flowEdges} fitView proOptions={{ hideAttribution: true }}>
-            <Background />
-            <Controls />
-          </ReactFlow>
-        </div>
+        <Card className={css.graphCard}>
+          {/* 直接迁移旧版 ExplorationGraph（exploration-graph.tsx）。旧组件本体不设高度
+              （exploration-graph.tsx:657 只 wrap w-full overflow-hidden rounded-xl），
+              必须外部给高度，否则 ReactFlow 无声明高度→零高度不显示。 */}
+          <div className={css.graphCanvas}>
+            <ExplorationGraph nodes={kept} edges={keptEdges} className={css.explorationHeight} />
+          </div>
+          <div className={css.legend} data-exploration-legend="">
+            <span className={css.legendGroup}>
+              <span className={css.legendLabel}>关系</span>
+              {relList.length === 0 ? (
+                <span className={css.legendMuted}>这张图没有边</span>
+              ) : (
+                relList.map((rel) => (
+                  <Badge key={rel} title="边上的字是关系类型（rel），原文照后端返回显示">
+                    {rel}
+                  </Badge>
+                ))
+              )}
+            </span>
+            <span className={css.legendGroup}>
+              <span className={css.legendLabel}>节点</span>
+              {kindList.map((kind) => (
+                <Badge key={kind} tone={kindTone(kind)}>
+                  {exploreKindLabel(kind)}
+                </Badge>
+              ))}
+            </span>
+            <span className={css.legendHint}>拖动平移 · 滚轮缩放</span>
+          </div>
+        </Card>
       )}
 
-      <div className={css.legend} data-exploration-legend="">
-        <span className={css.legendTitle}>图例</span>
-        <span className={css.legendItem}>边上的字是关系类型（rel），原文照后端返回显示</span>
-        {relList.length === 0 ? (
-          <span className={css.muted}>这张图没有边</span>
-        ) : (
-          relList.map((rel) => (
-            <Tag key={rel} tone="outline">
-              {rel}
-            </Tag>
-          ))
-        )}
-        <span className={css.legendItem}>
-          节点类型：
-          {[...new Set(kept.map((node) => exploreKindLabel(node.type)))].join(" / ")}
-        </span>
-        <span className={css.hint}>拖动可平移，滚轮缩放</span>
-      </div>
+      {kept.length === 0 ? null : (
+        <Section title="图中节点" count={kept.length}>
+          <Card className={css.scrollCard} data={{ "data-exploration-nodes": "" }}>
+            {kept.map((node) => (
+              <NodeRow key={node.id} node={node} data={{ "data-node-id": node.id }} />
+            ))}
+          </Card>
+        </Section>
+      )}
 
-      <ul className={css.nodeList} data-exploration-nodes="">
-        {kept.map((node) => (
-          <li key={node.id} className={css.nodeRow} data-node-id={node.id}>
-            <span className={css.nodeTitle} title={explorationNodeTitle(node)}>
-              {explorationNodeTitle(node)}
-            </span>
-            <Tag tone="outline">{exploreKindLabel(node.type)}</Tag>
-            <Tag tone={exploreStateTone(node.state)}>{exploreStateLabel(node.state)}</Tag>
-            <span className={css.muted}>优先级 {node.priority}</span>
-          </li>
-        ))}
-      </ul>
-
-      {/* P2:L1：按节点分页浏览。数据全部来自 `api.explorationNodes`（真实分页，不伪造节点），
-          分页口径照旧页 broadcast-tab.tsx:705-729（start–end / total、上一页 / 页号 / 下一页）。 */}
-      <section className={css.pagerBlock} data-exploration-pager="">
-        <div className={css.subHead}>
-          <span className={css.subTitle}>按节点分页浏览</span>
-          <span className={css.muted}>后端按创建顺序分页（最新在前）；这里只翻页，不额外过滤状态与关键词。</span>
-        </div>
-        {pageState.phase === "loading" ? (
-          <div className={css.state} data-exploration-pager-state="loading">
-            加载节点…
-          </div>
-        ) : null}
-        {pageState.phase === "offline" ? (
-          <div className={css.stateError} role="alert" data-exploration-pager-state="offline">
-            <span>节点读取失败：{pageState.error}</span>
-            <Button variant="outline" size="sm" onClick={pageState.reload}>
-              重试
-            </Button>
-          </div>
-        ) : null}
-        {pageState.phase === "ready" && pageTotal === 0 ? (
-          <p className={css.empty} data-exploration-pager-state="empty">
-            {filter === "all" ? "这个任务还没有产生探索节点。" : "当前筛选下没有可翻页的节点。"}
-          </p>
-        ) : null}
-        {pageState.phase === "ready" && pageState.data !== null && pageTotal > 0 ? (
-          <>
-            <ul className={css.nodeList} data-exploration-page-rows="">
-              {pageState.data.items.map((node) => (
-                <li key={node.id} className={css.nodeRow} data-exploration-page-node={node.id}>
-                  <span className={css.nodeTitle} title={explorationNodeTitle(node)}>
-                    {explorationNodeTitle(node)}
-                  </span>
-                  <Tag tone="outline">{exploreKindLabel(node.type)}</Tag>
-                  <Tag tone={exploreStateTone(node.state)}>{exploreStateLabel(node.state)}</Tag>
-                  <span className={css.muted}>优先级 {node.priority}</span>
-                </li>
-              ))}
-            </ul>
-            <div className={css.pager}>
-              <SegmentedControl
-                id="exploration-page-size"
-                label="每页条数"
-                value={String(size)}
-                options={PAGE_SIZE_OPTIONS}
-                onChange={(next) => {
-                  setSize(Number(next));
-                  setPage(1);
-                }}
-              />
-              <span className={css.range} data-exploration-page-range="">
-                {pageStart}–{pageEnd} / {pageTotal}
-              </span>
-              <span className={css.pagerRight}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label="上一页"
-                  title={page <= 1 ? "已经是第一页" : "上一页"}
-                  disabled={page <= 1}
-                  icon={<IconChevronLeftOutlineRegular size={13} />}
-                  onClick={() => setPage((value) => Math.max(1, value - 1))}
-                />
-                <span className={css.pageInfo} data-exploration-page-info="">
-                  {page} / {pageCount}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label="下一页"
-                  title={page >= pageCount ? "已经是最后一页" : "下一页"}
-                  disabled={page >= pageCount}
-                  icon={<IconChevronRightOutlineRegular size={13} />}
-                  onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
-                />
-              </span>
-            </div>
-          </>
-        ) : null}
-      </section>
-    </div>
+    </Page>
   );
 }

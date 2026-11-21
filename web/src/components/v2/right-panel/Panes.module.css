@@ -572,169 +572,6 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Session                                                             */
-/* ------------------------------------------------------------------ */
-
-.sessionId {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.session {
-  display: flex;
-  flex-direction: column;
-}
-
-/* One titled block; the last one keeps no rule below it. */
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 16px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
-}
-
-.section:last-child {
-  border-bottom: 0;
-}
-
-.sectionTitle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 18px;
-}
-
-.sectionIcon {
-  display: inline-flex;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.sessionTitle {
-  margin: 0;
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 20px;
-  overflow-wrap: anywhere;
-}
-
-.sessionDescription {
-  margin: 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  line-height: 20px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.progressRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.progressTrack {
-  flex: 1 1 auto;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--dsw-alias-bg-multi-select);
-}
-
-.progressFill {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  background: var(--dsw-alias-state-success-primary);
-}
-
-.progressText {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
-  font-variant-numeric: tabular-nums;
-}
-
-.metaList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-}
-
-.metaRow {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 2px 0;
-}
-
-.metaLabel {
-  flex: none;
-  width: 64px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-}
-
-.metaValue {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  line-height: 20px;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-
-.mono {
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.tagRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tokenGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.tokenCell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
-}
-
-.tokenLabel {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-}
-
-.tokenValue {
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ------------------------------------------------------------------ */
 /* Evidence (C23)                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -804,77 +641,24 @@
   overflow-wrap: anywhere;
 }
 
-/* ------------------------------------------------------------------ */
-/* Task (P1:E8 close-out)                                              */
-/* ------------------------------------------------------------------ */
-
-/* The 任务 page reuses the session page's block layout (`.session` /
-   `.section` / `.sectionTitle` / `.metaList` / `.progressRow`), so these
-   classes only cover what that page never needed: a count beside a section
-   title, a compact two-column row for the constraint and scope lists, and the
-   three short status lines (尚余 / 读取失败 / 空态). */
-
-/* The row count after a section title: quiet, aligned to the title baseline. */
-.taskSectionCount {
-  margin-left: 2px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* One constraint / scope row: a type tag, then the value on one line. */
-.taskList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.taskRow {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
+/* D6: quiet text link from the task-scoped findings list to the global library / full detail. */
+.libraryLink {
+  align-self: flex-start;
+  margin: 4px 0 0;
   padding: 2px 0;
-}
-
-/* The row's value: clipped with an ellipsis, the full text stays in `title`. */
-.taskRowText {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
+  border: 0;
+  background: transparent;
   color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
-  line-height: 20px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* The tail of a list that was cut at the page's limit. */
-.taskRemain {
-  margin: 0;
-  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
   font-size: 12px;
   line-height: 18px;
-  font-variant-numeric: tabular-nums;
+  cursor: pointer;
 }
 
-/* A section's read failure: the backend's own message, in the warning tone. */
-.taskError {
-  margin: 0;
-  color: var(--dsw-alias-state-warn-primary);
-  font-size: 12px;
-  line-height: 18px;
-  overflow-wrap: anywhere;
+@media (hover: hover) {
+  .libraryLink:hover {
+    color: var(--dsw-alias-label-primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }
-
-/* A section's honest empty line. */
-.taskEmpty {
-  margin: 0;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
-}
-

@@ -11,7 +11,7 @@
  * Ordering is explicit and matches DSH's composition order:
  *
  *   actions     plan-mode (10) → jobs-chip (20)
- *   utilities   right-panel-toggle (10) → more-menu (20)
+ *   utilities   schedule-clock (5) → right-panel-toggle (10) → more-menu (20)
  *
  * `jobs-chip` conditions itself on DSH's rule that the chip only exists while a
  * job row is live; the entry stays registered, exactly like DSH's component
@@ -25,6 +25,7 @@ import { ConversationMoreMenu } from "./ConversationMoreMenu";
 import css from "./ConversationRoot.module.css";
 import type { ConversationHeaderSlotContext } from "./contract";
 import { ModeMenu } from "./ModeMenu";
+import { ScheduleClock } from "./ScheduleClock";
 
 declare module "@/v2/slots/registry" {
   interface SlotContextMap {
@@ -85,4 +86,15 @@ export const MORE_MENU_UTILITY: SlotEntry<ConversationHeaderSlotContext> = {
   id: "more-menu",
   order: 20,
   render: (ctx) => <ConversationMoreMenu task={ctx.task} taskActions={ctx.taskActions} />,
+};
+
+/**
+ * 自动化时钟（DX-S3）：当前任务有 enabled 自动化时的快捷入口，排在右栏开关之前
+ * （order 5）。组件自隐：数据未就绪或当前任务没有 enabled 的自动化时渲染 null，
+ * 条目本身保持注册——与 `JOBS_CHIP_ACTION` 的 `when` 注释同一策略。
+ */
+export const SCHEDULE_CLOCK_UTILITY: SlotEntry<ConversationHeaderSlotContext> = {
+  id: "schedule-clock",
+  order: 5,
+  render: (ctx) => <ScheduleClock taskId={ctx.task.id} />,
 };

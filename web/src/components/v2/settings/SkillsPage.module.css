@@ -1,0 +1,467 @@
+/*
+ * 技能节（列表 SkillsPage + 详情 SkillDetail）在设计 kit 之上的特有小件。骨架（SettingsPage /
+ * PageHead / Section / Card / Row / Editor / Field / RowMenu / Metrics 类名）全部来自 Kit；这里只放：
+ * 排行比例条、两栏网格、描述截断、面包屑、文件树、文件编辑器头、危险区文字、删除确认摘要。
+ * 只用 --dsw-alias-* 颜色、--dsw-radius-* 圆角、0.5px 分隔线、400/500 字重。
+ */
+
+/* ---------------- 列表页 ---------------- */
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 排行 / 最近调用并排两栏，窄面板时自动折行。 */
+.split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+/* 排行行的序号 tile 文字。 */
+.rank {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 排行行尾：比例条 + 次数。 */
+.rankValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rankBar {
+  position: relative;
+  width: 64px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.rankFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.rankCount {
+  min-width: 40px;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 等宽名称（排行 / 最近调用里的技能名）。 */
+.mono {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+}
+
+/* 行描述：一行截断。 */
+.clip {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+/* 技能行外有一层钩子容器，kit 的 `.row + .row` 分隔线够不到：在容器之间补一条。 */
+.listCard {
+  overflow: hidden;
+}
+
+.item + .item,
+.uploadBlock {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* 技能行的字形色。 */
+.glyph {
+  display: inline-flex;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 卡内提示条（上传结果 / 失败）。 */
+.cardNotice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+/* 编辑器里的 layer-1 小卡（MCP 依赖、可见性的紧凑行）。 */
+.innerCard {
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.innerCard > [data-kit-row] {
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.innerState {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 删除确认里被删对象的摘要块。 */
+.targetBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dialogStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialogText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ---------------- 详情页 ---------------- */
+
+/* 面包屑：「技能 / name」。 */
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin-bottom: -12px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.crumbLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 6px 0 2px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .crumbLink:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.crumbLink:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.crumbSep {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+.crumbCurrent {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 文件区：左树右编辑。 */
+.workbench {
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+@container (max-width: 560px) {
+  .workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.treeCard {
+  min-height: 420px;
+  max-height: 560px;
+  overflow: hidden;
+}
+
+.treeHead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 6px 8px 6px 14px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.treeHeadTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.treeHeadCount {
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.treeBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px;
+}
+
+.treeState {
+  margin: 0;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.treeNotice {
+  padding: 6px 6px 0;
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding-right: 4px;
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+@media (hover: hover) {
+  .treeRow:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.treeRow:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.treeRowSelected,
+.treeRowSelected:hover {
+  background: var(--dsw-alias-bg-multi-select);
+  color: var(--dsw-alias-label-primary);
+}
+
+.treeChevron,
+.treeIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.treeName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.treeDirName {
+  composes: treeName;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 行内动作：悬停或聚焦时才出现。 */
+.treeActions {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 0;
+  opacity: 0;
+  transition: opacity var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.treeRow:hover .treeActions,
+.treeRow:focus-within .treeActions,
+.treeRowSelected .treeActions {
+  opacity: 1;
+}
+
+.treeAction {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .treeAction:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .treeActionDanger:hover {
+    color: var(--dsw-alias-state-error-primary);
+  }
+}
+
+.treeAction:focus-visible {
+  opacity: 1;
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.treeCreate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 4px 2px 0;
+}
+
+.treeCreateKind {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.treeCreateInput {
+  height: 26px;
+  font-size: 12px;
+}
+
+/* 编辑器卡。 */
+.editorCard {
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.editorHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 8px 6px 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.editorPath {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.editorPathFile {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editorHeadActions {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.editorBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px;
+}
+
+.editorArea {
+  flex: 1 1 auto;
+  min-height: 360px;
+  font-size: 12px;
+  line-height: 20px;
+  tab-size: 2;
+}
+
+.editorEmpty {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 危险区：红色说明。 */
+.dangerText {
+  color: var(--dsw-alias-state-error-primary);
+}

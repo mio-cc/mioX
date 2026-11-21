@@ -100,7 +100,9 @@
 }
 
 .actions > * {
-  height: 24px;
+  /* DSH `Button module` sm 档高 28px（`Button.module.css:28-34`）；
+     侧栏此前自造 24px 紧凑档，回到 sm 按钮统一高度。 */
+  height: 28px;
   font-size: 12px;
   line-height: 18px;
 }

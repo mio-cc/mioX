@@ -18,6 +18,7 @@
 import * as React from "react";
 
 import type { LLMRetryOverride } from "@/lib/types";
+import { Field, FieldGrid, kit, Row as KitRow, TextInput, UnitInput } from "@/components/v2/design/Kit";
 import { Switch } from "@/vendor/dsh/primitives/Switch";
 
 import { SelectMenu } from "./SelectMenu";
@@ -188,7 +189,7 @@ function RuleNum({
   return (
     <input
       id={id}
-      className={css.numberInput}
+      className={`${kit.input} ${css.numberInputKit}`}
       type="number"
       min={min}
       step={1}
@@ -235,65 +236,69 @@ export function ModelProfileExtraFields({
 
   return (
     <>
-      <label className={css.fieldLabel} htmlFor={`${uid}-proxy`}>代理</label>
-      <input
-        id={`${uid}-proxy`}
-        className={css.textField}
-        value={value.proxy}
-        placeholder="socks5://user:pass@127.0.0.1:1080"
-        aria-label="代理"
-        disabled={disabled}
-        onChange={(event) => onChange({ proxy: event.currentTarget.value })}
-      />
-      <p className={css.fieldHint}>
-        仅该配置的 LLM 出站请求走此代理，支持 http/https/socks5（可带账号密码，特殊字符需 URL 编码）；留空 = 直连。
-      </p>
-
-      <label className={css.fieldLabel} htmlFor={`${uid}-session-header`}>自定义会话头</label>
-      <input
-        id={`${uid}-session-header`}
-        className={css.textField}
-        value={value.sessionHeaderKey}
-        placeholder="如 x-session-id（留空 = 不发送）"
-        aria-label="自定义会话头"
-        disabled={disabled}
-        onChange={(event) => onChange({ sessionHeaderKey: event.currentTarget.value })}
-      />
-      <p className={css.fieldHint}>
-        填头名后每次请求都带该 HTTP 头，头值为当前会话的 session id（chat 如 conv-12、worker 如 exp3-worker-i87），用于按 session-id 做提示缓存 / 粘性路由；留空则不发送。
-      </p>
-
-      <div className={css.modelGrid}>
-        <label className={css.modelField} htmlFor={`${uid}-rps`}>
-          <span>每秒限速</span>
-          <RuleNum
-            id={`${uid}-rps`}
-            min={0}
-            value={value.ratePerSecond}
-            placeholder="0"
+      <FieldGrid>
+        <Field
+          label="代理"
+          htmlFor={`${uid}-proxy`}
+          optional
+          hint="仅本配置的出站请求走此代理（http/https/socks5）；留空直连。"
+        >
+          <TextInput
+            id={`${uid}-proxy`}
+            mono
+            value={value.proxy}
+            placeholder="socks5://user:pass@127.0.0.1:1080"
+            aria-label="代理"
             disabled={disabled}
-            label="每秒限速"
-            onChange={(next) => onChange({ ratePerSecond: next })}
+            onChange={(event) => onChange({ proxy: event.currentTarget.value })}
           />
-        </label>
-        <label className={css.modelField} htmlFor={`${uid}-rpm`}>
-          <span>每分钟限速</span>
-          <RuleNum
-            id={`${uid}-rpm`}
-            min={0}
-            value={value.ratePerMinute}
-            placeholder="0"
+        </Field>
+        <Field
+          label="自定义会话头"
+          htmlFor={`${uid}-session-header`}
+          optional
+          hint="每次请求带此头，值为当前会话 id，用于提示缓存 / 粘性路由。"
+        >
+          <TextInput
+            id={`${uid}-session-header`}
+            mono
+            value={value.sessionHeaderKey}
+            placeholder="x-session-id"
+            aria-label="自定义会话头"
             disabled={disabled}
-            label="每分钟限速"
-            onChange={(next) => onChange({ ratePerMinute: next })}
+            onChange={(event) => onChange({ sessionHeaderKey: event.currentTarget.value })}
           />
-        </label>
-      </div>
-      <p className={css.fieldHint}>限速 0 = 不限，全 Agent 共享该配置的配额。</p>
+        </Field>
+      </FieldGrid>
 
-      <div className={css.modelGrid}>
-        <label className={css.modelField} htmlFor={`${uid}-priority`}>
-          <span>轮询优先级</span>
+      <FieldGrid columns={3}>
+        <Field label="每秒限速" htmlFor={`${uid}-rps`} hint="0 = 不限">
+          <UnitInput unit="次/秒">
+            <RuleNum
+              id={`${uid}-rps`}
+              min={0}
+              value={value.ratePerSecond}
+              placeholder="0"
+              disabled={disabled}
+              label="每秒限速"
+              onChange={(next) => onChange({ ratePerSecond: next })}
+            />
+          </UnitInput>
+        </Field>
+        <Field label="每分钟限速" htmlFor={`${uid}-rpm`} hint="全 Agent 共享配额">
+          <UnitInput unit="次/分">
+            <RuleNum
+              id={`${uid}-rpm`}
+              min={0}
+              value={value.ratePerMinute}
+              placeholder="0"
+              disabled={disabled}
+              label="每分钟限速"
+              onChange={(next) => onChange({ ratePerMinute: next })}
+            />
+          </UnitInput>
+        </Field>
+        <Field label="轮询优先级" htmlFor={`${uid}-priority`} hint="越大越先选；同级轮流">
           <RuleNum
             id={`${uid}-priority`}
             min={0}
@@ -303,52 +308,27 @@ export function ModelProfileExtraFields({
             label="轮询优先级"
             onChange={(next) => onChange({ priority: next })}
           />
-        </label>
-      </div>
-      <p className={css.fieldHint}>
-        数字越大越先被选中；当前生效配置恒为第 1 顺位，与本值无关。相同优先级会轮流打头，天然分摊额度。
-      </p>
+        </Field>
+      </FieldGrid>
 
-      <div className={css.row}>
-        <div className={css.rowText}>
-          <div className={css.rowLabel}>不参与轮询</div>
-          <div className={css.rowHint}>开启后不会被当作故障转移目标；仍可被 Agent / 任务显式指定使用。</div>
-        </div>
-        <div className={css.rowControl}>
+      <div className={css.optionCard}>
+        <KitRow label="不参与轮询" description="不作为故障转移目标；仍可被 Agent / 任务显式指定。">
           <Switch
             checked={value.poolExclude}
             label="不参与轮询"
             disabled={disabled}
             onChange={(next) => onChange({ poolExclude: next })}
           />
-        </div>
-      </div>
-
-      <div className={css.row}>
-        <div className={css.rowText}>
-          <div className={css.rowLabel}>流式输出</div>
-          <div className={css.rowHint}>
-            开启（默认）走流式 SSE，有运行中实时进度与 token 计数；关闭走真·非流式（一次性返回），可绕开糟糕的 SSE 实现。
-          </div>
-        </div>
-        <div className={css.rowControl}>
+        </KitRow>
+        <KitRow label="流式输出" description="默认开启，提供实时进度与 token 计数；关闭则一次性返回。">
           <Switch
             checked={value.streaming}
             label="流式输出"
             disabled={disabled}
             onChange={(next) => onChange({ streaming: next })}
           />
-        </div>
-      </div>
-
-      <div className={css.row}>
-        <div className={css.rowText}>
-          <div className={css.rowLabel}>思考开关（thinking.type）</div>
-          <div className={css.rowHint}>
-            控制是否发送 thinking 字段。不发送 = 不带该字段（兼容不支持它的模型）；关闭 = 发 disabled；开启 = 发 enabled。
-          </div>
-        </div>
-        <div className={css.rowControl}>
+        </KitRow>
+        <KitRow label="思考开关" description="thinking.type：不发送 / 关闭（disabled）/ 开启（enabled）。">
           <SelectMenu
             id={`${uid}-thinking`}
             value={value.thinkingType}
@@ -357,15 +337,8 @@ export function ModelProfileExtraFields({
             disabled={disabled}
             ariaLabel="思考开关"
           />
-        </div>
-      </div>
-
-      <div className={css.row}>
-        <div className={css.rowText}>
-          <div className={css.rowLabel}>上限字段名</div>
-          <div className={css.rowHint}>{MAX_TOKENS_FIELD_HINTS[format] ?? MAX_TOKENS_FIELD_HINTS.openai}</div>
-        </div>
-        <div className={css.rowControl}>
+        </KitRow>
+        <KitRow label="上限字段名" description={MAX_TOKENS_FIELD_HINTS[format] ?? MAX_TOKENS_FIELD_HINTS.openai}>
           <SelectMenu
             id={`${uid}-max-tokens-field`}
             value={format === "openai" ? value.maxTokensField : NONE_OPTION}
@@ -374,43 +347,55 @@ export function ModelProfileExtraFields({
             disabled={disabled || format !== "openai"}
             ariaLabel="上限字段名"
           />
-        </div>
+        </KitRow>
       </div>
 
-      <div className={css.reasonRow}>
-        <span className={css.typeLabel}>重试覆盖</span>
-        <span className={css.fieldHint}>
-          只对该配置生效，覆盖「重试与退避」的全局默认：次数 0 = 跟随全局、-1 = 关闭该层；间隔 0 = 指数退避。
-        </span>
-      </div>
-      {RETRY_OVERRIDE_LAYERS.map((layer) => (
-        <div key={layer.key} className={css.modelField}>
-          <span>{layer.label}</span>
-          <span className={css.inlineRow}>
-            <RuleNum
-              id={`${uid}-retry-${layer.key}-n`}
-              min={-1}
-              value={value.retry[layer.key].attempts}
-              placeholder="0"
-              disabled={disabled}
-              label={`本配置${layer.label}次数`}
-              onChange={(next) => patchRetry(layer.key, { attempts: next })}
-            />
-            <span className={css.unit}>次</span>
-            <RuleNum
-              id={`${uid}-retry-${layer.key}-ms`}
-              min={0}
-              value={value.retry[layer.key].interval_ms}
-              placeholder="0"
-              disabled={disabled}
-              label={`本配置${layer.label}间隔（毫秒）`}
-              onChange={(next) => patchRetry(layer.key, { interval_ms: next })}
-            />
-            <span className={css.unit}>ms</span>
-          </span>
-          <span className={css.fieldHint}>{layer.hint}</span>
+      <Field
+        label="重试覆盖"
+        hint="仅本配置生效，覆盖全局「重试与退避」：次数 0 = 跟随全局、-1 = 关闭该层；间隔 0 = 指数退避。"
+      >
+        <div className={css.retryTable} role="table" aria-label="重试覆盖">
+          <div className={css.retryHead} role="row">
+            <span role="columnheader">层</span>
+            <span role="columnheader">次数</span>
+            <span role="columnheader">间隔</span>
+          </div>
+          {RETRY_OVERRIDE_LAYERS.map((layer) => (
+            <div key={layer.key} className={css.retryRow} role="row" data-retry-layer={layer.key}>
+              <span className={css.retryLayer} role="cell">
+                <span className={css.retryLayerName}>{layer.label}</span>
+                <span className={css.retryLayerHint}>{layer.hint}</span>
+              </span>
+              <span role="cell">
+                <UnitInput unit="次">
+                  <RuleNum
+                    id={`${uid}-retry-${layer.key}-n`}
+                    min={-1}
+                    value={value.retry[layer.key].attempts}
+                    placeholder="0"
+                    disabled={disabled}
+                    label={`本配置${layer.label}次数`}
+                    onChange={(next) => patchRetry(layer.key, { attempts: next })}
+                  />
+                </UnitInput>
+              </span>
+              <span role="cell">
+                <UnitInput unit="ms">
+                  <RuleNum
+                    id={`${uid}-retry-${layer.key}-ms`}
+                    min={0}
+                    value={value.retry[layer.key].interval_ms}
+                    placeholder="0"
+                    disabled={disabled}
+                    label={`本配置${layer.label}间隔（毫秒）`}
+                    onChange={(next) => patchRetry(layer.key, { interval_ms: next })}
+                  />
+                </UnitInput>
+              </span>
+            </div>
+          ))}
         </div>
-      ))}
+      </Field>
     </>
   );
 }

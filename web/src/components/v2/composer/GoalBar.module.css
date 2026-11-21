@@ -36,6 +36,112 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Active goal on a running task: a slow breath, the same cue as the jobs chip. */
+.glyph[data-breathing] {
+  color: var(--dsw-alias-state-business-primary);
+  animation: goal-breathe 2.4s var(--ds-ease-in-out, ease-in-out) infinite;
+}
+
+@keyframes goal-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glyph[data-breathing] {
+    animation: none;
+  }
+}
+
+/* 验收项 n/m capsule with a progress ring. */
+.progress {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ring {
+  flex: none;
+}
+
+.ringTrack {
+  fill: none;
+  stroke: var(--dsw-alias-border-l2);
+  stroke-width: 2;
+}
+
+.ringFill {
+  fill: none;
+  stroke: var(--dsw-alias-state-success-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Confirm-clear and achieved variants of the strip. */
+.confirmBar {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 30%, transparent);
+}
+
+.confirmText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.textBtn {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .textBtn:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.textBtnDanger {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+@media (hover: hover) {
+  .textBtnDanger:hover:not(:disabled) {
+    color: var(--dsw-alias-state-error-primary);
+  }
+}
+
+.doneBar .glyph,
+.doneBar .label {
+  color: var(--dsw-alias-state-success-primary);
+}
+
 /* Same family as the Todo/Queue panel titles (13/24 medium, primary). */
 .label {
   flex: none;

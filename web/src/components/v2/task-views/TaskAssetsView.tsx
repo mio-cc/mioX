@@ -10,6 +10,10 @@
  * 接口：全部走 `v2/data/task-assets.ts`（`api.taskAssets` api.ts:586、`api.searchTaskAssets` :592、
  * `api.assetCounts` :581、`api.attachTaskAssets` :596、`api.detachTaskAsset` :603、
  * `api.registerTaskAssetScopes` :601、`api.taskIntentAssets` :604）。
+ *
+ * D2 版式：PageHead → 「测试资产」（类型筛选 + DSL 搜索与一行语法提示 → 资产卡：每行勾选 / 资产 / 说明 / 来源 / 分离
+ * → 底部分页条）→ 「意图资产（只读）」卡 → 「登记测试范围」卡（多行编辑器 + 识别结果 + 主按钮）。
+ * 数据与写入行为不变。
  */
 import { type ReactNode, useEffect, useState } from "react";
 
@@ -18,12 +22,33 @@ import { parseCompanyScopeText } from "@/lib/company-scope";
 import { toast } from "@/components/v2/settings/Toast";
 import { assetTypeLabel } from "@/v2/data/assets-page";
 import { useDebouncedValue } from "@/components/v2/data-pages/use-debounced-value";
+import {
+  Badge,
+  Card,
+  Empty,
+  IconButton,
+  kit,
+  Meta,
+  Notice,
+  Page,
+  PageHead,
+  Row,
+  Section,
+  Skeleton,
+} from "@/components/v2/design/Kit";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Checkbox } from "@/vendor/dsh/primitives/Checkbox";
 import { Input } from "@/vendor/dsh/primitives/Input";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
-import { IconSearchOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
+import {
+  IconChevronLeftOutlineRegular,
+  IconChevronRightOutlineRegular,
+  IconCloseOutlineRegular,
+  IconDatabaseOutlineRegular,
+  IconRefreshOutlineRegular,
+  IconSearchOutlineRegular,
+  IconSparkleRegular,
+} from "@/vendor/dsh/primitives/icons/index";
 import {
   assetDslHint,
   attachTaskAssets,
@@ -77,7 +102,7 @@ function sourceLabel(source: string): string {
 /**
  * 一行资产的主标识（照旧页 assets-tab.tsx:72-89 的优先级）。
  * @param asset - 后端资产行。
- * @returns 用于表格首列的文本。
+ * @returns 用于行标题的文本。
  */
 function assetLabel(asset: Asset): string {
   switch (asset.type) {
@@ -149,7 +174,8 @@ function assetDetail(asset: Asset): string {
 }
 
 /**
- * 计数页签条（照旧页 assets-tab.tsx:489-504：每个类型带自己的计数）。
+ * 类型筛选条（照旧页 assets-tab.tsx:489-504：每个类型带自己的计数）。
+ * 外观与 kit FilterBar 一致（复用其类名），自己渲染是为了保留每项的 `data-task-assets-tab` 钩子。
  * @returns 类型页签。
  */
 function TypeTabs({
@@ -162,7 +188,7 @@ function TypeTabs({
   onChange: (next: NewAssetType) => void;
 }): ReactNode {
   return (
-    <div className={css.tabStrip} role="tablist" aria-label="资产类型" data-task-assets-tabs="">
+    <div className={kit.filterBar} role="tablist" aria-label="资产类型" data-kit-filter-bar="" data-task-assets-tabs="">
       {TASK_ASSET_TYPES.map((type) => {
         const active = type === value;
         const count = counts[type] ?? 0;
@@ -172,12 +198,13 @@ function TypeTabs({
             type="button"
             role="tab"
             aria-selected={active}
+            tabIndex={active ? 0 : -1}
             data-task-assets-tab={type}
-            className={active ? `${css.tab} ${css.tabActive}` : css.tab}
+            className={active ? `${kit.filter} ${kit.filterActive}` : kit.filter}
             onClick={() => onChange(type)}
           >
             {assetTypeLabel(type)}
-            <span className={css.tabCount}>{count}</span>
+            <span className={kit.filterCount}>{count}</span>
           </button>
         );
       })}
@@ -185,9 +212,9 @@ function TypeTabs({
   );
 }
 
-/** 意图资产的颜色：域名/IP 实心，其余描边。 */
-function intentTone(asset: IntentAsset): "info" | "outline" {
-  return asset.type === "root_domain" || asset.type === "subdomain" || asset.type === "ip" ? "info" : "outline";
+/** 意图资产的色调：域名/IP 用强调色，其余中性。 */
+function intentTone(asset: IntentAsset): "info" | "neutral" {
+  return asset.type === "root_domain" || asset.type === "subdomain" || asset.type === "ip" ? "info" : "neutral";
 }
 
 /**
@@ -199,6 +226,7 @@ export function TaskAssetsView({ task }: { task: Task }): ReactNode {
   const [type, setType] = useState<NewAssetType>("root_domain");
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState("");
+  const [syntaxOpen, setSyntaxOpen] = useState(false);
   const dsl = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
 
   const list = useTaskAssetsPage({ taskId: task.id, type, dsl, page, size: TASK_ASSETS_PAGE_SIZE });
@@ -331,24 +359,34 @@ export function TaskAssetsView({ task }: { task: Task }): ReactNode {
     count: parsedScope.rules.filter((rule) => rule.kind === kind).length,
   })).filter((row) => row.count > 0);
 
+  const totalHint =
+    counts.phase === "ready" ? `共 ${counts.total} 项` : counts.phase === "loading" ? "统计中…" : "统计失败";
+
   return (
-    <div className={css.wrap} data-task-assets="">
-      <section className={css.section} data-task-assets-list="">
-        <div className={css.sectionHead}>
-          <span className={css.sectionTitle}>测试资产</span>
-          <span className={css.sectionHint} data-task-assets-total={counts.total}>
-            {counts.phase === "ready" ? `本任务关联 ${counts.total} 项资产` : counts.phase === "loading" ? "统计中…" : "统计失败"}
-          </span>
-          <Button variant="outline" size="sm" onClick={refreshAll} data-task-assets-refresh="">
-            刷新
-          </Button>
-        </div>
+    <Page data={{ "data-task-assets": "" }}>
+      <PageHead
+        title="资产"
+        lead="本任务关联的测试资产、意图引用到的资产，以及给 Agent 登记新的测试范围。"
+        actions={
+          <IconButton
+            label="刷新"
+            spinning={list.phase === "loading" || counts.phase === "loading"}
+            onClick={refreshAll}
+            data-task-assets-refresh=""
+          >
+            <IconRefreshOutlineRegular size={14} />
+          </IconButton>
+        }
+      />
 
-        <div className={css.toolbar}>
-          <TypeTabs value={type} counts={counts.counts} onChange={setType} />
-        </div>
+      <Section
+        title="测试资产"
+        count={<span data-task-assets-total={counts.total}>{totalHint}</span>}
+        data={{ "data-task-assets-list": "" }}
+      >
+        <TypeTabs value={type} counts={counts.counts} onChange={setType} />
 
-        <div className={css.searchRow}>
+        <div className={css.search}>
           <Input
             icon={<IconSearchOutlineRegular size={14} />}
             className={css.searchInput}
@@ -367,241 +405,297 @@ export function TaskAssetsView({ task }: { task: Task }): ReactNode {
             </Button>
           )}
         </div>
-        <p className={css.hint}>{assetDslHint()}</p>
-
-        {counts.phase === "offline" ? (
-          <div className={css.errorInline} role="alert">
-            类型计数读取失败：{counts.error}
-          </div>
+        <div className={css.syntax}>
+          <span className={css.syntaxLine}>
+            <span className={css.op}>=</span> 模糊
+            <span className={css.op}>==</span> 精确
+            <span className={css.op}>!=</span> 排除
+            <span className={css.op}>&amp;&amp;</span> 组合条件
+          </span>
+          <button
+            type="button"
+            className={css.linkButton}
+            aria-expanded={syntaxOpen}
+            onClick={() => setSyntaxOpen((value) => !value)}
+          >
+            {syntaxOpen ? "收起字段" : "可用字段"}
+          </button>
+        </div>
+        {syntaxOpen ? (
+          <Card quiet padded>
+            <span className={css.syntaxFull}>{assetDslHint()}</span>
+          </Card>
         ) : null}
 
-        {list.phase === "loading" ? (
-          <div className={css.state} data-task-assets-state="loading">
-            加载资产…
-          </div>
-        ) : null}
+        {counts.phase === "offline" ? <Notice tone="danger">类型计数读取失败：{counts.error}</Notice> : null}
 
-        {list.phase === "offline" ? (
-          <div className={css.stateError} role="alert" data-task-assets-state="offline">
-            <span>{dsl === "" ? "资产读取失败" : "搜索失败"}：{list.error}</span>
-            <Button variant="outline" size="sm" onClick={list.reload} data-task-assets-action="retry">
-              重试
-            </Button>
-          </div>
-        ) : null}
-
-        {list.phase === "ready" && list.assets.length === 0 ? (
-          <div className={css.empty} data-task-assets-state="empty">
-            <Tag tone="neutral">{dsl === "" ? "暂无测试资产" : "没有匹配的资产"}</Tag>
-            <span>
-              {dsl === ""
-                ? "本任务还没有该类型的资产。可以在下方「登记测试范围」写入，或勾选后附加已有资产。"
-                : "换个 DSL 条件，或清空搜索。"}
+        {selected.length > 0 && list.phase === "ready" && list.assets.length > 0 ? (
+          <div className={css.selectionBar} data-task-assets-selected={selected.length}>
+            <span className={css.selectionText}>已选 {selected.length} 项</span>
+            <span className={css.selectionActions}>
+              <Button variant="ghost" size="sm" onClick={() => setSelected([])} data-task-assets-clear-selection="">
+                取消勾选
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => setAttachOpen(true)} data-task-assets-attach="">
+                附加到任务
+              </Button>
             </span>
           </div>
         ) : null}
 
+        {list.phase === "loading" ? (
+          <Card data={{ "data-task-assets-state": "loading" }}>
+            <Skeleton label="加载资产" />
+          </Card>
+        ) : null}
+
+        {list.phase === "offline" ? (
+          <Notice
+            tone="danger"
+            data={{ "data-task-assets-state": "offline" }}
+            action={
+              <Button variant="ghost" size="sm" onClick={list.reload} data-task-assets-action="retry">
+                重试
+              </Button>
+            }
+          >
+            {dsl === "" ? "资产读取失败" : "搜索失败"}：{list.error}
+          </Notice>
+        ) : null}
+
+        {list.phase === "ready" && list.assets.length === 0 ? (
+          <Card>
+            <Empty
+              inCard
+              data={{ "data-task-assets-state": "empty" }}
+              icon={dsl === "" ? <IconDatabaseOutlineRegular size={18} /> : <IconSearchOutlineRegular size={18} />}
+              title={dsl === "" ? `还没有${assetTypeLabel(type)}资产` : "没有匹配的资产"}
+              text={
+                dsl === ""
+                  ? "可以在下方「登记测试范围」写入，Agent 发现的资产也会自动出现在这里。"
+                  : "换个 DSL 条件，或清空搜索。"
+              }
+              action={
+                dsl === "" ? undefined : (
+                  <Button variant="outline" size="sm" onClick={() => setQuery("")}>
+                    清空搜索
+                  </Button>
+                )
+              }
+            />
+          </Card>
+        ) : null}
+
         {list.phase === "ready" && list.assets.length > 0 ? (
           <>
-            {selected.length > 0 ? (
-              <div className={css.actionRow} data-task-assets-selected={selected.length}>
-                <span>已选 {selected.length} 项</span>
-                <Button variant="primary" size="sm" onClick={() => setAttachOpen(true)} data-task-assets-attach="">
-                  附加到任务
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setSelected([])} data-task-assets-clear-selection="">
-                  取消勾选
-                </Button>
-              </div>
-            ) : null}
+            <Card data={{ "data-task-assets-table": "" }}>
+              {list.assets.map((asset) => {
+                const label = assetLabel(asset);
+                const detail = assetDetail(asset);
+                return (
+                  <Row
+                    key={asset.id}
+                    data={{ "data-task-asset": String(asset.id) }}
+                    lead={
+                      <Checkbox
+                        className={css.check}
+                        checked={selected.includes(asset.id)}
+                        label={`勾选 ${label}`}
+                        onChange={(next) => toggleRow(asset.id, next)}
+                      />
+                    }
+                    label={
+                      <span className={kit.mono} title={label}>
+                        {label}
+                      </span>
+                    }
+                    description={detail === "" ? undefined : <span title={detail}>{detail}</span>}
+                  >
+                    <Badge>{sourceLabel(asset.task_source ?? "legacy")}</Badge>
+                    <IconButton
+                      label="从任务分离"
+                      data-task-assets-detach={asset.id}
+                      onClick={() => {
+                        setDetachError(null);
+                        setDetachTarget(asset);
+                      }}
+                    >
+                      <IconCloseOutlineRegular size={14} />
+                    </IconButton>
+                  </Row>
+                );
+              })}
+            </Card>
 
-            <div className={css.tableWrap}>
-              <table className={css.table} data-task-assets-table="">
-                <thead>
-                  <tr>
-                    <th className={css.checkCell}>选择</th>
-                    <th>资产</th>
-                    <th>说明</th>
-                    <th>来源</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.assets.map((asset) => {
-                    const label = assetLabel(asset);
-                    const detail = assetDetail(asset);
-                    return (
-                      <tr key={asset.id} data-task-asset={asset.id}>
-                        <td className={css.checkCell}>
-                          <Checkbox
-                            checked={selected.includes(asset.id)}
-                            label={`勾选 ${label}`}
-                            onChange={(next) => toggleRow(asset.id, next)}
-                          />
-                        </td>
-                        <td className={css.mono} title={label}>
-                          {label}
-                        </td>
-                        <td title={detail}>{detail === "" ? "—" : detail}</td>
-                        <td>
-                          <Tag tone="outline">{sourceLabel(asset.task_source ?? "legacy")}</Tag>
-                        </td>
-                        <td>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            data-task-assets-detach={asset.id}
-                            onClick={() => {
-                              setDetachError(null);
-                              setDetachTarget(asset);
-                            }}
-                          >
-                            从任务分离
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <footer className={css.pager} data-task-assets-pager="">
-              <span data-task-assets-page-info="">
-                第 {page + 1} / {pageCount} 页 · 共 {list.total} 条 · 每页 {TASK_ASSETS_PAGE_SIZE} 条
+            <div className={css.pager} data-task-assets-pager="">
+              <span className={css.pagerInfo} data-task-assets-page-info="">
+                <Meta items={[`第 ${page + 1} / ${pageCount} 页`, `共 ${list.total} 条`, `每页 ${TASK_ASSETS_PAGE_SIZE} 条`]} />
               </span>
               <span className={css.pagerActions}>
-                <Button
-                  variant="outline"
-                  size="sm"
+                <IconButton
+                  label="上一页"
                   disabled={page <= 0}
                   onClick={() => setPage((current) => Math.max(0, current - 1))}
                   data-task-assets-page="prev"
                 >
-                  上一页
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
+                  <IconChevronLeftOutlineRegular size={14} />
+                </IconButton>
+                <IconButton
+                  label="下一页"
                   disabled={page + 1 >= pageCount}
                   onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
                   data-task-assets-page="next"
                 >
-                  下一页
-                </Button>
+                  <IconChevronRightOutlineRegular size={14} />
+                </IconButton>
               </span>
-            </footer>
+            </div>
           </>
         ) : null}
-      </section>
+      </Section>
 
-      <section className={css.section} data-task-assets-intent="">
-        <div className={css.sectionHead}>
-          <span className={css.sectionTitle}>意图资产（只读）</span>
-          <span className={css.sectionHint}>{intent.phase === "ready" ? `${intent.assets.length} 项` : ""}</span>
-          <Button variant="outline" size="sm" onClick={intent.reload} data-task-intent-assets-refresh="">
-            刷新
-          </Button>
-        </div>
-        {intent.error === null ? null : (
-          <div className={css.errorInline} role="alert">
-            意图资产读取失败：{intent.error}
-          </div>
-        )}
+      <Section
+        title="意图资产"
+        count={intent.phase === "ready" ? intent.assets.length : undefined}
+        hint="只读 · 意图在推进中引用到的资产"
+        data={{ "data-task-assets-intent": "" }}
+        actions={
+          <IconButton
+            label="刷新意图资产"
+            spinning={intent.phase === "loading"}
+            onClick={intent.reload}
+            data-task-intent-assets-refresh=""
+          >
+            <IconRefreshOutlineRegular size={14} />
+          </IconButton>
+        }
+      >
+        {intent.error !== null && intent.phase !== "offline" ? (
+          <Notice tone="danger">意图资产读取失败：{intent.error}</Notice>
+        ) : null}
         {intent.phase === "loading" ? (
-          <div className={css.state} data-task-intent-assets-state="loading">
-            加载意图资产…
-          </div>
+          <Card data={{ "data-task-intent-assets-state": "loading" }}>
+            <Skeleton label="加载意图资产" />
+          </Card>
         ) : null}
         {intent.phase === "offline" ? (
-          <div className={css.stateError} role="alert" data-task-intent-assets-state="offline">
-            <span>意图资产读取失败。</span>
-            <Button variant="outline" size="sm" onClick={intent.reload}>
-              重试
-            </Button>
-          </div>
+          <Notice
+            tone="danger"
+            data={{ "data-task-intent-assets-state": "offline" }}
+            action={
+              <Button variant="ghost" size="sm" onClick={intent.reload}>
+                重试
+              </Button>
+            }
+          >
+            意图资产读取失败{intent.error === null ? "。" : `：${intent.error}`}
+          </Notice>
         ) : null}
         {intent.phase === "ready" && intent.assets.length === 0 ? (
-          <div className={css.empty} data-task-intent-assets-state="empty">
-            <Tag tone="neutral">暂无意图资产</Tag>
-            <span>意图还没绑定资产时，这里为空。</span>
-          </div>
+          <Card>
+            <Empty
+              inCard
+              data={{ "data-task-intent-assets-state": "empty" }}
+              icon={<IconSparkleRegular size={18} />}
+              title="暂无意图资产"
+              text="意图还没有绑定资产；Agent 推进意图时引用到的资产会列在这里。"
+            />
+          </Card>
         ) : null}
         {intent.phase === "ready" && intent.assets.length > 0 ? (
-          <ul className={css.intentList} data-task-intent-assets-rows="">
+          <Card data={{ "data-task-intent-assets-rows": "" }}>
             {intent.assets.map((row) => (
-              <li key={`${row.intent_id}-${row.asset_id}`} className={css.intentRow}>
-                <span className={css.intentLabel} title={row.label}>
-                  {row.label === "" ? `#${row.asset_id}` : row.label}
-                </span>
-                <Tag tone={intentTone(row)}>{assetTypeLabel(row.type)}</Tag>
-                <span className={css.intentMeta}>
-                  {sourceLabel(row.source)}
-                  {row.source_summary === "" ? "" : ` · ${row.source_summary}`}
-                  {row.inherited ? ` · 继承自任务 #${row.source_task_id}` : ""}
-                </span>
-              </li>
+              <Row
+                key={`${row.intent_id}-${row.asset_id}`}
+                label={
+                  <span className={kit.mono} title={row.label}>
+                    {row.label === "" ? `#${row.asset_id}` : row.label}
+                  </span>
+                }
+                labelAdornment={<Badge tone={intentTone(row)}>{assetTypeLabel(row.type)}</Badge>}
+                description={
+                  <Meta
+                    items={[
+                      sourceLabel(row.source),
+                      row.source_summary === "" ? null : row.source_summary,
+                      row.inherited ? `继承自任务 #${row.source_task_id}` : null,
+                    ]}
+                  />
+                }
+              />
             ))}
-          </ul>
+          </Card>
         ) : null}
-      </section>
+      </Section>
 
-      <section className={css.section} data-task-assets-scope="">
-        <div className={css.sectionHead}>
-          <span className={css.sectionTitle}>登记测试范围</span>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={scopeBusy || parsedScope.rules.length === 0 || parsedScope.errors.length > 0}
-            onClick={() => {
-              setScopeError(null);
-              setScopeConfirm(true);
-            }}
-            data-task-assets-scope-submit=""
+      <Section title="登记测试范围" hint="域名和 IP 会成为资产；CIDR、ICP、关键词作为 Agent 的范围上下文" data={{ "data-task-assets-scope": "" }}>
+        <Card>
+          <Row
+            stacked
+            label="测试资产与范围"
+            description="每行一条，自动识别域名、IP、CIDR、ICP 备案和关键词。"
           >
-            登记 {parsedScope.rules.length > 0 ? parsedScope.rules.length : ""} 条
-          </Button>
-        </div>
-        <div className={css.fieldBlock}>
-          <label className={css.fieldLabel} htmlFor="task-assets-scope">
-            测试资产与范围（每行一条，自动识别域名、IP、CIDR、ICP 备案和关键词）
-          </label>
-          <textarea
-            id="task-assets-scope"
-            className={css.textArea}
-            rows={6}
-            value={scopeText}
-            placeholder="每行一条：域名、IP、CIDR、ICP 备案号或企业关键词"
-            data-task-assets-scope-text=""
-            disabled={scopeBusy}
-            onChange={(event) => setScopeText(event.currentTarget.value)}
-          />
-        </div>
-        <div className={css.parsedRow}>
-          <span>已识别 {parsedScope.rules.length} 条</span>
-          {scopeCounts.map((row) => (
-            <Tag key={row.kind} tone="neutral">
-              {SCOPE_KIND_LABELS[row.kind]} {row.count}
-            </Tag>
-          ))}
-        </div>
+            <textarea
+              id="task-assets-scope"
+              className={css.textArea}
+              rows={6}
+              value={scopeText}
+              aria-label="测试资产与范围"
+              placeholder={"example.com\n10.0.0.0/24\n京ICP备12345678号"}
+              data-task-assets-scope-text=""
+              disabled={scopeBusy}
+              onChange={(event) => setScopeText(event.currentTarget.value)}
+            />
+          </Row>
+          <Row
+            label={`已识别 ${parsedScope.rules.length} 条`}
+            description={
+              scopeCounts.length === 0 ? (
+                "输入后在这里预览识别结果"
+              ) : (
+                <span className={css.kindBadges}>
+                  {scopeCounts.map((row) => (
+                    <Badge key={row.kind}>
+                      {SCOPE_KIND_LABELS[row.kind]} {row.count}
+                    </Badge>
+                  ))}
+                </span>
+              )
+            }
+          >
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={scopeBusy || parsedScope.rules.length === 0 || parsedScope.errors.length > 0}
+              onClick={() => {
+                setScopeError(null);
+                setScopeConfirm(true);
+              }}
+              data-task-assets-scope-submit=""
+            >
+              登记 {parsedScope.rules.length > 0 ? parsedScope.rules.length : ""} 条
+            </Button>
+          </Row>
+        </Card>
         {parsedScope.errors.length > 0 ? (
-          <ul className={css.errorList}>
-            {parsedScope.errors.slice(0, 5).map((item) => (
-              <li key={`${item.line}-${item.error}`}>
-                第 {item.line} 行：{item.error}
-              </li>
-            ))}
-            {parsedScope.errors.length > 5 ? <li>另有 {parsedScope.errors.length - 5} 行错误</li> : null}
-          </ul>
+          <Notice tone="warning">
+            <ul className={css.errorList}>
+              {parsedScope.errors.slice(0, 5).map((item) => (
+                <li key={`${item.line}-${item.error}`}>
+                  第 {item.line} 行：{item.error}
+                </li>
+              ))}
+              {parsedScope.errors.length > 5 ? <li>另有 {parsedScope.errors.length - 5} 行错误</li> : null}
+            </ul>
+          </Notice>
         ) : null}
         {scopeError === null ? null : (
-          <div className={css.stateError} role="alert" data-task-assets-scope-error="">
-            <span>登记失败：{scopeError}</span>
-          </div>
+          <Notice tone="danger" data={{ "data-task-assets-scope-error": "" }}>
+            登记失败：{scopeError}
+          </Notice>
         )}
-        {scopeNotice === null ? null : <p className={css.notice}>{scopeNotice}</p>}
-      </section>
+        {scopeNotice === null ? null : <Notice tone="success">{scopeNotice}</Notice>}
+      </Section>
 
       <Modal
         open={attachOpen}
@@ -652,11 +746,7 @@ export function TaskAssetsView({ task }: { task: Task }): ReactNode {
               onChange={(event) => setAttachSummary(event.currentTarget.value)}
             />
           </div>
-          {attachError === null ? null : (
-            <p className={css.dialogError} role="alert">
-              附加失败：{attachError}
-            </p>
-          )}
+          {attachError === null ? null : <Notice tone="danger">附加失败：{attachError}</Notice>}
         </div>
       </Modal>
 
@@ -689,11 +779,7 @@ export function TaskAssetsView({ task }: { task: Task }): ReactNode {
       >
         <div className={css.dialogBody}>
           <span>分离后该资产不再属于本任务的测试资产清单，本任务已产生的发现不受影响。</span>
-          {detachError === null ? null : (
-            <p className={css.dialogError} role="alert">
-              分离失败：{detachError}
-            </p>
-          )}
+          {detachError === null ? null : <Notice tone="danger">分离失败：{detachError}</Notice>}
         </div>
       </Modal>
 
@@ -734,6 +820,6 @@ export function TaskAssetsView({ task }: { task: Task }): ReactNode {
           </ul>
         </div>
       </Modal>
-    </div>
+    </Page>
   );
 }

@@ -13,12 +13,14 @@
  * the send seat waits while any draft is not ready (`InputBar.tsx:98-104`).
  * Permission changes still write through the owner's callback.
  *
- * The primary seat is a two-state control, as in the source: while the chat request
- * is in flight it keeps the sending spinner, and once the backend reports the turn
- * running it becomes the Stop control. The run state itself is owned by the shell
- * (`useChatRun` is polled once) and arrives as `chatRun`, so the Stop seat and the
- * stream-tail running status share one `chat/status` poll chain. A stop request
- * never clears the conversation; the SSE tail keeps draining the turn.
+ * The primary seat is the only run control, as in the source: while the chat request
+ * is in flight it keeps the sending spinner, and while anything of the task runs —
+ * the main-agent turn (`chatRun`, one shell-owned `chat/status` poll) or the
+ * planner/workers (`taskStatus` running/queued) — an empty draft turns it into Stop.
+ * Stop halts the whole task: a pausable task is paused through `/tasks/{id}/control`
+ * (the backend cancels the main-agent turn with the pause), otherwise only the turn
+ * is cancelled. There is no separate pause or resume control: sending a message to a
+ * paused task resumes it first. A stop never clears the conversation.
  *
  * A running turn also accepts a draft into the page-level queue (`useComposerQueue`):
  * `POST /api/chat` answers 409 while the agent is busy and the backend has no steer
@@ -32,21 +34,34 @@
  * independent Stop exists only while the send request is in flight. Stopping a
  * running turn that has a draft therefore means clearing the draft (primary Stop) or
  * pressing Escape twice. Two Escape presses within 500ms while the task runs stop it
- * through the same `chatRun.stop()` call (single Escape never acts).
+ * through the same Stop action (single Escape never acts).
  */
 import * as React from "react";
 
-import type { GoalSnapshot } from "@/lib/types";
+import { toast } from "@/components/v2/settings/Toast";
+import type { GoalSnapshot, TaskStatus } from "@/lib/types";
 import type { ChatRunState } from "@/v2/data/chat-run";
 import { sendChat } from "@/v2/data/chat-send";
+import { useComposerAttachments } from "@/v2/data/composer-attachments";
+import { PLAN_GOAL_COMMANDS, parseComposerCommand } from "@/v2/data/composer-commands";
+import { useComposerPrefill } from "@/v2/data/composer-prefill";
 import type { FileMentionCandidate } from "@/v2/data/file-mentions";
 import { useFileMentions } from "@/v2/data/file-mentions";
 import type { GoalActions } from "@/v2/data/goal";
-import { useComposerAttachments } from "@/v2/data/composer-attachments";
-import { profilesToOptions } from "@/v2/data/llm-map";
+import { clearTaskGoal, pauseTaskGoal, resumeTaskGoal, setTaskGoal } from "@/v2/data/goal";
+import { reloadPlanState, usePlanMode } from "@/v2/data/plan-review";
+import { profilesToOptions, reasoningEffortLabel } from "@/v2/data/llm-map";
+import { setTurnEffort, turnEffortFor, useTurnEffort } from "@/v2/data/turn-effort";
 import { useLlmProfiles } from "@/v2/data/llm-profiles";
+import { useTaskLlmResolution } from "@/v2/data/task-llm";
 import type { SideQuestionChannel } from "@/v2/data/side-questions";
-import { isSideQuestionCommand, mutateSideQuestions as cancelSideQuestion, sideQuestionBody, useSideHistory, useSideQuestionSubmit } from "@/v2/data/side-questions";
+import {
+  mutateSideQuestions as cancelSideQuestion,
+  isSideQuestionCommand,
+  sideQuestionBody,
+  useSideHistory,
+  useSideQuestionSubmit,
+} from "@/v2/data/side-questions";
 import { useWorkspaceFiles } from "@/v2/data/workspace-files";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import {
@@ -56,24 +71,28 @@ import {
 } from "@/vendor/dsh/primitives/icons/index";
 import { Menu } from "@/vendor/dsh/primitives/Menu";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { toast } from "@/components/v2/settings/Toast";
 
 import css from "./Composer.module.css";
 import { ComposerAttachments } from "./ComposerAttachments";
 import type { ComposerEditorHandle } from "./ComposerEditor";
 import { ComposerEditor } from "./ComposerEditor";
-import { GoalBar } from "./GoalBar";
+import { GoalBar, type GoalProgress } from "./GoalBar";
 import { MentionMenu } from "./MentionMenu";
 import { ModelPicker } from "./ModelPicker";
+import { PlanModeToggle } from "./PlanModeToggle";
+import { PlanReviewDock } from "./PlanReviewDock";
 import { QueueDock } from "./QueueDock";
-import { SteeringDock } from "./SteeringDock";
 import { SideQuestionNotice } from "./SideQuestionNotice";
+import { SteeringDock } from "./SteeringDock";
 import type { TriggerHit } from "./trigger";
 import { detectTrigger } from "./trigger";
 import { QUEUE_ATTACHMENT_NOTICE, useComposerQueue } from "./useComposerQueue";
 
 /** The draft surface's copy; the same string is its accessible name, as in the source. */
 const PLACEHOLDER = "描述你想要构建的内容, / 调用指令, @ 文件或对话";
+
+/** Plan mode copy (DSH `ui-conversation` locale: "描述你的任务以生成计划"). */
+const PLAN_PLACEHOLDER = "描述要评估的目标，先侦察并给出计划";
 
 /**
  * Two Escape presses inside this window stop the running turn. The source's
@@ -90,6 +109,7 @@ const PERMISSIONS = [
 ];
 
 const COMMANDS = [
+  ...PLAN_GOAL_COMMANDS,
   { id: "model", label: "/model", desc: "切换本次会话的模型" },
   { id: "compact", label: "/compact", desc: "压缩上下文" },
   { id: "clear", label: "/clear", desc: "清空当前会话" },
@@ -100,7 +120,11 @@ const COMMANDS = [
  * `/btw`：静默兼容的旧入口（旧页 sessions-tab.tsx:1494-1527）。敲了前缀照旧走插话，
  * 但命令表不再列出它 —— 运行中 Enter 本身就是插话，前缀只剩兼容意义。
  */
-const BTW_COMMAND = { id: "btw", label: "/btw", desc: "给正在运行的会话提一条不打断的追问（兼容写法：直接输入即可插话）" };
+const BTW_COMMAND = {
+  id: "btw",
+  label: "/btw",
+  desc: "给正在运行的会话提一条不打断的追问（兼容写法：直接输入即可插话）",
+};
 
 /** One row of the `/` or `@` menu. */
 interface TriggerCandidate {
@@ -153,19 +177,34 @@ function StopGlyph(): React.ReactNode {
 export function Composer({
   goalState = null,
   goalActions,
+  goalProgress = null,
   taskId = null,
   chatRun = IDLE_CHAT_RUN,
   onSent,
   permissionLevel = "auto",
   onPermissionChange,
+  taskStatus = null,
+  taskPaused = false,
+  onPauseTask,
+  onResumeTask,
 }: {
   goalState?: GoalSnapshot | null;
   goalActions?: GoalActions;
+  /** 验收项进度（任务行 goals_met / goals_total），显示在目标条上。 */
+  goalProgress?: GoalProgress | null;
   taskId?: string | null;
   chatRun?: ChatRunState;
   onSent?: () => void;
   permissionLevel?: string;
   onPermissionChange?: (level: string) => void;
+  /** 实时任务状态（Shell 的 1.5s 任务行轮询）：停止键据此决定要不要连规划器/执行者一起停。 */
+  taskStatus?: TaskStatus | null;
+  /** 任务已暂停（paused 标记）：下一次发送会先恢复任务。 */
+  taskPaused?: boolean;
+  /** 暂停整个任务（规划器、执行者与本轮回复）；失败时 reject。 */
+  onPauseTask?: () => Promise<void>;
+  /** 恢复暂停的任务；发送消息前自动调用，失败时 reject。 */
+  onResumeTask?: () => Promise<void>;
 }): React.ReactNode {
   const [draft, setDraft] = React.useState("");
   const [sending, setSending] = React.useState(false);
@@ -191,11 +230,22 @@ export function Composer({
   // The shell owns the poll (`Shell.tsx`), so this component never polls again.
   const running = chatRun.running;
   const runningRef = React.useRef(running);
+  // Task-level run state. A paused task is resumed by the next send; a pausable
+  // task is stopped as a whole; live planner/workers keep the Stop seat even when
+  // no main-agent turn runs.
+  // A finished task can keep its paused flag (done + paused=true); only a live
+  // task is resumable, so a terminal status never counts as paused.
+  const terminal = taskStatus === "done" || taskStatus === "failed" || taskStatus === "timeout";
+  const paused = !terminal && (taskPaused || taskStatus === "paused");
+  const pausable = !paused && (taskStatus === "created" || taskStatus === "queued" || taskStatus === "running");
+  const taskBusy = running || (!paused && (taskStatus === "running" || taskStatus === "queued"));
   React.useEffect(() => {
     runningRef.current = running;
-    // The turn settled (or the task changed): release a pending stop.
-    if (!running) setStopping(false);
   }, [running]);
+  React.useEffect(() => {
+    // Everything settled (or the task changed): release a pending stop.
+    if (!taskBusy) setStopping(false);
+  }, [taskBusy]);
 
   // Page-level submission queue. It lives as long as this composer surface stays
   // mounted (task switches included), is text-only, and is dropped by a page
@@ -210,6 +260,50 @@ export function Composer({
     onSent,
     onError: setSendError,
   });
+
+  // ---- Plan mode (single source: `v2/data/plan-review.ts`, read from GET /tasks/{id}) ----
+  // The header ModeMenu subscribes to the same per-task store, so the capsule,
+  // Shift+Tab, `/plan` and the menu row can never disagree.
+  const plan = usePlanMode(taskId, { foreground: true });
+  const planOn = plan.planMode === true;
+  /** The last toggle happened while a turn ran: it applies from the next turn. */
+  const [planNextTurn, setPlanNextTurn] = React.useState(false);
+  React.useEffect(() => {
+    if (!running) setPlanNextTurn(false);
+  }, [running]);
+  React.useEffect(() => {
+    setPlanNextTurn(false);
+  }, [taskId]);
+  // A turn that just started may submit a plan; one re-read when it settles
+  // catches a review created between polls.
+  React.useEffect(() => {
+    if (!running && taskId !== null) reloadPlanState(taskId);
+  }, [running, taskId]);
+
+  /**
+   * Write plan mode; failures surface as a toast, never only in the console.
+   * @param on - wanted state (default: flip).
+   * @returns whether the write succeeded.
+   */
+  const applyPlanMode = React.useCallback(
+    async (on?: boolean): Promise<boolean> => {
+      if (taskId === null) {
+        toast("先选择一个任务");
+        return false;
+      }
+      const next = on ?? plan.planMode !== true;
+      if (plan.planMode === next) return true;
+      try {
+        await plan.set(next);
+        if (runningRef.current) setPlanNextTurn(true);
+        return true;
+      } catch (reason: unknown) {
+        toast(`${next ? "开启" : "关闭"}计划模式失败：${reason instanceof Error ? reason.message : String(reason)}`);
+        return false;
+      }
+    },
+    [taskId, plan],
+  );
 
   // Trigger menu state: the live token, the highlighted row, and per-token dismissal.
   const [hit, setHit] = React.useState<TriggerHit | null>(null);
@@ -232,6 +326,24 @@ export function Composer({
 
   const profilesState = useLlmProfiles();
   const modelOptions = React.useMemo(() => profilesToOptions(profilesState.profiles), [profilesState.profiles]);
+  // 当前任务生效的 profile（关注 mainagent 一路）：解析失败/无 profile 时不显示强度，
+  // 也不改选模型的旧默认（第一条 = 全局默认配置）。
+  const llmResolution = useTaskLlmResolution(taskId);
+  // Effort chosen in this menu's 推理等级 pane ("" = Default); remembered per task
+  // and sent with every chat turn as reasoning_effort (v2/data/turn-effort.ts).
+  // Before this the pane only moved a local check mark: nothing was sent, and the
+  // trigger kept showing the profile's 「默认」.
+  const effortChoice = useTurnEffort(taskId);
+  const { activeModelId, effortLabel } = React.useMemo(() => {
+    const id = llmResolution.resolution?.mainagent.profile_id;
+    if (taskId === null || id === undefined) return { activeModelId: null, effortLabel: null };
+    const profile = profilesState.profiles.find((row) => Number(row.id) === Number(id));
+    if (profile === undefined) return { activeModelId: null, effortLabel: null };
+    return {
+      activeModelId: modelOptions.some((row) => row.id === String(id)) ? String(id) : null,
+      effortLabel: reasoningEffortLabel(effortChoice !== "" ? effortChoice : (profile.reasoning_effort ?? "")),
+    };
+  }, [effortChoice, llmResolution.resolution, modelOptions, profilesState.profiles, taskId]);
   const workspaceState = useWorkspaceFiles();
   const fileOptions = React.useMemo(
     () => workspaceState.entries.map((entry) => ({ id: entry.path, label: entry.path })),
@@ -365,8 +477,7 @@ export function Composer({
 
   // An automatic queue send in flight also holds the send gate: the backend would
   // reject a second concurrent turn with 409.
-  const canSubmit =
-    draft.trim() !== "" && taskId !== null && !sending && !uploadsPending && !queue.flushing;
+  const canSubmit = draft.trim() !== "" && taskId !== null && !sending && !uploadsPending && !queue.flushing;
 
   /**
    * Move the draft into the page-level queue instead of POSTing it.
@@ -423,6 +534,135 @@ export function Composer({
     });
   };
 
+  /** Clear the draft surface after a command consumed it. */
+  const clearDraft = (): void => {
+    editorRef.current?.clear();
+    setDraft("");
+    applyHit(null);
+  };
+
+  // DX-OV：外部「预填草稿」通道（概览「在会话中设置目标」→ `/goal `）。
+  // 编辑器是非受控 contenteditable：整稿替换走 replaceRange(0, len, text)，
+  // 光标由它落到文本末尾；draft 状态经 notify → handleDraftChange 自动跟上，
+  // 所以这里不另调 setDraft。预填只换文本，不碰发送/停止/计划模式。
+  const draftLengthRef = React.useRef(0);
+  React.useEffect(() => {
+    draftLengthRef.current = draft.length;
+  }, [draft]);
+  useComposerPrefill(
+    React.useCallback((text: string): void => {
+      editorRef.current?.replaceRange(0, draftLengthRef.current, text);
+      editorRef.current?.focus();
+    }, []),
+  );
+
+  /**
+   * POST one message (with the ready attachments) and start following the run.
+   * Sending is also how a stopped task continues: a paused task is resumed first,
+   * so the planner/workers pick up again together with the new turn.
+   */
+  const sendNow = (text: string): void => {
+    if (taskId === null || uploadsPending || queue.flushing) return;
+    queue.release();
+    setSending(true);
+    setSendError(null);
+    const sendAttachments = attachments.flatMap((item) =>
+      item.status === "ready" && item.path !== undefined ? [{ name: item.name, path: item.path, size: item.size }] : [],
+    );
+    // A failed resume never blocks the message: the main agent answers a paused
+    // task too, and the reason is shown once the send settles.
+    let resumeError: string | null = null;
+    const resumeFirst =
+      paused && onResumeTask !== undefined
+        ? onResumeTask().catch((reason: unknown) => {
+            resumeError = reason instanceof Error ? reason.message : String(reason);
+          })
+        : Promise.resolve();
+    resumeFirst
+      .then(() => sendChat(text, taskId, sendAttachments, undefined, turnEffortFor(taskId) || undefined))
+      .then(() => {
+        clearDraft();
+        draftAttachments.clear();
+        // 202 accepted: the turn now runs asynchronously on the backend, so the
+        // primary seat becomes Stop instead of falling back to Send.
+        chatRun.start();
+        onSent?.();
+        if (resumeError !== null) setSendError(`任务没有恢复：${resumeError}`);
+      })
+      .catch((reason: unknown) => setSendError(reason instanceof Error ? reason.message : String(reason)))
+      .finally(() => setSending(false));
+  };
+
+  /**
+   * Run `/plan …` and `/goal …` locally. Returns true when the draft was a
+   * command (handled or refused), false for an ordinary message.
+   */
+  const runCommand = (): boolean => {
+    const command = parseComposerCommand(draft);
+    if (command === null || taskId === null) return false;
+    const goalCall = (label: string, call: () => Promise<unknown>, done: string): void => {
+      clearDraft();
+      void call()
+        .then(() => {
+          toast(done);
+          onSent?.();
+        })
+        .catch((reason: unknown) => toast(`${label}失败：${reason instanceof Error ? reason.message : String(reason)}`));
+    };
+    switch (command.kind) {
+      case "plan-off":
+        // A draft with files is not a mode switch: keep both (old page rule).
+        if (attachments.length > 0) {
+          setSendError("带附件时不能用 /plan off，请先移除附件或单独切换计划模式。");
+          return true;
+        }
+        clearDraft();
+        void applyPlanMode(false).then((ok) => {
+          if (ok) toast("计划模式已关闭");
+        });
+        return true;
+      case "plan-on": {
+        const message = command.message;
+        if (message === "") clearDraft();
+        void applyPlanMode(true).then((ok) => {
+          if (!ok) return;
+          if (message === "") {
+            toast("计划模式已开启：先侦察并给出计划，批准后再执行");
+            return;
+          }
+          // `/plan <message>`: the rest of the draft goes out as this turn's message.
+          if (runningRef.current) {
+            if (attachments.length > 0) {
+              setSendError(QUEUE_ATTACHMENT_NOTICE);
+              return;
+            }
+            queue.enqueue(message);
+            clearDraft();
+            toast("计划模式已开启，消息已排到下一轮");
+            return;
+          }
+          sendNow(message);
+        });
+        return true;
+      }
+      case "goal-set":
+        goalCall("设定目标", () => setTaskGoal(taskId, command.objective), "目标已设定");
+        return true;
+      case "goal-pause":
+        goalCall("暂停目标", () => pauseTaskGoal(taskId), "目标已暂停");
+        return true;
+      case "goal-resume":
+        goalCall("恢复目标", () => resumeTaskGoal(taskId), "目标已恢复");
+        return true;
+      case "goal-clear":
+        goalCall("清除目标", () => clearTaskGoal(taskId), "目标已清除");
+        return true;
+      case "goal-missing":
+        toast("请在 /goal 后写上目标，例如：/goal 拿到后台管理权限并给出证据");
+        return true;
+    }
+  };
+
   const submit = (): void => {
     if (taskId === null) return;
     // `/btw` 兼容接管：无论运行与否，敲了前缀就按插话语义走（旧行为保留）。
@@ -430,6 +670,8 @@ export function Composer({
       submitSteer(draft.trim());
       return;
     }
+    // `/plan …` and `/goal …` run locally in every run state.
+    if (!sending && runCommand()) return;
     // 运行中且有草稿：普通 Enter = 插话（DSH submission-policy 的 steer 分支）；没有
     // 插话目标（主 Agent 没在跑）时维持排队。发送中的请求期缓存 Enter 排队不变。
     if (running && !sending && steerAvailable) {
@@ -442,31 +684,10 @@ export function Composer({
     }
     if (!canSubmit) return;
     // An explicit send after a stop restarts delivery: rows kept by the stop
-    // (DSH `keepInbox`) drain again once this new turn settles.
-    queue.release();
-    setSending(true);
-    setSendError(null);
-    // Only ready drafts go on the wire; the send gate above guarantees none is
-    // still uploading, so this is the whole list. Size is the browser's exact
-    // byte count (the source sends its draft descriptors the same way).
-    const sendAttachments = attachments.flatMap((item) =>
-      item.status === "ready" && item.path !== undefined
-        ? [{ name: item.name, path: item.path, size: item.size }]
-        : [],
-    );
-    sendChat(draft.trim(), taskId, sendAttachments)
-      .then(() => {
-        editorRef.current?.clear();
-        setDraft("");
-        applyHit(null);
-        draftAttachments.clear();
-        // 202 accepted: the turn now runs asynchronously on the backend, so the
-        // primary seat becomes Stop instead of falling back to Send.
-        chatRun.start();
-        onSent?.();
-      })
-      .catch((reason: unknown) => setSendError(reason instanceof Error ? reason.message : String(reason)))
-      .finally(() => setSending(false));
+    // (DSH `keepInbox`) drain again once this new turn settles (`sendNow`
+    // releases the hold). Only ready drafts go on the wire; the send gate above
+    // guarantees none is still uploading.
+    sendNow(draft.trim());
   };
 
   /**
@@ -479,22 +700,28 @@ export function Composer({
       submitSteer(draft.trim());
       return;
     }
+    if (!sending && runCommand()) return;
     enqueueDraft();
   };
 
-  /** Stop the turn in flight; a failed request surfaces through the notice row. */
+  /**
+   * Stop = stop the task. A pausable task is paused through `/tasks/{id}/control`:
+   * the backend cancels planner/workers and the main-agent turn together
+   * (`applyTaskControlWithCause` → `cancelTaskChat`). A task that cannot be paused
+   * (terminal) only has the turn to cancel. Queued rows are held (DSH
+   * `keepInbox: true`, `session-controller/src/commands.ts:538`) until the next
+   * explicit send. A failed request surfaces through the notice row.
+   */
   const stop = (): void => {
     if (stopping || taskId === null) return;
-    // DSH cancels with `keepInbox: true` (`session-controller/src/commands.ts:538`):
-    // the stopped turn's end must not auto-send the queued rows.
     queue.noteStop();
     setStopping(true);
     setSendError(null);
-    chatRun
-      .stop()
+    const halt = pausable && onPauseTask !== undefined ? onPauseTask() : chatRun.stop();
+    halt
       .then(() => {
-        // Still running: the status poll owns the switch back to Send. Already
-        // idle (stopped during the send request): nothing else flips `running`,
+        // Still running: the polls own the switch back to Send. Already idle
+        // (stopped during the send request): nothing else flips the run state,
         // so release the control here.
         if (!runningRef.current) setStopping(false);
       })
@@ -504,8 +731,8 @@ export function Composer({
       });
   };
 
-  // Esc Esc: two Escape presses within DOUBLE_ESCAPE_MS while this task's turn
-  // runs stop it through the same call as the Stop seat. A single press never
+  // Esc Esc: two Escape presses within DOUBLE_ESCAPE_MS while this task runs
+  // stop it through the same call as the Stop seat. A single press never
   // acts; it only arms the short window. Conditions mirror the source's
   // `stop-shortcut.ts` fixed-input filter: repeated and IME-composing presses are
   // ignored, chords carrying Ctrl/Alt/Shift/Meta are ignored, an already-consumed
@@ -521,7 +748,7 @@ export function Composer({
   const escapePressRef = React.useRef<{ readonly taskId: string; readonly deadline: number } | null>(null);
   React.useEffect(() => {
     escapePressRef.current = null;
-    if (!running || taskId === null) return;
+    if (!taskBusy || taskId === null) return;
     const activeTask = taskId;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.repeat) return;
@@ -546,7 +773,7 @@ export function Composer({
       window.removeEventListener("keydown", onKeyDown);
       escapePressRef.current = null;
     };
-  }, [running, taskId]);
+  }, [taskBusy, taskId]);
 
   const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     const native = event.nativeEvent;
@@ -584,6 +811,15 @@ export function Composer({
       }
       if (menuOpen) {
         event.preventDefault();
+        // A fully typed local command (`/plan`, `/plan off`) runs on Enter
+        // instead of re-inserting the same token.
+        const picked = hit?.trigger === "/" ? slashCandidates[active]?.label : undefined;
+        const typed = picked !== undefined && draft.trim() === picked ? parseComposerCommand(draft) : null;
+        if (typed !== null && typed.kind !== "goal-missing") {
+          if (event.repeat) return;
+          submit();
+          return;
+        }
         commitActive();
         return;
       }
@@ -593,6 +829,14 @@ export function Composer({
       return;
     }
     if (composing) return;
+    // Shift+Tab toggles plan mode (Claude Code / Codex key). It never cycles the
+    // permission level, and an open `/`/`@` menu keeps Tab for itself.
+    if (event.key === "Tab" && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      if (event.repeat || menuOpen) return;
+      void applyPlanMode();
+      return;
+    }
     if (!menuOpen) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -648,14 +892,15 @@ export function Composer({
   };
 
   // The primary seat follows DSH's label priority (`InputBar.tsx:386-394` + our
-  // W-2 split): a running turn with an empty draft stops; a running turn with a
-  // draft steers it into the live turn ("插话发送", the side-question channel:
-  // `submission-policy.ts:36` resolves running+steer-capable to the preferred
-  // mode, and Ctrl/Cmd+Enter keeps queue available); when no steer target
-  // exists the same seat queues ("排队发送", `locales.ts:32`). A request in
-  // flight shows its spinner; otherwise the seat sends.
+  // W-2 split): a running task with an empty draft stops (the whole task, see
+  // `stop`); a running turn with a draft steers it into the live turn ("插话发送",
+  // the side-question channel: `submission-policy.ts:36` resolves
+  // running+steer-capable to the preferred mode, and Ctrl/Cmd+Enter keeps queue
+  // available); when no steer target exists the same seat queues ("排队发送",
+  // `locales.ts:32`). With only planner/workers running a draft is sent as a
+  // normal message. A request in flight shows its spinner; otherwise it sends.
   const hasDraft = draft.trim() !== "";
-  const primaryStops = running && !sending && !hasDraft;
+  const primaryStops = taskBusy && !sending && !hasDraft;
   const primarySteers = running && !sending && hasDraft && steerAvailable;
   const primaryQueues = running && !sending && hasDraft && !steerAvailable;
   const primaryLabel = primaryStops
@@ -669,17 +914,33 @@ export function Composer({
           : "发送消息";
   const primaryDisabled = primaryStops ? stopping : primarySteers || primaryQueues ? false : !canSubmit;
   const primaryActs = primaryStops ? stop : primarySteers ? () => submit() : submit;
-  // Independent Stop: only while the send request itself is in flight, matching the
-  // source's `interruptible` minus the continuable-child arm (`InputBar.tsx:383`). A
-  // running turn with a draft keeps queueing on the primary seat instead.
-  const interruptVisible = sending && !running;
+  // Independent Stop: DSH `interruptible = running && (continuable || sending …)`
+  // (`InputBar.tsx:383`) — the standalone stop glyph stays available while the
+  // run is live AND a submit is in flight, so the user can always interrupt the
+  // turn at that moment. mioX has no continuable-child arm here; the pure
+  // sending window (request out, run not yet observed) keeps the DSH spinner.
+  const interruptVisible = running && sending;
   const notice = sendError ?? chatRun.error;
+  // An undecided plan review takes the input's place (DSH: a pending interaction
+  // replaces the InputBar). The composer stays mounted underneath, hidden, so the
+  // draft, attachments and queue survive the review.
+  const review = plan.review;
 
   return (
-    <div className={css.wrap}>
-      <GoalBar goal={goalState} actions={goalActions} />
+    <div className={css.wrap} data-plan-mode={planOn ? "" : undefined}>
+      <GoalBar goal={goalState} actions={goalActions} progress={goalProgress} />
 
-      {hit !== null && hit.trigger === "@" ? (
+      {review !== null ? (
+        <PlanReviewDock
+          review={review}
+          onSettled={() => {
+            plan.reload();
+            onSent?.();
+          }}
+        />
+      ) : null}
+
+      {review === null && hit !== null && hit.trigger === "@" ? (
         <MentionMenu
           state={mentions}
           activeIndex={active}
@@ -687,7 +948,7 @@ export function Composer({
           onPick={pickMention}
           onRetry={mentions.reload}
         />
-      ) : hit !== null && slashMenuOpen ? (
+      ) : review === null && hit !== null && slashMenuOpen ? (
         <div className={css.triggerMenu} role="listbox" aria-label="指令">
           <div className={css.triggerHead}>指令</div>
           {slashCandidates.map((candidate, index) => (
@@ -701,7 +962,9 @@ export function Composer({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => pick(candidate.label)}
             >
-              <span className={css.triggerLabel}>{candidate.label}</span>
+              <span className={css.triggerLabel} data-wide="">
+                {candidate.label}
+              </span>
               {"desc" in candidate ? <span className={css.triggerDesc}>{candidate.desc}</span> : null}
             </button>
           ))}
@@ -711,7 +974,13 @@ export function Composer({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: the card only redirects
           pointer presses on its own chrome back to the draft; the editable and the
           toolbar controls keep their own semantics. */}
-      <div className={css.composer} data-composer-panel="" onMouseDown={onCardMouseDown}>
+      <div
+        className={css.composer}
+        data-composer-panel=""
+        data-plan-mode={planOn ? "" : undefined}
+        hidden={review !== null}
+        onMouseDown={onCardMouseDown}
+      >
         <QueueDock rows={queue.items} onRemove={queue.remove} held={queue.hold === "stopped"} />
 
         {/* W-2：插话问答栈——问题、回答中/终态、答案就地展开，跑的时候一直可见。 */}
@@ -732,7 +1001,7 @@ export function Composer({
         />
 
         <ComposerEditor
-          placeholder={PLACEHOLDER}
+          placeholder={planOn ? PLAN_PLACEHOLDER : PLACEHOLDER}
           editable={!sending}
           showPlaceholder={draft === "" && attachments.length === 0}
           handleRef={editorRef}
@@ -745,6 +1014,7 @@ export function Composer({
           <div className={css.tools}>
             <Menu
               open={attachOpen}
+              side="top"
               anchor={
                 <button
                   type="button"
@@ -792,6 +1062,7 @@ export function Composer({
             />
             <Menu
               open={pickerOpen}
+              side="top"
               anchor={<span hidden />}
               items={fileOptions.map((option) => ({ id: option.id, label: option.label }))}
               onSelect={(id) => {
@@ -805,6 +1076,7 @@ export function Composer({
             <div className={css.modes}>
               <Menu
                 open={permissionOpen}
+                side="top"
                 anchor={
                   <button
                     type="button"
@@ -833,12 +1105,27 @@ export function Composer({
                 }}
                 onClose={() => setPermissionOpen(false)}
               />
+              <PlanModeToggle
+                on={taskId === null ? false : plan.planMode}
+                busy={plan.busy}
+                nextTurn={planNextTurn && running}
+                disabled={taskId === null}
+                onMouseDown={keepEditorFocus}
+                onToggle={() => void applyPlanMode()}
+              />
             </div>
           </div>
 
           <div className={css.trailing}>
             <div className={css.standardControls}>
-              <ModelPicker models={modelOptions} phase={profilesState.phase} />
+              <ModelPicker
+                models={modelOptions}
+                phase={profilesState.phase}
+                value={activeModelId ?? undefined}
+                effort={effortLabel}
+                effortChoice={effortChoice}
+                onEffortChange={taskId === null ? undefined : (value) => setTurnEffort(taskId, value)}
+              />
             </div>
 
             {interruptVisible ? (

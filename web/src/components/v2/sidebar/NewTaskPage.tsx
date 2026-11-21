@@ -1,291 +1,457 @@
 "use client";
 
 /**
- * First-run task surface: one purposeful draft, a light context row, and
- * progressively disclosed task settings. Creation stays on the real v2 adapters.
+ * 新会话启动页：一个目标 → 直接开跑。
+ *
+ * D7（用户反馈「新会话的输入框逻辑和会话里的不一样，有点奇怪」）：输入卡与会话
+ * 输入框完全同构——同一张卡（`Composer.module.css` 的 .composer / .row / .chip /
+ * .primary）、同一套按键：Enter 发送、Shift+Enter 换行、输入法组合中不发送、
+ * 按住 Enter 不连发；工具条左侧是权限档与「计划」开关（与会话里同一控件
+ * `PlanModeToggle`，Shift+Tab 切换），右侧是模型选择与发送圆钮。原来的
+ * 「标准 / 规划 / 团队」下拉拆成：计划 = 输入框里的计划开关；团队协作 = 卡片上方
+ * 的上下文开关。工作目录同在上下文行。
+ *
+ * 写入顺序不变：createTask → 首条消息 sendTaskChatMessage → 模式 / 权限 / 模型绑定；
+ * 失败时如实说明已创建到哪一步。
  */
 import * as React from "react";
 
+import { ComposerEditor, type ComposerEditorHandle } from "@/components/v2/composer/ComposerEditor";
+import composerCss from "@/components/v2/composer/Composer.module.css";
 import { ModelPicker } from "@/components/v2/composer/ModelPicker";
-import { SelectMenu } from "@/components/v2/settings/SelectMenu";
+import { PlanModeToggle } from "@/components/v2/composer/PlanModeToggle";
 import { toast } from "@/components/v2/settings/Toast";
-import { bindTaskProfiles, useTaskCategories } from "@/v2/data/task-create";
-import { createTask, setTaskPlanMode } from "@/v2/data/task-actions";
-import { setTaskTeamMode } from "@/v2/data/task-mode";
-import { useTaskTemplates } from "@/v2/data/task-categories";
-import { useLlmProfiles } from "@/v2/data/llm-profiles";
 import { profilesToOptions } from "@/v2/data/llm-map";
-import { Button } from "@/vendor/dsh/primitives/Button";
-import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { Switch } from "@/vendor/dsh/primitives/Switch";
+import { useLlmProfiles } from "@/v2/data/llm-profiles";
 import {
-  IconChevronsUpDownOutlineRegular,
-  IconCloseOutlineRegular,
+  createTask,
+  sendTaskChatMessage,
+  setTaskPermissionLevel,
+  setTaskPlanMode,
+} from "@/v2/data/task-actions";
+import { useTaskTemplates } from "@/v2/data/task-categories";
+import { bindTaskProfiles } from "@/v2/data/task-create";
+import { setTaskTeamMode } from "@/v2/data/task-mode";
+import { reasoningEffortLabel } from "@/v2/data/llm-map";
+import { setTurnEffort } from "@/v2/data/turn-effort";
+import { Button } from "@/vendor/dsh/primitives/Button";
+import {
+  IconCheckOutlineRegular,
+  IconChevronDownOutlineRegular,
   IconFolderOpenOutlineRegular,
-  IconSlidersTwoOutlineRegular,
+  IconSendOutlineRegular,
+  IconUsersOutlineRegular,
 } from "@/vendor/dsh/primitives/icons/index";
-import { DirPicker } from "./DirPicker";
+import { Menu } from "@/vendor/dsh/primitives/Menu";
+import { Modal } from "@/vendor/dsh/primitives/Modal";
+
 import { MioxMark } from "./MioxMark";
+import { NativeDirPicker } from "./NativeDirPicker";
 import css from "./NewTaskPage.module.css";
 
 const DEFAULT_DIR = "默认工作区";
-const MODES = [
-  { value: "standard", label: "标准模式", hint: "规划与执行均由 Agent 自主推进" },
-  { value: "plan", label: "规划模式", hint: "先探索与规划，批准后再执行" },
-  { value: "team", label: "团队协作", hint: "提供共享任务板，协调多个执行角色" },
+
+/** 与会话输入框同一份权限档（`Composer.tsx` PERMISSIONS）。 */
+const PERMISSIONS = [
+  { id: "auto", label: "自动", desc: "规则 + LLM 裁决（默认）" },
+  { id: "read-only", label: "仅可查看", desc: "状态变更工具全部拒绝" },
+  { id: "workspace-write", label: "工作区内修改", desc: "工作区可写，全局副作用工具拒绝" },
+  { id: "danger-full", label: "完全权限", desc: "不拦截（不可逆操作仍要人工确认）" },
 ] as const;
 
+const PLACEHOLDER = "描述要测试的目标与范围，例如：对 example.com 做一次授权范围内的外部攻击面梳理";
+const PLAN_PLACEHOLDER = "描述要评估的目标，先侦察并给出计划，批准后再执行";
+
 export interface NewTaskPageProps {
-  /** Empty string opens the directory picker on entering this surface. */
-  readonly initialWorkDir?: string;
-  readonly pickDirOnOpen?: boolean;
-  readonly onCancel: () => void;
+  /** 创建成功后收到新任务 id；调用方随即离开本页进入该任务。 */
   readonly onCreated: (id: string) => void;
 }
 
-function ArrowUp({ size = 18 }: { size?: number }): React.ReactNode {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M10 15.5v-11M5 9l5-5 5 5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-/** Full-page new-session entry, deliberately not a second modal administration form. */
-export function NewTaskPage({ initialWorkDir = DEFAULT_DIR, pickDirOnOpen = false, onCancel, onCreated }: NewTaskPageProps): React.ReactNode {
+/** 全页新会话入口：一个目标 → 直接开跑。 */
+export function NewTaskPage({ onCreated }: NewTaskPageProps): React.ReactNode {
   const [description, setDescription] = React.useState("");
-  const [workDir, setWorkDir] = React.useState(initialWorkDir);
-  const [rawDirReference, setRawDirReference] = React.useState(initialWorkDir !== DEFAULT_DIR);
-  const [dirOpen, setDirOpen] = React.useState(pickDirOnOpen);
-  const [mode, setMode] = React.useState("standard");
-  const [advanced, setAdvanced] = React.useState(false);
-  const [goal, setGoal] = React.useState("");
-  const [categoryId, setCategoryId] = React.useState("none");
-  const [profileIds, setProfileIds] = React.useState<number[]>([]);
-  const [activeProfileId, setActiveProfileId] = React.useState("none");
-  const [coverageEnabled, setCoverageEnabled] = React.useState(true);
-  const [startImmediately, setStartImmediately] = React.useState(true);
+  const [workDir, setWorkDir] = React.useState(DEFAULT_DIR);
+  const [rawDirReference, setRawDirReference] = React.useState(false);
+  const [dirOpen, setDirOpen] = React.useState(false);
+  const [planMode, setPlanMode] = React.useState(false);
+  const [teamMode, setTeamMode] = React.useState(false);
+  const [permission, setPermission] = React.useState<string>("auto");
+  const [permissionOpen, setPermissionOpen] = React.useState(false);
+  const [confirmFull, setConfirmFull] = React.useState(false);
+  const [acknowledged, setAcknowledged] = React.useState(false);
+  const [activeProfileId, setActiveProfileId] = React.useState<string>("none");
+  // 推理等级（"" = Default）：与会话输入框同一套——随首条消息发送，并记到新任务上，
+  // 进入会话后输入框继续沿用（v2/data/turn-effort.ts）。
+  const [effortChoice, setEffortChoice] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [pendingTemplate, setPendingTemplate] = React.useState<number | null>(null);
-  const editorRef = React.useRef<HTMLTextAreaElement>(null);
+  const editorRef = React.useRef<ComposerEditorHandle>(null);
+  const createdTask = React.useRef<string | null>(null);
+  const inFlight = React.useRef(false);
 
   const profiles = useLlmProfiles();
   const models = React.useMemo(() => profilesToOptions(profiles.profiles), [profiles.profiles]);
-  const categories = useTaskCategories();
   const templates = useTaskTemplates();
-  const appliedTemplate = React.useRef("");
-  const readyProfiles = profiles.profiles;
-  const checkedProfiles = readyProfiles.filter((item) => profileIds.includes(Number(item.id)));
-  const activeOptions = [
-    { value: "none", label: "跟随全局默认" },
-    ...checkedProfiles.map((item) => ({ value: item.id, label: item.name })),
-  ];
-  const categoryOptions = [
-    { value: "none", label: "不分类" },
-    ...categories.categories.map((item) => ({ value: String(item.id), label: item.name })),
-  ];
-  const templateOptions = [
-    { value: "none", label: "选择任务模板（可选）" },
-    ...templates.templates.map((item) => ({ value: String(item.id), label: item.name })),
-  ];
+  // 触发器上的强度：所选档位；Default 时显示所选模型配置自身的 reasoning_effort。
+  const effortLabel = React.useMemo(() => {
+    if (effortChoice !== "") return reasoningEffortLabel(effortChoice);
+    const chosen =
+      activeProfileId === "none"
+        ? (profiles.profiles.find((row) => row.is_default === true) ?? profiles.profiles[0])
+        : profiles.profiles.find((row) => row.id === activeProfileId);
+    return chosen === undefined ? null : reasoningEffortLabel(chosen.reasoning_effort ?? "");
+  }, [activeProfileId, effortChoice, profiles.profiles]);
 
   React.useEffect(() => {
-    if (pickDirOnOpen) return;
-    const frame = window.requestAnimationFrame(() => editorRef.current?.focus({ preventScroll: true }));
+    const frame = window.requestAnimationFrame(() => editorRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
-  }, [pickDirOnOpen]);
-
-  const templateSource = pendingTemplate === null ? undefined : templates.templates.find((item) => item.id === pendingTemplate);
-  const applyTemplate = (): void => {
-    if (templateSource === undefined) return;
-    setDescription(templateSource.description);
-    setGoal(templateSource.goal);
-    setCategoryId(templateSource.category_id === undefined || templateSource.category_id === null ? "none" : String(templateSource.category_id));
-    appliedTemplate.current = String(templateSource.id);
-    setPendingTemplate(null);
-  };
-  const chooseTemplate = (value: string): void => {
-    if (value === "none") {
-      appliedTemplate.current = "";
-      return;
-    }
-    const template = templates.templates.find((item) => String(item.id) === value);
-    if (template === undefined) return;
-    const hasContent = description.trim() !== "" || goal.trim() !== "";
-    if (hasContent && (description !== template.description || goal !== template.goal)) {
-      setPendingTemplate(template.id);
-      return;
-    }
-    setDescription(template.description);
-    setGoal(template.goal);
-    setCategoryId(template.category_id === undefined || template.category_id === null ? "none" : String(template.category_id));
-    appliedTemplate.current = value;
-  };
-  const toggleProfile = (id: string, checked: boolean): void => {
-    setProfileIds((current) => {
-      const numeric = Number(id);
-      const next = checked ? [...current, numeric] : current.filter((value) => value !== numeric);
-      setActiveProfileId((active) => (active === id && !checked ? "none" : active));
-      return next;
-    });
-  };
+  }, []);
 
   const submit = async (): Promise<void> => {
     const text = description.trim();
-    if (text === "" || busy) return;
+    if (text === "" || busy || inFlight.current || createdTask.current !== null) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     let createdTaskId: string | null = null;
+    let requestSucceeded = false;
+    const profileIds = activeProfileId === "none" ? [] : [Number(activeProfileId)];
     try {
       const task = await createTask({
         description: text,
-        goal: goal.trim() === "" ? text : goal.trim(),
-        categoryId: categoryId === "none" ? undefined : Number(categoryId),
+        goal: text,
         llmProfileIds: profileIds.length > 0 ? profileIds : undefined,
         workDir: rawDirReference && workDir.trim() !== "" ? workDir.trim() : undefined,
-        coverageEnabled,
-        seedFirstIntent: startImmediately,
+        // 不再 seed 开跑：第一条内容作为聊天消息真实发送，正文首行是用户消息。
+        seedFirstIntent: false,
       });
       createdTaskId = task.id;
-      // Task creation is a write. Preserve existing server-side defaults until
-      // the user deliberately chooses a different execution mode in this page.
-      if (mode !== "standard") {
-        await (mode === "plan" ? setTaskPlanMode(task.id, true) : setTaskTeamMode(task.id, true));
-      }
+      createdTask.current = task.id;
+      // 模式与权限先于首条消息生效，这样第一轮就按所选档位运行。
+      if (planMode) await setTaskPlanMode(task.id, true);
+      if (teamMode) await setTaskTeamMode(task.id, true);
+      if (permission !== "auto") await setTaskPermissionLevel(task.id, permission);
+      // 首条消息：进入对话的正文流（202 异步运行），模型回应随后经 SSE 到达。
+      if (effortChoice !== "") setTurnEffort(task.id, effortChoice);
+      await sendTaskChatMessage(task.id, text, effortChoice);
       if (activeProfileId !== "none") {
         try {
           await bindTaskProfiles(task.id, profileIds, Number(activeProfileId));
-        } catch (reason: unknown) {
-          toast(`任务已创建，但生效模型设置失败：${reason instanceof Error ? reason.message : String(reason)}`);
+        } catch {
+          toast("任务已创建，但生效模型设置失败；可在任务模型页重设。");
         }
       }
+      requestSucceeded = true;
       onCreated(task.id);
     } catch (reason: unknown) {
       const reasonText = reason instanceof Error ? reason.message : String(reason);
-      setError(createdTaskId === null ? `创建未完成：${reasonText}` : `任务 #${createdTaskId} 已创建，但模式设置未完成。请在任务页检查后重试该模式：${reasonText}`);
+      setError(
+        createdTaskId === null
+          ? `创建未完成：${reasonText}`
+          : `任务 #${createdTaskId} 已创建，但首条消息未送出。请在任务里直接重发：${reasonText}`,
+      );
       setBusy(false);
+    } finally {
+      if (!requestSucceeded) inFlight.current = false;
     }
   };
-  const submitRef = React.useRef(submit);
-  submitRef.current = submit;
+
+  const retryAction = (): void => {
+    if (createdTask.current !== null) {
+      onCreated(createdTask.current);
+      return;
+    }
+    void submit();
+  };
+  const retryLabel = createdTask.current === null ? "重试" : "进入已创建任务";
+
+  /** 同会话输入框（`Composer.tsx` handleEditorKeyDown）：Enter 发送、Shift+Enter 换行、IME 安全。 */
+  const onEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const native = event.nativeEvent;
+    const composing = native.isComposing || native.keyCode === 229 || (editorRef.current?.recentlyComposing() ?? false);
+    if (
+      native.altKey ||
+      native.getModifierState("AltGraph") ||
+      (native.ctrlKey && native.metaKey) ||
+      (native.shiftKey && (native.ctrlKey || native.metaKey))
+    ) {
+      if (event.key === "Enter") event.preventDefault();
+      return;
+    }
+    if (event.key === "Enter") {
+      if (event.shiftKey) {
+        if (composing) return;
+        event.preventDefault();
+        editorRef.current?.insertLineBreak();
+        return;
+      }
+      if (composing) return;
+      event.preventDefault();
+      if (event.repeat) return;
+      void submit();
+      return;
+    }
+    if (composing) return;
+    if (event.key === "Tab" && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      if (!event.repeat) setPlanMode((value) => !value);
+    }
+  };
+
+  /** 工具条按下不抢走草稿焦点（同会话输入框）。 */
+  const keepEditorFocus = (event: React.MouseEvent): void => {
+    event.preventDefault();
+    editorRef.current?.focus();
+  };
+
+  const permissionLabel = PERMISSIONS.find((entry) => entry.id === permission)?.label ?? "自动";
+  const dirLabel = rawDirReference ? workDir.split(/[\\/]/).filter(Boolean).at(-1) || workDir : DEFAULT_DIR;
+  const starters = templates.phase === "ready" ? templates.templates.slice(0, 4) : [];
 
   return (
     <section className={css.stage} data-new-session-page="" aria-label="新会话启动">
-      <header className={css.topbar}>
-        <span className={css.topTitle}>新会话</span>
-        <Button size="sm" aria-label="关闭新会话" title="关闭" icon={<IconCloseOutlineRegular size={14} />} disabled={busy} onClick={onCancel} />
-      </header>
-
       <div className={css.content}>
-        <div className={css.mark} aria-hidden="true"><MioxMark size={34} /></div>
-        <h1>从一个目标开始</h1>
-        <p className={css.lead}>描述你想完成的事，mioX 将组织 Agent 探索、执行并给出结果。</p>
+        <div className={css.headline}>
+          <div className={css.mark} aria-hidden="true">
+            <MioxMark size={34} />
+          </div>
+          <h1>从一个目标开始</h1>
+        </div>
+        <p className={css.lead}>描述目标与授权范围，mioX 会组织 Agent 侦察、验证并整理发现。</p>
 
         <div className={css.contextRow}>
-          <button type="button" className={css.context} title={rawDirReference ? workDir : DEFAULT_DIR} aria-label="选择工作目录" onClick={() => setDirOpen(true)}>
-            <IconFolderOpenOutlineRegular size={16} />
-            <span>{rawDirReference ? workDir.split(/[\\/]/).filter(Boolean).at(-1) || workDir : DEFAULT_DIR}</span>
-            <IconChevronsUpDownOutlineRegular size={11} />
+          <button
+            type="button"
+            className={css.context}
+            title={rawDirReference ? workDir : "选择工作目录"}
+            aria-label="选择工作目录"
+            data-new-session-dir=""
+            onClick={() => setDirOpen(true)}
+          >
+            <IconFolderOpenOutlineRegular size={14} />
+            <span>{dirLabel}</span>
+            <IconChevronDownOutlineRegular size={10} />
           </button>
-          <SelectMenu ariaLabel="任务模式" value={mode} options={MODES.map(({ value, label }) => ({ value, label }))} onChange={setMode} />
+          <span className={css.contextSep} aria-hidden="true" />
+          <button
+            type="button"
+            className={teamMode ? `${css.context} ${css.contextOn}` : css.context}
+            aria-pressed={teamMode}
+            title="团队协作：提供共享任务板，协调多个执行角色"
+            data-new-session-team={teamMode ? "on" : "off"}
+            onClick={() => setTeamMode((value) => !value)}
+          >
+            <IconUsersOutlineRegular size={14} />
+            <span>团队协作</span>
+            {teamMode ? <IconCheckOutlineRegular size={12} /> : null}
+          </button>
         </div>
-        <p className={css.modeHint}>{MODES.find((item) => item.value === mode)?.hint}</p>
 
-        <div className={`${css.composer} ${advanced ? css.composerAdvanced : ""}`} data-new-session-composer="">
-          <textarea
-            ref={editorRef}
-            className={css.editor}
-            value={description}
-            rows={3}
-            disabled={busy}
-            placeholder="告诉 Agent，你想完成什么…"
-            aria-label="任务目标"
-            data-newtask-description=""
-            onChange={(event) => { setDescription(event.target.value); setError(null); }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) {
+        <div
+          className={composerCss.composer}
+          data-new-session-composer=""
+          data-plan-mode={planMode ? "" : undefined}
+          onMouseDown={(event) => {
+            if (event.button !== 0 || event.defaultPrevented) return;
+            const target = event.target as HTMLElement;
+            if (target.closest("button, input, [contenteditable], [role='menu']") !== null) return;
+            event.preventDefault();
+            editorRef.current?.focus();
+          }}
+        >
+          <ComposerEditor
+            handleRef={editorRef}
+            editable={!busy}
+            placeholder={planMode ? PLAN_PLACEHOLDER : PLACEHOLDER}
+            showPlaceholder={description === ""}
+            onDraftChange={(text) => {
+              setDescription(text);
+              setError(null);
+            }}
+            onKeyDown={onEditorKeyDown}
+            onPaste={(event) => {
+              if (event.clipboardData.files.length > 0) {
                 event.preventDefault();
-                void submitRef.current();
+                toast("新会话创建后才能添加附件");
+                return;
+              }
+              const text = event.clipboardData.getData("text/plain");
+              if (text !== "") {
+                event.preventDefault();
+                editorRef.current?.insertPlainText(text);
               }
             }}
           />
-          <div className={css.composerFooter}>
-            <div className={css.secondaryActions}>
-              <Button size="sm" variant={advanced ? "toolbar" : "ghost"} icon={<IconSlidersTwoOutlineRegular size={14} />} aria-expanded={advanced} onClick={() => setAdvanced((value) => !value)}>
-                更多选项
-              </Button>
-              {!startImmediately ? <span className={css.startHint}>仅创建，不自动运行</span> : null}
+
+          <div className={composerCss.row}>
+            <div className={composerCss.tools}>
+              <div className={composerCss.modes}>
+                <Menu
+                  open={permissionOpen}
+                  side="bottom"
+                  anchor={
+                    <button
+                      type="button"
+                      className={composerCss.chip}
+                      aria-haspopup="menu"
+                      aria-expanded={permissionOpen}
+                      data-new-session-permission={permission}
+                      onMouseDown={keepEditorFocus}
+                      onClick={() => setPermissionOpen((value) => !value)}
+                    >
+                      {permissionLabel} <IconChevronDownOutlineRegular size={10} />
+                    </button>
+                  }
+                  items={PERMISSIONS.map((entry) => ({
+                    id: entry.id,
+                    label: (
+                      <span className={css.menuTwoLine}>
+                        <span>{entry.label}</span>
+                        <span className={css.menuDesc}>{entry.desc}</span>
+                      </span>
+                    ),
+                  }))}
+                  selectedId={permission}
+                  selection="check"
+                  onSelect={(id) => {
+                    setPermissionOpen(false);
+                    if (id === "danger-full") {
+                      setAcknowledged(false);
+                      setConfirmFull(true);
+                      return;
+                    }
+                    setPermission(id);
+                  }}
+                  onClose={() => setPermissionOpen(false)}
+                />
+                <PlanModeToggle
+                  on={planMode}
+                  busy={false}
+                  nextTurn={false}
+                  disabled={busy}
+                  onMouseDown={keepEditorFocus}
+                  onToggle={() => setPlanMode((value) => !value)}
+                />
+              </div>
             </div>
-            <div className={css.modelSeat}><ModelPicker models={models} phase={profiles.phase} /></div>
-            <button
-              type="button"
-              className={css.submit}
-              disabled={description.trim() === "" || busy}
-              aria-label={busy ? "正在创建会话" : startImmediately ? "创建并开跑" : "创建会话"}
-              title={busy ? "正在创建…" : startImmediately ? "创建并开跑 · Ctrl/⌘ Enter" : "创建会话 · Ctrl/⌘ Enter"}
-              data-newtask-submit=""
-              data-newtask-start={startImmediately ? "true" : "false"}
-              onClick={() => { void submit(); }}
-            >
-              <ArrowUp />
-            </button>
+
+            <div className={composerCss.trailing}>
+              <div className={composerCss.standardControls}>
+                <ModelPicker
+                  models={models}
+                  phase={profiles.phase}
+                  value={activeProfileId === "none" ? undefined : activeProfileId}
+                  onChange={(id) => {
+                    const numeric = Number(id);
+                    if (Number.isNaN(numeric)) return;
+                    setActiveProfileId(id);
+                  }}
+                  effort={effortLabel}
+                  effortChoice={effortChoice}
+                  onEffortChange={setEffortChoice}
+                />
+              </div>
+              <button
+                type="button"
+                className={composerCss.primary}
+                disabled={description.trim() === "" || busy}
+                aria-label={busy ? "正在创建会话" : "创建并开跑"}
+                aria-busy={busy ? true : undefined}
+                title={busy ? "正在创建…" : "创建并开跑（Enter）"}
+                data-sending={busy ? "" : undefined}
+                data-newtask-submit=""
+                onMouseDown={keepEditorFocus}
+                onClick={() => void submit()}
+              >
+                {busy ? (
+                  <svg className={composerCss.sendingSpinner} viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                    <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
+                    <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <IconSendOutlineRegular size={15} />
+                )}
+              </button>
+            </div>
           </div>
-          {advanced ? (
-            <div className={css.advanced} data-new-session-advanced="">
-              <div className={css.advancedGrid}>
-                <label className={css.field}>
-                  <span>具体成功标准 <em>可选</em></span>
-                  <input value={goal} data-newtask-goal="" placeholder="留空则与任务描述相同" onChange={(event) => setGoal(event.target.value)} />
-                </label>
-                <label className={css.field}>
-                  <span>任务分类 <em>可选</em></span>
-                  <SelectMenu ariaLabel="任务分类" value={categoryId} options={categoryOptions} onChange={setCategoryId} />
-                </label>
-              </div>
-              {templates.phase === "ready" && templates.templates.length > 0 ? (
-                <label className={css.templateField}>
-                  <span>用模板填入任务内容</span>
-                  <SelectMenu key={appliedTemplate.current} ariaLabel="任务模板" value={appliedTemplate.current || "none"} options={templateOptions} onChange={chooseTemplate} />
-                </label>
-              ) : null}
-              <label className={css.field}>
-                <span>工作目录 <em>可选</em></span>
-                <input value={rawDirReference ? workDir : ""} readOnly placeholder="默认：任务自己的目录" aria-label="工作目录" data-newtask-workdir="" onFocus={() => setDirOpen(true)} />
-              </label>
-              {readyProfiles.length > 0 ? (
-                <fieldset className={css.profileField}>
-                  <legend>任务模型 <em>不选则使用全局默认</em></legend>
-                  <p className={css.profileHint}>可多选候选模型；选择「生效模型」后会单独完成绑定。</p>
-                  {readyProfiles.map((item) => (
-                    <div className={css.profileRow} key={item.id}>
-                      <label>
-                        <input type="checkbox" data-newtask-profile={item.id} checked={profileIds.includes(Number(item.id))} onChange={(event) => toggleProfile(item.id, event.target.checked)} />
-                        <span>{item.name}<small>{item.model}</small></span>
-                      </label>
-                    </div>
-                  ))}
-                  {checkedProfiles.length > 0 ? <SelectMenu ariaLabel="任务生效模型" value={activeProfileId} options={activeOptions} onChange={setActiveProfileId} /> : null}
-                </fieldset>
-              ) : null}
-              <div className={css.switchRow}>
-                <div><strong>记录资产覆盖度</strong><small>在任务中持续维护探索范围与未覆盖资产。</small></div>
-                <Switch checked={coverageEnabled} onChange={setCoverageEnabled} label="记录资产覆盖度" />
-              </div>
-              <div className={css.switchRow}>
-                <div><strong>创建后立即开始</strong><small>关闭时仅建立任务，可随时在会话中继续。</small></div>
-                <Switch checked={startImmediately} onChange={setStartImmediately} label="创建后立即开始" />
-              </div>
-            </div>
-          ) : null}
         </div>
-        {error === null ? <p className={css.hint}>Enter 换行 · ⌘ / Ctrl + Enter 开始</p> : (
-          <div className={css.error} role="alert"><span>{error}</span><Button size="sm" onClick={() => { void submit(); }}>重试</Button></div>
+
+        {error === null ? (
+          <p className={css.hint}>
+            <kbd>Enter</kbd> 创建并开跑 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行 · <kbd>Shift</kbd>+<kbd>Tab</kbd> 计划模式
+          </p>
+        ) : (
+          <div className={css.error} role="alert">
+            <span>{error}</span>
+            <Button size="sm" variant="outline" onClick={retryAction}>
+              {retryLabel}
+            </Button>
+          </div>
         )}
+
+        {starters.length > 0 ? (
+          <div className={css.starters} data-new-session-templates={starters.length}>
+            <div className={css.startersHead}>从模板开始</div>
+            <div className={css.starterGrid}>
+              {starters.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  className={css.starter}
+                  data-new-session-template={template.id}
+                  onClick={() => {
+                    const text = template.goal.trim() === "" ? template.description : template.goal;
+                    editorRef.current?.insertPlainText(text);
+                    editorRef.current?.focus();
+                  }}
+                >
+                  <span className={css.starterName}>{template.name}</span>
+                  <span className={css.starterDesc}>{template.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
-      <DirPicker open={dirOpen} initial={rawDirReference ? workDir : ""} onClose={() => setDirOpen(false)} onPick={(path) => { setWorkDir(path); setRawDirReference(true); }} />
-            <Modal open={pendingTemplate !== null} onClose={() => setPendingTemplate(null)} closeLabel="关闭" title="用模板覆盖当前内容？" description="已填写的任务描述、成功标准和分类会被模板替换。" footer={<><Button variant="outline" onClick={() => setPendingTemplate(null)}>取消</Button><Button variant="primary" onClick={applyTemplate}>应用模板</Button></>}>
-        <p className={css.templateConfirm}>{templateSource?.name ?? "所选模板"}</p>
+
+      <NativeDirPicker
+        open={dirOpen}
+        initial={rawDirReference ? workDir : ""}
+        onClose={() => setDirOpen(false)}
+        onPick={(path) => {
+          setWorkDir(path);
+          setRawDirReference(true);
+        }}
+      />
+
+      <Modal
+        open={confirmFull}
+        onClose={() => setConfirmFull(false)}
+        closeLabel="关闭"
+        title="确认启用完全权限？"
+        description="启用完全权限后，这个任务将减少确认步骤，可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任后续任务时使用。"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmFull(false)}>
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!acknowledged}
+              onClick={() => {
+                setPermission("danger-full");
+                setConfirmFull(false);
+              }}
+            >
+              启用完全权限
+            </Button>
+          </>
+        }
+      >
+        <label className={composerCss.ackRow}>
+          <input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />
+          我已了解风险，并愿意继续
+        </label>
       </Modal>
     </section>
   );

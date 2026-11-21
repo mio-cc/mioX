@@ -1254,11 +1254,35 @@ func (t *ToolSet) proveGoal() actool.CoreTool {
 				if allMet {
 					t.GoalMet = true
 					t.Reason = fmt.Sprintf("所有 %d 个目标均已 met（最后由 goal %d 触发）", len(goals), goal)
+					// G-2：全部验收项 met → 操作员总目标（task_goals）自动 complete。
+					t.completeTaskGoal()
 					return actool.Text(fmt.Sprintf("goal %d marked met；本任务所有目标均已达成，任务自动判定完成", goal)), nil
 				}
 			}
 			return actool.Text(fmt.Sprintf("goal %d marked met", goal)), nil
 		})
+}
+
+// completeTaskGoal moves the task's operator goal (task_goals, the `/goal` row) to
+// phase=complete once every acceptance item (goal node) is met. revision 0 skips
+// the CAS; no goal / already complete is a no-op. Never fails the tool call.
+func (t *ToolSet) completeTaskGoal() {
+	handle := t.db
+	if handle == nil && t.ts != nil {
+		handle = t.ts.DB()
+	}
+	taskID := t.taskID
+	if taskID <= 0 && t.ts != nil {
+		taskID, _ = t.ts.TaskID()
+	}
+	if handle == nil || taskID <= 0 {
+		return
+	}
+	g, err := handle.GetTaskGoal(taskID)
+	if err != nil || g == nil || g.Phase == db.GoalPhaseComplete {
+		return
+	}
+	_, _ = handle.SetTaskGoalPhase(taskID, db.GoalPhaseComplete, 0)
 }
 
 func (t *ToolSet) goalMet() actool.CoreTool {

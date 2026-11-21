@@ -668,6 +668,11 @@ func (s *Server) agentsForTask(t *Task) *taskAgentBundle {
 	// 批准后退出计划模式（DSH index.ts:358-362）：落库 plan_mode=false 并丢弃 bundle，
 	// 下一轮重建出"非计划模式"的 agent（工具集与系统提示都固化在 bundle 里）。
 	main.SetPlanExit(func() { s.leavePlanMode(t.ID) })
+	// P-1 计划模式硬边界：plan_mode_strict（每轮读）开启时拒绝非只读工具；关闭时只告警。
+	main.SetPlanStrict(s.planModeStrict)
+	main.SetPlanWarn(func(taskID int64, tool string) {
+		log.Printf("[plan-mode] task %d: 计划模式下调用了非只读工具 %s（plan_mode_strict=false，仅告警，未拦截）", taskID, tool)
+	})
 	main.SetFindingRecorder(s.evidenceStore())
 	main.SetCompactionWindowResolver(mainRuntime.CompactionWindow)
 	main.SetNonStreaming(mainRuntime.nonStreaming)

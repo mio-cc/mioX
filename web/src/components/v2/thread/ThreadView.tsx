@@ -31,17 +31,25 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { Badge } from "@/components/v2/design/Kit";
+import { SelectMenu } from "@/components/v2/settings/SelectMenu";
+import { ScrollFollow, scrollMetrics } from "@/lib/scroll-follow";
+import type { TurnChangedFile } from "@/lib/types";
+import type { Block } from "@/v2/data/activity-blocks";
+import { buildHunk, parseReadLines, parseSearchGroups } from "@/v2/data/block-cards";
+import { fetchActivityDetail } from "@/v2/data/message-detail";
+import {
+  deleteFeedback,
+  FEEDBACK_CATEGORIES,
+  feedbackKey,
+  putFeedback,
+  sessionKeyOf,
+  useTaskFeedback,
+} from "@/v2/data/message-feedback";
+import { mainSegOf } from "@/v2/data/sessions";
+import { useTurnFiles } from "@/v2/data/turn-files";
 import { DiffBlock } from "@/vendor/dsh/primitives/DiffBlock";
 import { DisclosureRow } from "@/vendor/dsh/primitives/DisclosureRow";
-import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { ReadBlock } from "@/vendor/dsh/primitives/ReadBlock";
-import { SearchBlock } from "@/vendor/dsh/primitives/SearchBlock";
-import type { SearchFileGroup } from "@/vendor/dsh/primitives/SearchBlock";
-import { TerminalBlock } from "@/vendor/dsh/primitives/TerminalBlock";
-import { UserMessageBubble } from "@/vendor/dsh/primitives/UserMessageBubble";
-import { Tooltip } from "@/vendor/dsh/primitives/Tooltip";
-import { useClipboardCopy } from "@/vendor/dsh/primitives/use-clipboard-copy";
-import { MarkdownText } from "@/vendor/dsh/primitives/markdown/MarkdownText";
 import {
   IconCheckOutlineRegular,
   IconChevronDownOutlineRegular,
@@ -50,29 +58,25 @@ import {
   IconDislikeOutlineRegular,
   IconEditOutlineRegular,
   IconLikeOutlineRegular,
+  IconListPenOutlineRegular,
   IconThinkOutlineRegular,
   IconWrapLinesOutlineRegular,
 } from "@/vendor/dsh/primitives/icons/index";
-import { ScrollFollow, scrollMetrics } from "@/lib/scroll-follow";
-import { SelectMenu } from "@/components/v2/settings/SelectMenu";
-import type { TurnChangedFile } from "@/lib/types";
-import type { Block } from "@/v2/data/activity-blocks";
-import { buildHunk, parseReadLines, parseSearchGroups } from "@/v2/data/block-cards";
-import { fetchActivityDetail } from "@/v2/data/message-detail";
-import { mainSegOf } from "@/v2/data/sessions";
-import { useTurnFiles } from "@/v2/data/turn-files";
-import {
-  FEEDBACK_CATEGORIES,
-  deleteFeedback,
-  feedbackKey,
-  putFeedback,
-  sessionKeyOf,
-  useTaskFeedback,
-} from "@/v2/data/message-feedback";
+import { Modal } from "@/vendor/dsh/primitives/Modal";
+import { MarkdownText } from "@/vendor/dsh/primitives/markdown/MarkdownText";
+import { ReadBlock } from "@/vendor/dsh/primitives/ReadBlock";
+import type { SearchFileGroup } from "@/vendor/dsh/primitives/SearchBlock";
+import { SearchBlock } from "@/vendor/dsh/primitives/SearchBlock";
+import { TerminalBlock } from "@/vendor/dsh/primitives/TerminalBlock";
+import { Tooltip } from "@/vendor/dsh/primitives/Tooltip";
+import { UserMessageBubble } from "@/vendor/dsh/primitives/UserMessageBubble";
+import { useClipboardCopy } from "@/vendor/dsh/primitives/use-clipboard-copy";
+
+import { PlanCard } from "./PlanCard";
 import { RunningStatus } from "./RunningStatus";
+import css from "./ThreadView.module.css";
 import { TurnFilesSlot } from "./TurnFiles";
 import { DIFF_LABELS, MARKDOWN_LABELS, READ_LABELS, SEARCH_LABELS, TERMINAL_LABELS } from "./thread-labels";
-import css from "./ThreadView.module.css";
 
 /** Paging state of the older-history pages above the live window. */
 export interface ThreadHistoryState {
@@ -177,6 +181,24 @@ function MessageBody({ text, blockSeq }: { text: string; blockSeq: number }): Re
 }
 
 /**
+ * 详情正文的机载荷段：后端部分 activity 的 detail 就是原始 JSON（fact/goal/
+ * asset 等事件内联也在其中），解析成功就缩进成 ```json 代码块，避免一整块墙；
+ * 解析失败的照原文交给 Markdown。
+ * @param part - fetchActivityDetail 返回的正文。
+ * @returns 可交给 MarkdownText 的文本。
+ */
+function formatDetailPart(part: string): string {
+  const trimmed = part.trim();
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return part;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return `\`\`\`json\n${JSON.stringify(parsed, null, 2)}\n\`\`\``;
+  } catch {
+    return part;
+  }
+}
+
+/**
  * Render the stream.
  * @param props - mapped blocks, optional stats, conversation identity, run state,
  *   older-history paging and the edit/resend action.
@@ -193,6 +215,7 @@ export function ThreadView({
   lane = null,
 }: ThreadViewProps): React.ReactNode {
   const [thinking, setThinking] = useState<number | null>(null);
+  const [decomposeOpen, setDecomposeOpen] = useState<number | null>(null);
   const [away, setAway] = useState(false);
   const [activeTurn, setActiveTurn] = useState(0);
   const [editingSeq, setEditingSeq] = useState<number | null>(null);
@@ -380,7 +403,7 @@ export function ThreadView({
       .then((parts) => {
         const labels = ["调用", "结果"];
         const text = parts
-          .map((part, index) => (part.trim() === "" ? "" : `【${labels[index] ?? "结果"}】\n${part}`))
+          .map((part, index) => (part.trim() === "" ? "" : `【${labels[index] ?? "结果"}】\n${formatDetailPart(part)}`))
           .filter((part) => part !== "")
           .join("\n\n");
         setDetails((prev) => ({ ...prev, [block.seq]: text }));
@@ -456,36 +479,32 @@ export function ThreadView({
       .finally(() => setFeedbackBusy(false));
   };
 
-  /** Detail disclosure shared by the tool cards. */
+  /** Detail disclosure — DSH `DisclosureRow` 原型（同"思考"行）：左图标+标题行，
+   * 内容展开在下方；不再自造按钮/文案。 */
   const detailRow = (block: Block): React.ReactNode => {
     const open = detailSeq === block.seq;
     const text = details[block.seq];
+    const toolName = "tool" in block && typeof block.tool === "string" && block.tool !== "" ? block.tool : "调用与输出";
     return (
-      <div className={css.detailWrap}>
-        <button
-          type="button"
-          className={css.detailToggle}
-          aria-expanded={open}
-          aria-label={open ? "收起工具调用详情" : "查看工具调用详情"}
-          data-p1-b6-detail={block.seq}
-          onClick={() => openDetail(block)}
-        >
-          {open ? <IconChevronUpOutlineRegular size={12} /> : <IconChevronDownOutlineRegular size={12} />}
-          {open ? "收起详情" : "详情"}
-        </button>
-        {open ? (
-          <div className={css.detailBody} data-p1-b6-detail-body={block.seq}>
-            {detailLoading === block.seq ? (
-              <p className={css.detailPlaceholder}>读取中…</p>
-            ) : text === undefined || text === "" ? (
-              <p className={css.detailPlaceholder}>该步骤没有记录详情</p>
-            ) : (
-              // P1:E1：详情是模型/工具写出的正文（含旧页 `【调用】/【结果】` 两个小节），按 Markdown 渲染。
-              <MarkdownText text={text} labels={MARKDOWN_LABELS} variant="compact" />
-            )}
-          </div>
-        ) : null}
-      </div>
+      <DisclosureRow
+        icon={<IconWrapLinesOutlineRegular size={13} />}
+        title={toolName}
+        open={open}
+        expandable
+        expandOnRowClick
+        onToggle={() => openDetail(block)}
+      >
+        <div className={css.detailBody} data-p1-b6-detail-body={block.seq}>
+          {detailLoading === block.seq ? (
+            <p className={css.detailPlaceholder}>读取中…</p>
+          ) : text === undefined || text === "" ? (
+            <p className={css.detailPlaceholder}>该步骤没有记录详情</p>
+          ) : (
+            // P1:E1：详情是模型/工具写出的正文（含旧页 `【调用】/【结果】` 两个小节），按 Markdown 渲染。
+            <MarkdownText text={text} labels={MARKDOWN_LABELS} variant="compact" />
+          )}
+        </div>
+      </DisclosureRow>
     );
   };
 
@@ -493,7 +512,12 @@ export function ThreadView({
     <div className={css.thread} data-p1-b6-thread="">
       <div className={css.messages} ref={listRef}>
         {history === undefined ? null : (
-          <div className={css.historyRow} data-p1-b6-history={history.loading ? "loading" : history.error !== null ? "error" : history.hasMore ? "more" : "start"}>
+          <div
+            className={css.historyRow}
+            data-p1-b6-history={
+              history.loading ? "loading" : history.error !== null ? "error" : history.hasMore ? "more" : "start"
+            }
+          >
             <button
               type="button"
               className={css.historyButton}
@@ -574,7 +598,18 @@ export function ThreadView({
                   data-seq={block.seq}
                   data-turn-start={block.seq}
                 >
-                  <UserMessageBubble>{block.text}</UserMessageBubble>
+                  {/* DSH MessageItem 双层：userRow(flex-end, gap 6) > userStack
+                      (max-width 702%, figma 525/748) > bubble。 */}
+                  <div className={css.userStack}>
+                    {/* S-4：automation 投递的 user 行在气泡上方打「⏱ 自动化」小 Badge，
+                        避免被误读成人类的实时指令。 */}
+                    {block.source === "automation" ? (
+                      <span className={css.userBadge} data-user-automation={block.seq}>
+                        <Badge tone="info">⏱ 自动化{block.automationTitle === undefined || block.automationTitle === "" ? "" : ` · ${block.automationTitle}`}</Badge>
+                      </span>
+                    ) : null}
+                    <UserMessageBubble>{block.text}</UserMessageBubble>
+                  </div>
                   <div className={css.userActions}>
                     <CopyMessageButton text={block.text} />
                     {onEditResend === undefined ? null : (
@@ -599,33 +634,55 @@ export function ThreadView({
                 </div>
               );
             }
-            case "thinking":
+            case "thinking": {
+              // DSH ReasoningRow：标题固定“思考”，动态摘录走 collapsedContent
+              // （12/20 secondary 的 ellipsis 行），点整行可展开；展开正文在
+              // 标题起点的缩进下（leading 16 + gap 6 = 22px，`thinkBody`）。
+              const thinkingOpen = thinking === block.seq;
               return (
                 <DisclosureRow
                   key={block.seq}
                   icon={<IconThinkOutlineRegular size={13} />}
-                  title={`思考 · ${block.text}`}
-                  open={thinking === block.seq}
+                  title="思考"
+                  open={thinkingOpen}
                   expandable
-                  onToggle={() => setThinking(thinking === block.seq ? null : block.seq)}
+                  expandOnRowClick
+                  onToggle={() => setThinking(thinkingOpen ? null : block.seq)}
+                  collapsedContent={
+                    <>
+                      <span className={css.flowSeparator} aria-hidden="true" />
+                      <span className={css.flowSummary}>
+                        <span className={css.flowSummaryText}>{block.text}</span>
+                      </span>
+                    </>
+                  }
                 >
-                  <MessageBody text={block.text} blockSeq={block.seq} />
+                  <div className={css.thinkBody}>
+                    <MessageBody text={block.text} blockSeq={block.seq} />
+                  </div>
                 </DisclosureRow>
               );
+            }
             case "text": {
-              const recorded = feedback.byKey[feedbackKey(sessionKeyOf({
-                worker: block.worker,
-                kind: "text",
-                main_seg: block.mainSeg,
-                intent_id: block.intentId,
-              }), block.seq)]?.rating;
+              const recorded =
+                feedback.byKey[
+                  feedbackKey(
+                    sessionKeyOf({
+                      worker: block.worker,
+                      kind: "text",
+                      main_seg: block.mainSeg,
+                      intent_id: block.intentId,
+                    }),
+                    block.seq,
+                  )
+                ]?.rating;
               // The turn's changed-files card closes the turn here, after its
               // closing reply and answer actions, before the next turn opens
               // (`task-workspace-dsh.tsx:1556,1574`; DSH registers it at
               // conversation.chat.turnTail, `ui-deliverables/index.ts:64-84`).
               // A turn that changed nothing renders zero footprint.
               const changed: readonly TurnChangedFile[] =
-                mainSeg === null || turnFiles.phase !== "ready" ? [] : turnFiles.byEnd[block.seq] ?? [];
+                mainSeg === null || turnFiles.phase !== "ready" ? [] : (turnFiles.byEnd[block.seq] ?? []);
               return (
                 <div key={block.seq} className={css.answerRow} data-seq={block.seq}>
                   <MessageBody text={block.text} blockSeq={block.seq} />
@@ -672,14 +729,16 @@ export function ThreadView({
             }
             case "terminal":
               return (
-                <div key={block.seq} className={css.cardSlot}>
-                  <TerminalBlock
-                    command={block.command}
-                    output={block.output}
-                    cwd="~/tasks/1107"
-                    exitCode={block.isError ? 1 : 0}
-                    labels={TERMINAL_LABELS}
-                  />
+                <div key={block.seq}>
+                  <div className={css.cardSlot}>
+                    <TerminalBlock
+                      command={block.command}
+                      output={block.output}
+                      cwd="~/tasks/1107"
+                      exitCode={block.isError ? 1 : 0}
+                      labels={TERMINAL_LABELS}
+                    />
+                  </div>
                   {detailRow(block)}
                 </div>
               );
@@ -691,14 +750,20 @@ export function ThreadView({
                   </div>
                   <div className={css.cardSlot}>
                     <DiffBlock diffs={buildHunk(block.path, block.before, block.after)} labels={DIFF_LABELS} />
-                    {detailRow(block)}
                   </div>
+                  {detailRow(block)}
                 </div>
               );
             case "search": {
               const groups = parseSearchGroups(block.result);
               // Grep returns `path:line` matches; Glob returns a bare path list.
-              const paths = groups.length === 0 ? block.result.split("\n").map((row) => row.trim()).filter((row) => row !== "") : [];
+              const paths =
+                groups.length === 0
+                  ? block.result
+                      .split("\n")
+                      .map((row) => row.trim())
+                      .filter((row) => row !== "")
+                  : [];
               const count = groups.length > 0 ? groups.length : paths.length;
               return (
                 <div key={block.seq}>
@@ -715,10 +780,16 @@ export function ThreadView({
                         total={groups.reduce((n, group) => n + group.matches.length, 0)}
                       />
                     ) : (
-                      <SearchBlock kind="paths" paths={paths} labels={SEARCH_LABELS} truncated={false} total={paths.length} />
+                      <SearchBlock
+                        kind="paths"
+                        paths={paths}
+                        labels={SEARCH_LABELS}
+                        truncated={false}
+                        total={paths.length}
+                      />
                     )}
-                    {detailRow(block)}
                   </div>
+                  {detailRow(block)}
                 </div>
               );
             }
@@ -729,18 +800,126 @@ export function ThreadView({
                     <IconWrapLinesOutlineRegular size={13} /> 读取了 {block.label}
                   </div>
                   <div className={css.cardSlot}>
-                    <ReadBlock label={block.label} lines={parseReadLines(block.result)} totalLines={parseReadLines(block.result).length} labels={READ_LABELS} />
-                    {detailRow(block)}
+                    <ReadBlock
+                      label={block.label}
+                      lines={parseReadLines(block.result)}
+                      totalLines={parseReadLines(block.result).length}
+                      labels={READ_LABELS}
+                    />
                   </div>
-                </div>
-              );
-            default:
-              return (
-                <div key={block.seq} className={css.actionLine}>
-                  <MessageBody text={block.text} blockSeq={block.seq} />
                   {detailRow(block)}
                 </div>
               );
+            case "plan":
+              return (
+                <PlanCard
+                  key={block.seq}
+                  seq={block.seq}
+                  taskId={taskId}
+                  title={block.title}
+                  markdown={block.markdown}
+                  truncated={block.truncated}
+                  reviewId={block.reviewId ?? null}
+                  feedback={block.feedback}
+                  failure={block.failure}
+                />
+              );
+            case "plan_review":
+              // The review row folded into its plan card; a review whose plan row
+              // is outside the loaded window draws the card from its own payload.
+              if (block.attached) return null;
+              return (
+                <PlanCard
+                  key={block.seq}
+                  seq={block.seq}
+                  taskId={taskId}
+                  title={block.title}
+                  markdown={block.markdown === "" ? `# ${block.title}` : block.markdown}
+                  truncated={false}
+                  reviewId={block.reviewId}
+                />
+              );
+            case "decompose": {
+              // DX-S3：planner 目标拆解段的折叠卡。卡标题给出验收项数、卡内列验收项；
+              // set_constraints/add_task_scope 的条目若有则列在第二段；说明默认收起
+              // （DisclosureRow），展开按 Markdown 渲染 report。
+              const open = decomposeOpen === block.seq;
+              return (
+                <section
+                  key={block.seq}
+                  className={css.decomposeCard}
+                  data-decompose-card={block.seq}
+                  data-decompose-goals={block.goals.length}
+                  aria-label="已拆解目标"
+                >
+                  <header className={css.decomposeHead}>
+                    <span className={css.decomposeTile} aria-hidden="true">
+                      <IconListPenOutlineRegular size={16} />
+                    </span>
+                    <span className={css.decomposeHeading}>
+                      <span className={css.decomposeTitle}>已拆解目标 · {block.goals.length} 个验收项</span>
+                      <span className={css.decomposeSub}>{block.summary}</span>
+                    </span>
+                  </header>
+                  {block.goals.length === 0 ? (
+                    <p className={css.decomposeNote}>这一段没有登记验收项。</p>
+                  ) : (
+                    <ol className={css.decomposeList} data-decompose-goal-list={block.goals.length}>
+                      {block.goals.map((goal, index) => (
+                        <li key={`${block.seq}:${index}`} className={css.decomposeItem} data-decompose-goal={index}>
+                          <span className={css.decomposeIndex} aria-hidden="true">
+                            {index + 1}
+                          </span>
+                          <span className={css.decomposeText}>{goal}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  {block.extras.length === 0 ? null : (
+                    <ul className={css.decomposeExtras} data-decompose-extras={block.extras.length}>
+                      {block.extras.map((item, index) => (
+                        <li key={`x${block.seq}:${index}`} className={css.decomposeExtra}>
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {block.report.trim() === "" ? null : (
+                    <DisclosureRow
+                      icon={<IconWrapLinesOutlineRegular size={13} />}
+                      title="查看拆解说明"
+                      open={open}
+                      expandable
+                      expandOnRowClick
+                      onToggle={() => setDecomposeOpen(open ? null : block.seq)}
+                    >
+                      <div className={css.thinkBody} data-decompose-report={block.seq}>
+                        <MessageBody text={block.report} blockSeq={block.seq} />
+                      </div>
+                    </DisclosureRow>
+                  )}
+                </section>
+              );
+            }
+            default: {
+              // 机载荷（后端事件 JSON / 工具原始输出）不常驻正文：只留一行动作，
+              // 内容收进 DSH DisclosureRow 折叠（fetch 完整 detail 后由 Markdown 渲染）。
+              const machine =
+                block.text.startsWith("```json") ||
+                (block.text.startsWith("{") && block.text.length > 200) ||
+                block.text.startsWith('{"intent_id') ||
+                block.text.startsWith('{"final_text');
+              return (
+                <div key={block.seq}>
+                  <div className={css.actionLine}>
+                    <IconWrapLinesOutlineRegular size={13} />
+                    {machine ? `执行了 ${block.tool === "" ? "工具调用" : block.tool}` : null}
+                    {!machine ? <MessageBody text={block.text} blockSeq={block.seq} /> : null}
+                  </div>
+                  {machine ? detailRow(block) : null}
+                </div>
+              );
+            }
           }
         })}
 
@@ -814,10 +993,22 @@ export function ThreadView({
           }}
           footer={
             <>
-              <button type="button" className={css.dialogCancel} disabled={feedbackBusy} data-p1-b6-feedback-cancel="" onClick={() => setFeedbackDraft(null)}>
+              <button
+                type="button"
+                className={css.dialogCancel}
+                disabled={feedbackBusy}
+                data-p1-b6-feedback-cancel=""
+                onClick={() => setFeedbackDraft(null)}
+              >
                 取消
               </button>
-              <button type="button" className={css.dialogSubmit} disabled={feedbackBusy} data-p1-b6-feedback-submit="" onClick={submitFeedback}>
+              <button
+                type="button"
+                className={css.dialogSubmit}
+                disabled={feedbackBusy}
+                data-p1-b6-feedback-submit=""
+                onClick={submitFeedback}
+              >
                 {feedbackBusy ? "提交中…" : "提交"}
               </button>
             </>

@@ -14,6 +14,11 @@ import type {
   AgentTrigger,
   ArchiveBatchItem,
   Asset,
+  Automation,
+  AutomationInput,
+  AutomationRun,
+  AutomationTiming,
+  AutomationTimingKind,
   AssetInterceptRule,
   AssetInterceptRuleInput,
   Audit,
@@ -465,6 +470,9 @@ export const api = {
   // 清除目标:服务端删除该行,之后 GET 返回 null。
   clearTaskGoal: (id: string) =>
     post<{ ok: boolean; cleared: boolean }>(`/tasks/${id}/goal/clear`, {}),
+  // 人工标记目标达成:phase=complete(D5 G-3,server/task_goal_api.go taskGoalComplete)。
+  completeTaskGoal: (id: string) =>
+    post<{ goal: GoalSnapshot | null }>(`/tasks/${id}/goal/complete`, {}).then((r) => r.goal ?? null),
 
   // ---- 消息反馈（Like/Dislike + 分类 + 文字,DSH ui-message-feedback）----
   // 一条消息只有一条记录(唯一约束 task_id+session_key+message_seq):先赞后踩是【覆盖】,
@@ -1116,6 +1124,27 @@ export const api = {
       proxy,
       profile_id,
     }),
+
+  // ---- automations（定时任务，D5；接口文档 .tmp/d5-backend-api.md §3） ----
+  automations: (taskId?: string) =>
+    get<{ automations: Automation[] | null }>(
+      `/automations${taskId ? `?task_id=${encodeURIComponent(taskId)}` : ""}`,
+    ).then((r) => arr(r.automations)),
+  createAutomation: (input: AutomationInput) => post<{ automation: Automation }>("/automations", input).then((r) => r.automation),
+  updateAutomation: (id: string, patchBody: Partial<AutomationInput> & { expected_updated_at?: string }) =>
+    patch<{ automation: Automation }>(`/automations/${encodeURIComponent(id)}`, patchBody).then((r) => r.automation),
+  deleteAutomation: (id: string) => del<{ ok: boolean }>(`/automations/${encodeURIComponent(id)}`),
+  runAutomation: (id: string) =>
+    post<{ outcome: string; run: AutomationRun }>(`/automations/${encodeURIComponent(id)}/run`),
+  automationRuns: (id: string, limit = 20, before?: string) =>
+    get<{ runs: AutomationRun[] | null; has_more: boolean; next_before: string | null }>(
+      `/automations/${encodeURIComponent(id)}/runs?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ""}`,
+    ).then((r) => ({ runs: arr(r.runs), hasMore: r.has_more === true, nextBefore: r.next_before ?? null })),
+  previewAutomation: (timing_kind: AutomationTimingKind, timing: AutomationTiming, count = 3) =>
+    post<{ runs: string[] | null; tz: string }>("/automations/preview", { timing_kind, timing, count }).then((r) => ({
+      runs: arr(r.runs),
+      tz: r.tz,
+    })),
 
   // ---- agents ----
   agents: () => get<{ agents: Agent[] }>("/agents").then((r) => arr(r.agents)),

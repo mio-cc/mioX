@@ -41,6 +41,7 @@ import { Menu } from "@/vendor/dsh/primitives/Menu";
 
 import css from "./ConversationRoot.module.css";
 import {
+  CONVERSATION_MORE_TABS,
   CONVERSATION_VIEW_TABS,
   type ConversationHeaderSlotContext,
   type ConversationHeaderSlotData,
@@ -50,7 +51,8 @@ import {
 import { SessionCrumbs } from "./SessionCrumbs";
 
 /** Row width budget per View tab, mirroring `ConversationSession.tsx:127`. */
-const VIEW_TAB_SLOT_WIDTH = 120;
+/** DSH tab 実测：tab 文字上限 88px + 左右 hit 10px + 32px gap ≈ 每席约 70px 而非 120px。 */
+const VIEW_TAB_SLOT_WIDTH = 70;
 /** Space the row keeps for the More launcher and the strip's own gaps. */
 const VIEW_TAB_ROW_RESERVE = 48;
 
@@ -92,19 +94,32 @@ export interface ConversationSessionHeaderProps {
  * @returns the session header rows.
  */
 export function ConversationSessionHeader(props: ConversationSessionHeaderProps): ReactNode {
-  const { task, headerSlotData, view, onSelectView, onOpenTask, laneBar } = props;
+  const { task, headerSlotData, view: viewId, onSelectView, onOpenTask, laneBar } = props;
 
   // Owner data: shell contributions plus the Session this header owns.
   const slotContext: ConversationHeaderSlotContext = { ...headerSlotData, task, onOpenTask };
 
-  /** Fixed Views first, then the task-view registry in its own order. */
+  /**
+   * U2: the strip holds the fixed View plus the registry's `main` Views (对话 / 概览 /
+   * 探索 / 发现 / 资产); 轨迹 and the `more` Views (团队, team mode only) always sit in
+   * the More menu. A container's sub-view (`explore.graph`) selects its container tab.
+   */
+  const registry = listTaskViews(task);
   const tabs = useMemo<readonly ConversationViewTab[]>(
     () => [
       ...CONVERSATION_VIEW_TABS,
-      ...listTaskViews().map((entry) => ({ id: entry.id, label: entry.label })),
+      ...registry.filter((entry) => entry.placement === "main").map((entry) => ({ id: entry.id, label: entry.label })),
     ],
-    [],
+    [registry],
   );
+  const pinnedMore = useMemo<readonly ConversationViewTab[]>(
+    () => [
+      ...CONVERSATION_MORE_TABS,
+      ...registry.filter((entry) => entry.placement === "more").map((entry) => ({ id: entry.id, label: entry.label })),
+    ],
+    [registry],
+  );
+  const view = viewId.split(".")[0] ?? viewId;
 
   const tabRow = useRef<HTMLDivElement>(null);
   const [limit, setLimit] = useState(1);
@@ -137,12 +152,12 @@ export function ConversationSessionHeader(props: ConversationSessionHeaderProps)
     // and let the displaced tab join the More menu.
     const current = rest.find((tab) => tab.id === view);
     if (current === undefined || head.length < 2) {
-      return { visibleTabs: head, moreTabs: rest };
+      return { visibleTabs: head, moreTabs: [...rest, ...pinnedMore] };
     }
     const visible = [...head.slice(0, head.length - 1), current];
     const visibleIds = new Set(visible.map((tab) => tab.id));
-    return { visibleTabs: visible, moreTabs: tabs.filter((tab) => !visibleIds.has(tab.id)) };
-  }, [limit, tabs, view]);
+    return { visibleTabs: visible, moreTabs: [...tabs.filter((tab) => !visibleIds.has(tab.id)), ...pinnedMore] };
+  }, [limit, pinnedMore, tabs, view]);
 
   // Only reachable in the one-seat fallback (a very narrow column), where the
   // selected View cannot be swapped onto the strip.

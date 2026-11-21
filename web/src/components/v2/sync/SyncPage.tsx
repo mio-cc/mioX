@@ -29,7 +29,7 @@ import { Button } from "@/vendor/dsh/primitives/Button";
 import { Checkbox } from "@/vendor/dsh/primitives/Checkbox";
 import { Input } from "@/vendor/dsh/primitives/Input";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
+import { FilterBar } from "@/components/v2/design/Kit";
 import { Tag } from "@/vendor/dsh/primitives/Tag";
 import {
   IconChevronLeftOutlineRegular,
@@ -495,7 +495,7 @@ export function SyncPage(): ReactNode {
       {ready ? (
         <section className={css.card} aria-label="选择同步目标" data-sync-card="select">
           <div className={css.cardHead}>
-            <SegmentedControl
+            <FilterBar
               id="sync-dimension"
               value={dimension}
               options={DIMENSION_OPTIONS}

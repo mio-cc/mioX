@@ -766,6 +766,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tasks/{id}/goal/pause", s.taskGoalPause)             // 暂停目标(phase=paused)
 	mux.HandleFunc("POST /api/tasks/{id}/goal/resume", s.taskGoalResume)           // 恢复目标(phase=active)
 	mux.HandleFunc("POST /api/tasks/{id}/goal/clear", s.taskGoalClear)             // 清除目标(goal=null)
+	mux.HandleFunc("POST /api/tasks/{id}/goal/complete", s.taskGoalComplete)       // 人工标记目标达成(phase=complete)
 	mux.HandleFunc("GET /api/tasks/{id}/constraints", s.listConstraints)           // 约束管理:列出本任务操作约束
 	mux.HandleFunc("POST /api/tasks/{id}/constraints", s.addConstraint)            // 约束管理:新增约束(不通知 planner)
 	mux.HandleFunc("PATCH /api/tasks/{id}/constraints/{cid}", s.editConstraint)    // 约束管理:修改约束
@@ -909,6 +910,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/agents/{key}/triggers", s.pgListTriggers)
 	mux.HandleFunc("POST /api/agents/{key}/triggers", s.pgCreateTrigger)
 	mux.HandleFunc("PATCH /api/triggers/{id}", s.pgUpdateTrigger)
+	// 自动化(定时任务):见 server/automations.go 与 .tmp/d5-backend-api.md。
+	mux.HandleFunc("GET /api/automations", s.listAutomations)
+	mux.HandleFunc("POST /api/automations", s.createAutomation)
+	mux.HandleFunc("POST /api/automations/preview", s.previewAutomation)
+	mux.HandleFunc("PATCH /api/automations/{id}", s.patchAutomation)
+	mux.HandleFunc("DELETE /api/automations/{id}", s.deleteAutomation)
+	mux.HandleFunc("POST /api/automations/{id}/run", s.runAutomationNow)
+	mux.HandleFunc("GET /api/automations/{id}/runs", s.listAutomationRuns)
 	mux.HandleFunc("DELETE /api/triggers/{id}", s.pgDeleteTrigger)
 	mux.HandleFunc("GET /api/agents/{key}/prompts", s.pgListPromptVersions)
 	mux.HandleFunc("GET /api/agents/{key}/variables", s.pgPromptVars)
@@ -1105,10 +1114,17 @@ func (s *Server) listTasks(w http.ResponseWriter, r *http.Request) {
 	list := s.m.List()
 	metrics, _ := s.m.PG().TaskListMetricsAll()
 	archiveBlockers, _ := s.m.PG().TaskArchiveBlockers()
+	// G-5:一次查询取全部任务级目标(/goal),避免 N+1。
+	goalsByTask, _ := s.m.PG().TaskGoalsByTask()
 	dtos := make([]TaskDTO, 0, len(list))
 	for _, t := range list {
 		dto := taskDTO(t, s.resolvedTaskStatus(t))
 		applyTaskArchiveBlocker(&dto, archiveBlockers)
+		if tid, err := strconv.ParseInt(t.ID, 10, 64); err == nil {
+			if g := goalsByTask[tid]; g != nil {
+				dto.GoalState = taskGoalDTO(g)
+			}
+		}
 		metric := metrics[t.ExpID]
 		dto.Tokens = tokenTotalDTO(metric.Tokens)
 		// prefer the live in-memory heartbeat (fresher) and fall back to the
@@ -1860,6 +1876,10 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 		if goal, err := s.m.PG().GetTaskGoal(taskID); err == nil {
 			dto.GoalState = taskGoalDTO(goal)
 		}
+	}
+	// P-2:未决的计划审阅(exit_plan_mode pending),刷新页面后据此恢复审批条。
+	if pid, err := s.m.PG().PendingPlanReviewID(t.ID); err == nil && pid > 0 {
+		dto.PendingPlanReviewID = strconv.FormatInt(pid, 10)
 	}
 	writeJSON(w, 200, dto)
 }
@@ -3456,6 +3476,8 @@ func (s *Server) settingsPayload() map[string]any {
 		"notify_enabled":             s.m.pg.GetBool(settingNotifyEnabled, true),
 		"notify_public_base_url":     notifyPublicBaseURL(s.m.pg),
 		"notify_digest_interval_min": notifyDigestIntervalMin(s.m.pg),
+		// P-1 计划模式硬边界(默认关):开启后计划批准前拒绝非只读工具;关闭时只告警。
+		"plan_mode_strict": s.planModeStrict(),
 	}
 }
 
@@ -3530,10 +3552,18 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		NotifyDigestMins *int    `json:"notify_digest_interval_min"`
 		// 拒答阶梯 L3 用的 fallback 模型 profile id（""=不启用，L3 降级为 give_up）。
 		RefusalFallbackProfile *string `json:"refusal_fallback_profile"`
+		// P-1 计划模式硬边界开关;每轮读,即时生效。
+		PlanModeStrict *bool `json:"plan_mode_strict"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, 400, err.Error())
 		return
+	}
+	if req.PlanModeStrict != nil {
+		if err := s.m.pg.SetBool(settingPlanModeStrict, *req.PlanModeStrict); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
 	}
 	if req.ConstraintsInjectPlanner != nil {
 		if err := s.m.pg.SetBool(settingConstraintsInjectPlanner, *req.ConstraintsInjectPlanner); err != nil {
@@ -3835,22 +3865,81 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	res, err := s.startTaskChatTurn(t, taskChatTurn{
+		Message: req.Message, AgentMessage: agentMessage, Attachments: req.Attachments,
+		Seg: req.Seg, ReasoningEffort: req.ReasoningEffort,
+	})
+	if err != nil {
+		writeErr(w, 409, err.Error())
+		return
+	}
+	if res.Mode == "llm" {
+		writeJSON(w, 202, map[string]any{"status": "accepted", "mode": "llm"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"reply": res.Reply, "mode": "rule"})
+}
+
+// taskChatTurn is one main-agent turn request. The HTTP chat handler (human) and
+// the automation scheduler (S-3) both go through startTaskChatTurn, so an automated
+// message is exactly "a user sent a message and triggered one turn" — except that
+// Source="automation" turns are NOT bound as human review background (S-4: they
+// must never count as human authorization) and their user row carries
+// metadata {"source":"automation", ...} so the UI can tag them「⏱ 自动化」.
+type taskChatTurn struct {
+	Message         string // transcript text (raw)
+	AgentMessage    string // what the agent receives (mentions expanded)
+	Attachments     []chatAttachment
+	Seg             *int
+	ReasoningEffort string
+	Source          string         // "" = human; "automation"
+	SourceMeta      map[string]any // extra metadata merged into the user row (automation_id, run_id…)
+	ForceReadonly   bool           // safety=readonly automation: plan-mode hard boundary regardless of settings
+	// OnDone, if set, runs after the turn ends (LLM or rule path). err is the
+	// agent error (nil on success; cancellation is reported as ctx error).
+	OnDone func(err error)
+}
+
+type taskChatResult struct {
+	Mode  string // "llm" | "rule"
+	Reply string // rule mode only
+}
+
+var (
+	errChatTaskDeleting = errors.New("任务正在删除，无法发送新消息")
+	errChatBusy         = errors.New("主 Agent 正在处理上一条消息，请稍候")
+)
+
+// startTaskChatTurn admits and launches one main-agent turn (the internal body of
+// POST /api/chat). Returns errChatBusy / errChatTaskDeleting when not admitted.
+func (s *Server) startTaskChatTurn(t *Task, turn taskChatTurn) (taskChatResult, error) {
+	req := turn
+	agentMessage := turn.AgentMessage
+	if agentMessage == "" {
+		agentMessage = turn.Message
+	}
 	// Admission is serialized with deletion's chat cancellation. Mark every chat
 	// turn busy before its first activity/file write, including rule-mode turns.
 	// If deletion wins the race, the second barrier check rejects this request.
 	s.chatMu.Lock()
 	if s.engine.IsDeleting(t.ID) {
 		s.chatMu.Unlock()
-		writeErr(w, 409, "任务正在删除，无法发送新消息")
-		return
+		return taskChatResult{}, errChatTaskDeleting
 	}
 	if s.chatBusy[t.ID] {
 		s.chatMu.Unlock()
-		writeErr(w, 409, "主 Agent 正在处理上一条消息，请稍候")
-		return
+		return taskChatResult{}, errChatBusy
 	}
 	ctx, cancel := context.WithCancelCause(s.ctx)
-	ctx = intercept.WithReviewContext(ctx, "", intercept.ReviewBackground{Source: intercept.BackgroundUserMessage, Text: req.Message})
+	if turn.Source == "" {
+		// 只有人类消息才绑定为审阅背景(BuildReviewInput 只接受 user_message 来源);
+		// 自动化消息不绑定,避免被当作人类授权(S-4)。
+		ctx = intercept.WithReviewContext(ctx, "", intercept.ReviewBackground{Source: intercept.BackgroundUserMessage, Text: req.Message})
+	}
+	if turn.ForceReadonly {
+		// safety=readonly 的自动化:本轮计划模式按严格硬边界执行(不看 plan_mode_strict)。
+		ctx = agent.WithForcePlanStrict(ctx)
+	}
 	s.chatBusy[t.ID] = true
 	s.chatCancel[t.ID] = cancel
 	s.chatMu.Unlock()
@@ -3889,6 +3978,15 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	// renders attachment cards.
 	humanTurn := userActivityWithAttachments("mainagent", req.Message, req.Attachments)
 	humanTurn.MainSeg = segPtr
+	if turn.Source != "" {
+		meta := map[string]any{"source": turn.Source}
+		for k, v := range turn.SourceMeta {
+			meta[k] = v
+		}
+		if blob, err := json.Marshal(meta); err == nil {
+			humanTurn.Metadata = blob
+		}
+	}
 	s.engine.emitActivity(t, humanTurn)
 	var ma *agent.MainAgent
 	var bundle *taskAgentBundle
@@ -3909,11 +4007,15 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		// steps + final answer stream back live via SSE (worker="mainagent"), so the
 		// handler returns immediately and the browser never needs to hold the request.
 		go func() {
+			var turnErr error
 			defer func() {
 				if bundle != nil && bundle.mainRuntime != nil {
 					bundle.mainRuntime.setEffortOverride("") // never leak into the next turn
 				}
 				s.finishTaskChat(t.ID, cancel)
+				if turn.OnDone != nil {
+					turn.OnDone(turnErr)
+				}
 			}()
 			// emit every step (thinking/tool_use/tool_result/text/result) so the main
 			// agent session shows its work live, like worker/planner. The final answer
@@ -3997,16 +4099,22 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 			if err != nil && ctx.Err() == nil {
 				s.engine.emitActivity(t, db.Activity{Worker: "mainagent", Kind: "text", IsError: true, Summary: "（主 Agent 出错：" + err.Error() + "）", MainSeg: segPtr})
 			}
+			turnErr = err
+			if turnErr == nil && ctx.Err() != nil && !errors.Is(context.Cause(ctx), agent.AbortChatTurnFinished) {
+				turnErr = context.Cause(ctx)
+			}
 		}()
-		writeJSON(w, 202, map[string]any{"status": "accepted", "mode": "llm"})
-		return
+		return taskChatResult{Mode: "llm"}, nil
 	}
 	reply := s.fallbackChat(t, req.Message)
 	// 规则模式与 LLM 路径同口径:最终回答存在 result 帧里(不再单独发 text 帧,
 	// 否则前端会把回答渲染两遍)。前端靠本轮 result 帧释放 sending 闩锁(U2)。
 	s.engine.emitActivity(t, db.Activity{Worker: "mainagent", Kind: "result", Summary: reply, MainSeg: segPtr})
 	s.finishTaskChat(t.ID, cancel)
-	writeJSON(w, 200, map[string]any{"reply": reply, "mode": "rule"})
+	if turn.OnDone != nil {
+		turn.OnDone(nil)
+	}
+	return taskChatResult{Mode: "rule", Reply: reply}, nil
 }
 
 func (s *Server) cancelTaskChat(taskID string, cause error) bool {

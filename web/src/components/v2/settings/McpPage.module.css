@@ -1,0 +1,196 @@
+/*
+ * MCP 节在设计 kit 之上的特有小件。骨架（SettingsPage / PageHead / Section / Card / Row /
+ * Editor / Field / RowMenu）全部来自 Kit；这里只放：命令行截断、卡内展开面板（工具明细 +
+ * 可见性）、layer-1 小卡里的紧凑行、工具开关按钮的箭头、删除确认摘要。
+ * 只用 --dsw-alias-* 颜色、--dsw-radius-* 圆角、0.5px 分隔线、400/500 字重。
+ */
+
+/* 行描述里的启动命令 / 远程 URL：等宽、一行截断。 */
+.command {
+  display: inline-block;
+  max-width: 320px;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 行尾「工具 n」切换：箭头随展开旋转。 */
+.toolsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolsChevron {
+  display: inline-flex;
+  transition: transform var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.toolsChevronOpen {
+  transform: rotate(90deg);
+}
+
+/* 卡内提示条（启停 / 刷新 / 删除失败）。 */
+.cardNotice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+/* 卡内展开面板：填充底，与 Editor 同材质，分组之间用细线。 */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 12px 12px;
+  padding: 16px;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.panelGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.panelGroup + .panelGroup {
+  padding-top: 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.panelTitle {
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.panelCount {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.panelHint {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panelActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* 面板里的 layer-1 小卡：放工具 / Agent 的紧凑行。 */
+.innerCard {
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.innerCard > [data-kit-row] {
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.innerScroll {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* 工具名：等宽主色。 */
+.toolName {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 工具说明：最多两行。 */
+.toolDesc {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* 面板里的状态文字（读取中 / 无数据）。 */
+.panelState {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 编辑器里的多行环境变量 / 请求头。 */
+.envArea {
+  min-height: 96px;
+}
+
+/* 删除确认里被删对象的摘要块。 */
+.targetBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.targetText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.targetName {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dialogStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialogText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}

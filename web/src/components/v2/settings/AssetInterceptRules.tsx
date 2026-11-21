@@ -6,28 +6,38 @@
  * DELETE / POST …/toggle）。全局规则只拦截、不带 action，表单字段就是后端的
  * enabled / kind / pattern / note 四项。删除用 Modal 二次确认（额度照总表 §5.5）。
  *
+ * 版式（D3 设计重塑）：页头与子页签由 InterceptRulesPage 经 `head` 插槽渲染；
+ * 正文 = Section → Card + Row（开关 · 等宽匹配内容 · 类型/内置徽标 · 备注 · ⋯ 菜单），
+ * 末尾虚线位新建；编辑弹窗内用 kit 的 Field / TextInput。
+ *
  * 旧页面依据：ARTEX/web/src/app/(main)/system/intercept/assets/page.tsx:177-346
  * （列表列：类型 / 匹配内容 / 备注 / 启用 / 操作；Sheet 表单：匹配类型 / 匹配内容 / 备注 / 启用此规则；
  * :156 的删除确认；:78 的默认值 fuzzy_domain + enabled；:81-88 的前端轻校验）。
- * DSH 依据：DSH 无拦截配置，按设置分节子页签扩展（总表 §4.3）；
- * 列表行与表单卡沿用 SettingsDialog.module.css 的 ruleList / ruleRow / ruleMain /
- * ruleMeta / ruleActions / formCard / formRow / fieldBlock / textField / textArea /
- * formActions / errorLine / pageToolbar 等类，与同分节的 InterceptRulesPage.tsx 一致。
+ * DSH 依据：DSH 无拦截配置，按设置分节子页签扩展（总表 §4.3）。
  * 对照表行：P3:I9 P3:I10 P2:J1 P2:J2 P2:J3 P2:J4 P2:J5
  */
 import * as React from "react";
 
 import { Button } from "@/vendor/dsh/primitives/Button";
-import { Input } from "@/vendor/dsh/primitives/Input";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
 import { Switch } from "@/vendor/dsh/primitives/Switch";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
-import {
-  IconPlusOutlineRegular,
-  IconRefreshOutlineRegular,
-  IconTrashOutlineRegular,
-} from "@/vendor/dsh/primitives/icons/index";
+import { IconGlobeOutlineRegular, IconPlusOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 
+import {
+  AddSlot,
+  AddSlots,
+  Badge,
+  Card,
+  Empty,
+  Field,
+  type KitTone,
+  Meta,
+  Notice,
+  Row,
+  Section,
+  Skeleton,
+  TextInput,
+} from "@/components/v2/design/Kit";
 import type { AssetInterceptKind, AssetInterceptRule } from "@/lib/types";
 import {
   createAssetInterceptRule,
@@ -39,7 +49,9 @@ import {
 } from "@/v2/data/asset-intercept";
 import { SelectMenu } from "./SelectMenu";
 import { toast } from "./Toast";
-import css from "./SettingsDialog.module.css";
+import { errorText, type InterceptHead, RefreshButton, RowMenu } from "./InterceptAdvanced";
+import shared from "./SettingsDialog.module.css";
+import own from "./InterceptRulesPage.module.css";
 
 /** kind 的元信息，照旧页面 KIND_OPTIONS（assets/page.tsx:24-32）：标签与输入提示。 */
 const KIND_OPTIONS: readonly {
@@ -72,11 +84,11 @@ const KIND_SELECT_OPTIONS = KIND_OPTIONS.map((option) => ({ value: option.value,
 /** 新建表单的初始值，照旧页面 defaultForm（assets/page.tsx:78）。 */
 const NEW_RULE_DRAFT: AssetInterceptRuleInput = { enabled: true, kind: "fuzzy_domain", pattern: "", note: "" };
 
-/** kind 的标签色：网段 / 模糊 / 全等各有区分（Tag 只接受固定 tone）。 */
-function kindTone(kind: AssetInterceptKind): "info" | "warning" | "success" {
+/** kind 的徽标色：网段 / 模糊 / 全等各有区分。 */
+function kindTone(kind: AssetInterceptKind): KitTone {
   if (kind === "cidr") return "info";
   if (kind.startsWith("fuzzy_")) return "warning";
-  return "success";
+  return "done";
 }
 
 /** 匹配内容的输入提示：CIDR / 模糊 / 全等三类，照旧页面 :305-311。 */
@@ -100,12 +112,15 @@ function ruleToInput(rule: AssetInterceptRule): AssetInterceptRuleInput {
   return { enabled: rule.enabled, kind: rule.kind, pattern: rule.pattern, note: rule.note };
 }
 
+const ASSETS_LEAD = "命中的域名、IP、URL 或网段会被全局拦截，Agent 不会对其执行任何操作。";
+
 /** 「资产黑名单」子页签正文：真实列表 + 新建 / 编辑 / 启停 / 删除。 */
-export function AssetInterceptRules(): React.ReactNode {
+export function AssetInterceptRules({ head }: { head: InterceptHead }): React.ReactNode {
   const rules = useAssetInterceptRules();
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<AssetInterceptRule | null>(null);
   const [deleting, setDeleting] = React.useState<AssetInterceptRule | null>(null);
+  const actions = <RefreshButton onClick={rules.reload} spinning={rules.phase === "loading"} />;
 
   const openNew = (): void => {
     setEditing(null);
@@ -117,58 +132,73 @@ export function AssetInterceptRules(): React.ReactNode {
     setEditorOpen(true);
   };
 
-  if (rules.phase === "loading") return <p className={css.pageLead}>读取资产拦截规则…</p>;
-
-  if (rules.phase === "offline") {
+  if (rules.phase === "loading") {
     return (
       <>
-        <p className={css.pageLead} role="alert">
-          未连接后端（读不到资产拦截规则）
-        </p>
-        {rules.error === null ? null : <p className={css.errorLine}>{rules.error}</p>}
-        <Button variant="outline" size="sm" onClick={rules.reload}>
-          <IconRefreshOutlineRegular size={13} /> 重新读取
-        </Button>
+        {head({ lead: ASSETS_LEAD, actions })}
+        <Card>
+          <Skeleton label="读取资产拦截规则" />
+        </Card>
       </>
     );
   }
 
+  if (rules.phase === "offline") {
+    return (
+      <>
+        {head({ lead: ASSETS_LEAD, actions })}
+        <Notice tone="danger" action={<Button variant="ghost" size="sm" onClick={rules.reload}>重新读取</Button>}>
+          未连接后端（读不到资产拦截规则）{rules.error === null ? "" : `：${rules.error}`}
+        </Notice>
+      </>
+    );
+  }
+
+  const enabledCount = rules.rules.filter((rule) => rule.enabled).length;
+
   return (
     <>
-      <h2 className={css.pageTitle}>资产黑名单</h2>
-      <p className={css.pageLead}>
-        来自 GET /asset-intercept/rules，共 {rules.rules.length} 条。全局资产黑名单：命中的域名 / IP / URL /
-        网段会被拦截，不对其执行任何操作。支持全等与模糊匹配，以及 CIDR 网段。
-      </p>
-      <div className={css.pageToolbar}>
-        <Button variant="outline" size="sm" onClick={openNew}>
-          <IconPlusOutlineRegular size={13} /> 新建规则
-        </Button>
-        <Button variant="ghost" size="sm" onClick={rules.reload}>
-          <IconRefreshOutlineRegular size={13} /> 刷新
-        </Button>
-      </div>
-
-      {rules.rules.length === 0 ? (
-        <div data-asset-rules-empty="">
-          <p className={css.pageLead}>暂无资产拦截规则</p>
-          <Button variant="outline" size="sm" onClick={openNew}>
-            <IconPlusOutlineRegular size={13} /> 新建第一条规则
-          </Button>
-        </div>
-      ) : (
-        <div className={css.ruleList}>
-          {rules.rules.map((rule) => (
-            <AssetRuleRow
-              key={rule.id}
-              rule={rule}
-              onEdit={() => openEdit(rule)}
-              onDelete={() => setDeleting(rule)}
-              onChanged={rules.reload}
+      {head({ lead: ASSETS_LEAD, actions })}
+      <Section
+        title="黑名单"
+        count={rules.rules.length === 0 ? undefined : `${enabledCount}/${rules.rules.length} 启用`}
+        hint={rules.rules.length === 0 ? undefined : "支持全等、模糊匹配与 CIDR 网段"}
+      >
+        {rules.rules.length === 0 ? (
+          <Card data={{ "data-asset-rules-empty": "" }}>
+            <Empty
+              inCard
+              icon={<IconGlobeOutlineRegular size={18} />}
+              title="暂无资产拦截规则"
+              text="把不允许触碰的域名、IP 或网段加进来，所有任务都会绕开它们。"
+              action={
+                <Button variant="outline" size="sm" onClick={openNew}>
+                  <IconPlusOutlineRegular size={13} /> 新建第一条规则
+                </Button>
+              }
             />
-          ))}
-        </div>
-      )}
+          </Card>
+        ) : (
+          <>
+            <Card>
+              {rules.rules.map((rule) => (
+                <AssetRuleRow
+                  key={rule.id}
+                  rule={rule}
+                  onEdit={() => openEdit(rule)}
+                  onDelete={() => setDeleting(rule)}
+                  onChanged={rules.reload}
+                />
+              ))}
+            </Card>
+            <AddSlots>
+              <AddSlot data={{ "data-asset-rule-new": "" }} onClick={openNew}>
+                <IconPlusOutlineRegular size={13} /> 新建规则
+              </AddSlot>
+            </AddSlots>
+          </>
+        )}
+      </Section>
 
       <AssetRuleEditor
         open={editorOpen}
@@ -192,7 +222,7 @@ export function AssetInterceptRules(): React.ReactNode {
   );
 }
 
-/** 列表行：启用 Switch + 类型 / 匹配内容 / 备注，动作是编辑与删除。 */
+/** 列表行：开关 · 匹配内容（等宽）· 类型徽标 · 备注 · ⋯ 菜单。 */
 function AssetRuleRow({
   rule,
   onEdit,
@@ -215,39 +245,51 @@ function AssetRuleRow({
         toast(next ? "规则已启用" : "规则已停用");
         onChanged();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setBusy(false));
   };
 
   return (
-    <div className={css.ruleRow} data-asset-rule-id={rule.id} data-asset-rule-enabled={rule.enabled}>
-      <Switch
-        checked={rule.enabled}
+    <Row
+      data={{ "data-asset-rule-id": String(rule.id), "data-asset-rule-enabled": String(rule.enabled) }}
+      lead={<Switch checked={rule.enabled} disabled={busy} label={`启用资产拦截规则 ${rule.pattern}`} onChange={toggle} />}
+      label={
+        <span className={`${own.pattern} ${own.patternLabel} ${rule.enabled ? "" : own.labelOff}`} title={rule.pattern}>
+          {rule.pattern}
+        </span>
+      }
+      labelAdornment={
+        <>
+          <Badge tone={rule.enabled ? kindTone(rule.kind) : "neutral"}>{KIND_LABEL[rule.kind] ?? rule.kind}</Badge>
+          {rule.builtin ? <Badge>内置</Badge> : null}
+        </>
+      }
+      description={
+        <>
+          <Meta
+            items={[
+              rule.note.trim() === "" ? "无备注" : (
+                <span key="note" className={`${own.metaClip} ${own.metaClipWide}`} title={rule.note}>
+                  {rule.note}
+                </span>
+              ),
+              rule.enabled ? null : "已停用",
+            ]}
+          />
+          {failure === null ? null : <span className={own.rowError}>操作失败：{failure}</span>}
+        </>
+      }
+    >
+      <RowMenu
+        label={`资产规则 ${rule.pattern} 的更多操作`}
         disabled={busy}
-        label={`启用资产拦截规则 ${rule.pattern}`}
-        onChange={toggle}
+        data={{ "data-asset-rule-more": String(rule.id) }}
+        items={[
+          { label: "编辑", onSelect: onEdit, data: { "data-asset-rule-edit": String(rule.id) } },
+          { label: "删除", onSelect: onDelete, danger: true, separatorBefore: true, data: { "data-asset-rule-delete": String(rule.id) } },
+        ]}
       />
-      <div className={css.ruleMain}>
-        <div className={css.ruleMeta}>
-          <Tag tone={kindTone(rule.kind)}>{KIND_LABEL[rule.kind] ?? rule.kind}</Tag>
-          {rule.builtin ? <Tag tone="neutral">内置</Tag> : null}
-          <Tag tone={rule.enabled ? "success" : "quiet"}>{rule.enabled ? "已启用" : "已停用"}</Tag>
-        </div>
-        <div className={css.rulePattern}>{rule.pattern}</div>
-        <div className={css.ruleMeta}>
-          <span>{rule.note.trim() === "" ? "无备注" : rule.note}</span>
-        </div>
-        {failure === null ? null : <p className={css.errorLine}>{failure}</p>}
-      </div>
-      <div className={css.ruleActions}>
-        <Button variant="outline" size="sm" disabled={busy} onClick={onEdit}>
-          编辑
-        </Button>
-        <button type="button" className={css.dangerBtn} disabled={busy} onClick={onDelete}>
-          <IconTrashOutlineRegular size={13} /> 删除
-        </button>
-      </div>
-    </div>
+    </Row>
   );
 }
 
@@ -263,6 +305,7 @@ function AssetRuleEditor({
   onClose: () => void;
   onSaved: () => void;
 }): React.ReactNode {
+  const uid = React.useId();
   const [draft, setDraft] = React.useState<AssetInterceptRuleInput>(NEW_RULE_DRAFT);
   const [saving, setSaving] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
@@ -274,8 +317,7 @@ function AssetRuleEditor({
     setFailure(null);
   }, [open, rule]);
 
-  const patch = (next: Partial<AssetInterceptRuleInput>): void =>
-    setDraft((prev) => ({ ...prev, ...next }));
+  const patch = (next: Partial<AssetInterceptRuleInput>): void => setDraft((prev) => ({ ...prev, ...next }));
 
   const placeholder = KIND_OPTIONS.find((option) => option.value === draft.kind)?.placeholder ?? "";
 
@@ -294,7 +336,7 @@ function AssetRuleEditor({
         toast(rule === null ? "资产拦截规则已创建" : "资产拦截规则已更新");
         onSaved();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setSaving(false));
   };
 
@@ -304,6 +346,8 @@ function AssetRuleEditor({
       onClose={onClose}
       title={rule === null ? "新建资产拦截规则" : "编辑资产拦截规则"}
       closeLabel="关闭"
+      className={own.modal}
+      contentClassName={own.modalContent}
       description="命中此规则的目标资产会被全局拦截"
       footer={
         <>
@@ -316,10 +360,10 @@ function AssetRuleEditor({
         </>
       }
     >
-      <div className={css.formCard}>
-        <div className={css.fieldBlock}>
-          <div className={css.fieldLabel}>匹配类型</div>
+      <div className={own.form}>
+        <Field label="匹配类型" htmlFor={`${uid}-kind`}>
           <SelectMenu
+            id={`${uid}-kind`}
             value={draft.kind}
             options={KIND_SELECT_OPTIONS}
             disabled={saving}
@@ -329,24 +373,22 @@ function AssetRuleEditor({
               if (found !== undefined) patch({ kind: found.value });
             }}
           />
-        </div>
-
-        <div className={css.fieldBlock} style={{ marginTop: 12 }}>
-          <div className={css.fieldLabel}>匹配内容</div>
-          <Input
+        </Field>
+        <Field label="匹配内容" htmlFor={`${uid}-pattern`} hint={patternHint(draft.kind)}>
+          <TextInput
+            id={`${uid}-pattern`}
+            mono
             aria-label="匹配内容"
             placeholder={placeholder}
             value={draft.pattern}
             disabled={saving}
             onChange={(event) => patch({ pattern: event.currentTarget.value })}
           />
-          <p className={css.fieldHint}>{patternHint(draft.kind)}</p>
-        </div>
-
-        <div className={css.fieldBlock} style={{ marginTop: 12 }}>
-          <div className={css.fieldLabel}>备注（可选）</div>
+        </Field>
+        <Field label="备注" htmlFor={`${uid}-note`} optional>
           <textarea
-            className={css.textArea}
+            id={`${uid}-note`}
+            className={own.textArea}
             aria-label="规则备注"
             rows={2}
             placeholder="说明这条规则的用途"
@@ -354,19 +396,13 @@ function AssetRuleEditor({
             disabled={saving}
             onChange={(event) => patch({ note: event.currentTarget.value })}
           />
+        </Field>
+        <div className={shared.optionCard}>
+          <Row label="启用此规则" description={rule === null ? "保存后生效。" : "关闭则保留规则但不拦截。"}>
+            <Switch checked={draft.enabled} disabled={saving} label="启用此规则" onChange={(next) => patch({ enabled: next })} />
+          </Row>
         </div>
-
-        <div className={css.checkInline} style={{ marginTop: 12 }}>
-          <Switch
-            checked={draft.enabled}
-            disabled={saving}
-            label="启用此规则"
-            onChange={(next) => patch({ enabled: next })}
-          />
-          <span>启用此规则{rule === null ? "（保存后生效）" : ""}</span>
-        </div>
-
-        {failure === null ? null : <p className={css.errorLine}>{failure}</p>}
+        {failure === null ? null : <Notice tone="danger">{failure}</Notice>}
       </div>
     </Modal>
   );
@@ -399,7 +435,7 @@ function AssetRuleDeleteDialog({
         toast("资产拦截规则已删除");
         onDeleted();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setBusy(false));
   };
 
@@ -426,12 +462,17 @@ function AssetRuleDeleteDialog({
         </>
       }
     >
-      <div className={css.dialogBodyText}>
-        <p style={{ margin: 0 }}>
-          {rule === null ? "" : `${KIND_LABEL[rule.kind] ?? rule.kind} · ${rule.pattern}`}
-        </p>
-        {failure === null ? null : <p className={css.errorLine}>删除失败：{failure}</p>}
-      </div>
+      {rule === null ? null : (
+        <div className={own.dialogStack}>
+          <div className={own.target}>
+            <Badge tone={kindTone(rule.kind)}>{KIND_LABEL[rule.kind] ?? rule.kind}</Badge>
+            <span className={own.targetText} title={rule.pattern}>
+              {rule.pattern}
+            </span>
+          </div>
+          {failure === null ? null : <Notice tone="danger">删除失败：{failure}</Notice>}
+        </div>
+      )}
     </Modal>
   );
 }

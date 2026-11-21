@@ -24,8 +24,8 @@
 import type { ReactNode } from "react";
 
 import { AgentChatPage } from "@/components/v2/agent-chat/AgentChatPage";
+import { AutomationsPage } from "@/components/v2/automations/AutomationsPage";
 import { CommandsPage } from "@/components/v2/commands/CommandsPage";
-import { CompaniesPage } from "@/components/v2/companies/CompaniesPage";
 import { DashboardPage } from "@/components/v2/dashboard/DashboardPage";
 import { AssetsDataPage } from "@/components/v2/data-pages/AssetsDataPage";
 import { TrafficDataPage } from "@/components/v2/data-pages/TrafficDataPage";
@@ -34,9 +34,9 @@ import { LogsPage } from "@/components/v2/logs/LogsPage";
 import { LlmRecordsPage } from "@/components/v2/llm/LlmRecordsPage";
 import { MemoriesPage } from "@/components/v2/memories/MemoriesPage";
 import { SyncPage } from "@/components/v2/sync/SyncPage";
-import { ToolsPage } from "@/components/v2/tools/ToolsPage";
 import { WorkspacePage } from "@/components/v2/workspace/WorkspacePage";
 import {
+  IconClockOutlineRegular,
   IconCodeOutlineRegular,
   IconDatabaseOutlineRegular,
   IconFolderOpenOutlineRegular,
@@ -46,7 +46,6 @@ import {
   IconListPenOutlineRegular,
   IconRefreshOutlineRegular,
   IconShieldOutlineRegular,
-  IconSlidersTwoOutlineRegular,
 } from "@/vendor/dsh/primitives/icons/index";
 
 /** Icon renderer shared with the sidebar's fixed navigation rows. */
@@ -87,16 +86,27 @@ const PAGES: readonly MainPage[] = [
     Component: DashboardPage,
   },
   {
+    // D5：定时任务（自动化）一级页——DSH「自动化任务」页、Codex Scheduled 收件箱同位。
+    id: "automations",
+    label: "自动化",
+    Icon: IconClockOutlineRegular,
+    order: 85,
+    group: "数据",
+    Component: AutomationsPage,
+  },
+  {
+    // D6·U4：原名「发现」；企业只读列表并入资产库后，本页是全局发现的唯一全功能入口。
     id: "findings",
-    label: "发现",
+    label: "发现库",
     Icon: IconShieldOutlineRegular,
     order: 90,
     group: "数据",
     Component: FindingsDataPage,
   },
   {
+    // D6·U4：原名「资产」；「企业」页并入本页的 company tab（?page=assets&tab=company）。
     id: "assets",
-    label: "资产",
+    label: "资产库",
     Icon: IconDatabaseOutlineRegular,
     order: 100,
     group: "数据",
@@ -111,11 +121,13 @@ const PAGES: readonly MainPage[] = [
     Component: TrafficDataPage,
   },
   {
+    // D6·U4：原名「Agent 对话」，从「数据」移到「系统」——它是独立聊天工具，不是
+    // 跨任务数据页。order 290 让「系统」段在「数据」段之后连续（按 group 切段渲染）。
     id: "conversations",
-    label: "Agent 对话",
+    label: "Agent 聊天",
     Icon: IconDatabaseOutlineRegular,
-    order: 120,
-    group: "数据",
+    order: 290,
+    group: "系统",
     Component: AgentChatPage,
   },
   {
@@ -125,14 +137,6 @@ const PAGES: readonly MainPage[] = [
     order: 130,
     group: "数据",
     Component: WorkspacePage,
-  },
-  {
-    id: "companies",
-    label: "企业",
-    Icon: IconDatabaseOutlineRegular,
-    order: 140,
-    group: "数据",
-    Component: CompaniesPage,
   },
   {
     id: "commands",
@@ -167,14 +171,8 @@ const PAGES: readonly MainPage[] = [
     Component: LlmRecordsPage,
   },
   {
-    id: "tools",
-    label: "工具",
-    Icon: IconSlidersTwoOutlineRegular,
-    order: 330,
-    group: "系统",
-    Component: ToolsPage,
-  },
-  {
+    // D6·U4：原「工具」（order 330）与原「企业」（order 140）两项入口已删——
+    // 工具组件在设置弹窗「工具」节（SettingsDialog.tsx），企业并入资产库 company tab。
     id: "sync",
     label: "资产同步",
     Icon: IconRefreshOutlineRegular,

@@ -1,305 +1,282 @@
-/* 工具目录页（设置弹窗内）：左侧列表 + 右侧编辑器，窄栏下自动堆叠。 */
+/*
+ * 工具目录节（设置弹窗内）在设计 kit 之上的特有小件。
+ * 骨架（SettingsPage / PageHead / FilterBar / Card / Row / Editor / Field / AddSlot / Empty）全部来自 Kit；
+ * 这里只放：主从分栏、列表卡的滚动与行内两行描述、选中行底色、编辑器头、参数表、
+ * Agent 绑定网格、测试输出块、搜索框。
+ * 只用 --dsw-alias-* 颜色、--dsw-radius-* 圆角、0.5px 分隔线、400/500 字重。
+ */
 
-.page {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-bottom: 24px;
-}
+/* ---------------- 筛选 + 搜索 ---------------- */
 
-.head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.title {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
-}
-
-.lead {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.hint {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.headActions {
+.filterRow {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
 }
 
 .search {
-  display: block;
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 260px;
+  min-width: 160px;
+  margin-left: auto;
 }
+
+.searchIcon {
+  position: absolute;
+  left: 10px;
+  color: var(--dsw-alias-label-tertiary);
+  pointer-events: none;
+}
+
+.searchInput {
+  padding-left: 30px;
+}
+
+/* ---------------- 主从分栏 ---------------- */
 
 .split {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.1fr);
-  gap: 14px;
+  grid-template-columns: minmax(220px, 0.78fr) minmax(0, 1.22fr);
+  gap: 12px;
   align-items: start;
+  min-width: 0;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-.list {
+.master {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  max-height: 460px;
-  overflow: auto;
+  gap: 8px;
+  min-width: 0;
 }
 
-.row {
+/* 内置分组列表：整列限高滚动（每组一个 Section + Card），右侧编辑器 sticky 不动。 */
+.masterScroll {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  padding: 8px 10px;
-  text-align: left;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-settings-card-fill);
-  cursor: pointer;
+  gap: 20px;
+  max-height: 620px;
+  padding-right: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-@media (hover: hover) {
-  .row:hover {
-    background: var(--dsw-alias-bg-multi-select);
-  }
+/* 自定义列表卡：自己滚，右侧编辑器保持在视野内。 */
+.listCard {
+  max-height: 520px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.listCard > [data-kit-row],
+.groupCard > [data-kit-row] {
+  min-height: 0;
+  padding: 10px 14px;
 }
 
 .rowActive {
-  border-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
   background: var(--dsw-alias-interactive-bg-active);
 }
 
-.rowKey {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
-  overflow-wrap: anywhere;
+@media (hover: hover) {
+  .rowActive:hover {
+    background: var(--dsw-alias-interactive-bg-active);
+  }
 }
 
-.rowDesc {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-secondary);
-  overflow-wrap: anywhere;
+.key {
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
 }
 
-.rowMeta {
+.desc {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 4px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary);
+  min-width: 0;
 }
 
-.empty {
-  padding: 10px;
-  font-size: 12px;
-  color: var(--dsw-alias-label-tertiary);
+.clamp2 {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dimmed {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 .detail {
+  position: sticky;
+  top: 0;
   min-width: 0;
 }
 
-.editor {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--dsw-alias-settings-card-stroke);
-  border-radius: var(--dsw-radius-lg);
-  background: var(--dsw-alias-settings-card-fill);
+/* 右侧未选中：卡内空态。 */
+.placeholder {
+  min-height: 280px;
+  justify-content: center;
 }
 
-.editorHead {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+/* ---------------- 编辑器 ---------------- */
+
+.editorCard > [data-kit-editor] {
+  margin-top: 0;
 }
 
-.editorKey {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
   overflow-wrap: anywhere;
 }
 
-.field {
+.groupHead {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.fieldLabel {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-primary);
-}
-
-.textarea {
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  padding: 7px 9px;
-  font: inherit;
+}
+
+.groupCount {
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 文本框尺寸。 */
+textarea.short {
+  min-height: 64px;
+}
+
+textarea.code {
+  min-height: 120px;
   font-size: 12px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-base);
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  resize: vertical;
+  line-height: 18px;
+  tab-size: 2;
 }
 
-.textarea:focus {
-  outline: none;
-  border-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+textarea.codeTall {
+  min-height: 168px;
+  font-size: 12px;
+  line-height: 18px;
+  tab-size: 2;
 }
 
+/* 选项小卡里的行：与 Models 编辑器同节奏。 */
+.optionRows > [data-kit-row] {
+  min-height: 48px;
+  padding: 8px 14px;
+}
+
+/* 参数表：名称 + 类型 / 说明 / 默认值，layer-1 小卡。 */
 .params {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.paramRow {
-  display: grid;
-  grid-template-columns: minmax(110px, 0.8fr) 1.3fr 0.8fr;
-  gap: 6px;
-  align-items: center;
-}
-
-.paramName {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--dsw-alias-label-secondary);
-  overflow-wrap: anywhere;
-}
-
-.paramInput {
   min-width: 0;
-}
-
-.rowLine {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 0;
-  border-top: 1px solid var(--dsw-alias-border-l1);
-}
-
-.bindList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.bindItem {
-  font-size: 12px;
-}
-
-.error {
-  margin: 0;
-  font-size: 12px;
-  color: var(--dsw-alias-state-warn-label);
-  overflow-wrap: anywhere;
-}
-
-/* 主区里光秃秃一行「读取工具目录…」会像空页，给一个明确的状态块。 */
-.state,
-.stateError {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 12px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--dsw-alias-label-secondary);
-  border: 1px solid var(--dsw-alias-border-l1);
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-layer-1);
 }
 
-.stateError {
-  color: var(--dsw-alias-state-error-primary);
-  border-color: var(--dsw-alias-state-error-primary);
+/* 每个参数：上一行「名称 + 类型 + 必填」，下一行「说明 | 默认值」。 */
+.paramRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 8px;
+  padding: 10px 12px;
 }
 
-.toolbar {
+.paramRow + .paramRow {
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.paramName {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.formGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.paramKey {
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@media (max-width: 720px) {
-  .formGrid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.testBox {
+.paramTags {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--dsw-alias-border-l1);
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
-.output,
-.outputError {
+.paramRow input {
+  height: 28px;
+  font-size: 12px;
+}
+
+/* Agent 绑定：自适应网格的复选框。 */
+.bindGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.bindItem {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 测试运行输出。 */
+.output {
   margin: 0;
-  max-height: 160px;
+  max-height: 200px;
   overflow: auto;
-  padding: 8px;
-  font-size: 11px;
-  line-height: 1.5;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-label-secondary);
 }
 
 .outputError {
-  color: var(--dsw-alias-state-warn-label);
+  composes: output;
+  color: var(--dsw-alias-state-error-primary);
 }
+

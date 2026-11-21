@@ -13,15 +13,20 @@
  * 对照表行：P1:A16。
  */
 import * as React from "react";
+
+import type { TaskStatus } from "@/lib/types";
+import { TASK_STATUS_LABEL, taskStatusTone } from "@/v2/data/tasks";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Checkbox } from "@/vendor/dsh/primitives/Checkbox";
-import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { Menu } from "@/vendor/dsh/primitives/Menu";
 import { IconEllipsisOutlineRegular, IconPinFillRegular } from "@/vendor/dsh/primitives/icons/index";
-import type { TaskStatus } from "@/lib/types";
-import { taskStatusTone, TASK_STATUS_LABEL } from "@/v2/data/tasks";
+import { Menu, type MenuEntry } from "@/vendor/dsh/primitives/Menu";
+import { Modal } from "@/vendor/dsh/primitives/Modal";
+
 import { toast } from "../settings/Toast";
 import css from "./SessionRow.module.css";
+
+/** The menu items with ids prefixed `extra:` are passed in by the caller and returned via the `onMenuExtra` callback. */
+const EXTRA_PREFIX = "extra:";
 
 export interface Session {
   id: string;
@@ -62,6 +67,8 @@ export function SessionRow({
   selectable = false,
   selected = false,
   onSelectedChange,
+  menuExtras,
+  onMenuExtra,
 }: {
   session: Session;
   active: boolean;
@@ -73,6 +80,14 @@ export function SessionRow({
   selected?: boolean;
   /** C10 多选模式：勾选状态变化；有它时点行只切勾选、不切任务。 */
   onSelectedChange?: (next: boolean) => void;
+  /**
+   * 调用方注入的附加菜单项（id 必须以 `extra:` 开头）：分组视图把「移入分类」
+   * 子菜单放这里，替代旧行内浮起 chip（用户 2026-11-20 反馈：行上浮起的
+   * 文字 chip 不是 DSH 的形态；行动作统一走右键菜单，`Rows.tsx:7`）。
+   */
+  menuExtras?: readonly MenuEntry[];
+  /** `menuExtras` 项被选中的回调：id 去掉 `extra:` 前缀。 */
+  onMenuExtra?: (id: string) => void;
 }): React.ReactNode {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [renaming, setRenaming] = React.useState(false);
@@ -85,7 +100,7 @@ export function SessionRow({
   const renameBlocked = busy || trimmed === "" || trimmed === session.label;
   const selecting = selectable && onSelectedChange !== undefined;
 
-  const items = [
+  const items: MenuEntry[] = [
     ...(archived ? [] : [{ id: "pin", label: session.pinned === true ? "取消置顶" : "置顶会话" }]),
     { id: "rename", label: "重命名" },
     { id: "fork", label: "分叉会话（后端未提供）", disabled: true },
@@ -93,20 +108,31 @@ export function SessionRow({
     // 「标为未读」本身不成立（旧页也没有），故只保留运行状态这一条真实项。
     {
       id: "read",
-      label:
-        session.status === undefined
-          ? "标为未读（任务无该字段）"
-          : `状态 ${TASK_STATUS_LABEL[session.status]}`,
+      label: session.status === undefined ? "标为未读（任务无该字段）" : `状态 ${TASK_STATUS_LABEL[session.status]}`,
       disabled: true,
     },
-    { id: "copy", label: "复制 Session ID", separatorBefore: true },
-    { id: "archive", label: archived ? "取消归档" : "归档会话", separatorBefore: true },
+    ...(menuExtras ?? []),
+    // 分隔线是独立 entry（`MenuEntry` 的 `MenuSeparator`），不是 `separatorBefore` 属性。
+    { type: "separator", id: "sep:copy" },
+    { id: "copy", label: "复制 Session ID" },
+    { id: "archive", label: archived ? "取消归档" : "归档会话" },
   ];
 
   const run = (id: string): void => {
     setMenuOpen(false);
-    if (id === "pin") { onChange({ pinned: session.pinned !== true }); return; }
-    if (id === "rename") { setDraft(session.label); setRenaming(true); return; }
+    if (id.startsWith(EXTRA_PREFIX)) {
+      onMenuExtra?.(id.slice(EXTRA_PREFIX.length));
+      return;
+    }
+    if (id === "pin") {
+      onChange({ pinned: session.pinned !== true });
+      return;
+    }
+    if (id === "rename") {
+      setDraft(session.label);
+      setRenaming(true);
+      return;
+    }
     if (id === "copy") {
       void navigator.clipboard.writeText(session.id).then(
         () => toast(`已复制 ${session.id}`),
@@ -115,9 +141,15 @@ export function SessionRow({
       return;
     }
     if (id === "archive") {
-      if (archived) { onChange({ archived: false }); return; }
+      if (archived) {
+        onChange({ archived: false });
+        return;
+      }
       // Running work must be named before it is stopped.
-      if (session.running === true) { setConfirming(true); return; }
+      if (session.running === true) {
+        setConfirming(true);
+        return;
+      }
       onChange({ archived: true });
     }
   };
@@ -130,10 +162,12 @@ export function SessionRow({
       ? 0
       : session.findings.split("/").reduce((sum, part) => sum + (Number.parseInt(part, 10) || 0), 0);
   const summary: string[] = [];
-  if (session.goals !== undefined && session.goals !== "—" && session.goals !== "") summary.push(`目标 ${session.goals}`);
+  if (session.goals !== undefined && session.goals !== "—" && session.goals !== "")
+    summary.push(`目标 ${session.goals}`);
   if (findingsTotal > 0) summary.push(`发现 ${findingsTotal}`);
   if (session.inFlight !== undefined && session.inFlight !== "0") summary.push(`在途 ${session.inFlight}`);
-  if (summary.length === 0 && session.duration !== undefined && session.duration !== "") summary.push(`时长 ${session.duration}`);
+  if (summary.length === 0 && session.duration !== undefined && session.duration !== "")
+    summary.push(`时长 ${session.duration}`);
   const hasMeta = summary.length > 0;
   const detailLines = [
     session.description ?? session.label,
@@ -154,7 +188,9 @@ export function SessionRow({
         role="button"
         tabIndex={0}
         title={title}
-        aria-label={session.status === undefined ? session.label : `${session.label}，${TASK_STATUS_LABEL[session.status]}`}
+        aria-label={
+          session.status === undefined ? session.label : `${session.label}，${TASK_STATUS_LABEL[session.status]}`
+        }
         aria-current={active ? "true" : undefined}
         data-task-id={session.id}
         data-task-status={session.status}
@@ -175,14 +211,20 @@ export function SessionRow({
           }
           onSelect();
         }}
-        onContextMenu={(e) => { e.preventDefault(); setMenuOpen(true); }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenuOpen(true);
+        }}
       >
         <span className={css.line}>
           {selecting ? (
             <span
               className={css.checkSeat}
               // 勾选框自己处理点击，不让两次切换互相抵消。
-              onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
               onClick={(e) => e.stopPropagation()}
             >
               <Checkbox
@@ -221,8 +263,14 @@ export function SessionRow({
                 aria-label="会话操作"
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
-                onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
-                onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen((v) => !v);
+                }}
               >
                 <IconEllipsisOutlineRegular size={14} />
               </button>
@@ -235,7 +283,9 @@ export function SessionRow({
         {hasMeta ? (
           <span className={css.meta}>
             {session.status !== undefined ? (
-              <span className={`${css.metaStatus} ${css[`ink_${statusTone}`] ?? ""}`}>{TASK_STATUS_LABEL[session.status]}</span>
+              <span className={`${css.metaStatus} ${css[`ink_${statusTone}`] ?? ""}`}>
+                {TASK_STATUS_LABEL[session.status]}
+              </span>
             ) : null}
             {summary.map((item) => (
               <span className={css.metaItem} key={item}>
@@ -245,23 +295,32 @@ export function SessionRow({
           </span>
         ) : session.status !== undefined ? (
           <span className={css.meta}>
-            <span className={`${css.metaStatus} ${css[`ink_${statusTone}`] ?? ""}`}>{TASK_STATUS_LABEL[session.status]}</span>
+            <span className={`${css.metaStatus} ${css[`ink_${statusTone}`] ?? ""}`}>
+              {TASK_STATUS_LABEL[session.status]}
+            </span>
           </span>
         ) : null}
       </div>
 
       <Modal
         open={renaming}
-        onClose={() => { if (!busy) setRenaming(false); }}
+        onClose={() => {
+          if (!busy) setRenaming(false);
+        }}
         closeLabel="关闭"
         title="重命名会话"
         footer={
           <>
-            <Button variant="outline" disabled={busy} onClick={() => setRenaming(false)}>取消</Button>
+            <Button variant="outline" disabled={busy} onClick={() => setRenaming(false)}>
+              取消
+            </Button>
             <Button
               variant="primary"
               disabled={renameBlocked}
-              onClick={() => { onChange({ label: trimmed }); setRenaming(false); }}
+              onClick={() => {
+                onChange({ label: trimmed });
+                setRenaming(false);
+              }}
             >
               重命名
             </Button>
@@ -277,27 +336,38 @@ export function SessionRow({
           onFocus={(e) => e.target.select()}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !renameBlocked) { onChange({ label: trimmed }); setRenaming(false); }
+            if (e.key === "Enter" && !renameBlocked) {
+              onChange({ label: trimmed });
+              setRenaming(false);
+            }
           }}
         />
       </Modal>
 
       <Modal
         open={confirming}
-        onClose={() => { if (!busy) setConfirming(false); }}
+        onClose={() => {
+          if (!busy) setConfirming(false);
+        }}
         closeLabel="关闭"
         title="停止并归档此会话？"
         description={`「${session.label}」仍有正在进行的工作。归档会先停止这些工作；之后可在侧栏「全部对话（显示已归档）」中恢复会话，被停止的工作不会自动继续。`}
         footer={
           <>
-            <Button variant="outline" disabled={busy} onClick={() => setConfirming(false)}>取消</Button>
+            <Button variant="outline" disabled={busy} onClick={() => setConfirming(false)}>
+              取消
+            </Button>
             <Button
               variant="outline"
               className={css.danger}
               disabled={busy}
               onClick={() => {
                 setBusy(true);
-                window.setTimeout(() => { setBusy(false); setConfirming(false); onChange({ archived: true }); }, 300);
+                window.setTimeout(() => {
+                  setBusy(false);
+                  setConfirming(false);
+                  onChange({ archived: true });
+                }, 300);
               }}
             >
               停止并归档

@@ -1,69 +1,35 @@
-/* 报告 / 复测记录视图（A03）。只用 --dsw-* 语义变量。 */
+/* 报告 / 复测记录视图（D2）：版式来自 design/Kit；这里只放本页特有的小件。只用 --dsw-* 语义变量。 */
 
-.wrap {
+/* Page head + the pane filter read as one header block. */
+.head {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 20px 48px;
   min-width: 0;
-  font-family: var(--dsw-font-family);
+}
+
+/* ---------- Report body ---------- */
+
+.reportCard {
+  padding: 24px 28px 28px;
+}
+
+/* Comfortable measure for long-form Markdown; the card keeps the page width. */
+.markdown {
+  max-width: 720px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.75;
   color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
 }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.toolbarRight {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.state {
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.stateError {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 0.5px solid var(--dsw-alias-state-error-primary);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.empty {
-  margin: 0;
-  padding: 24px 0;
-  text-align: center;
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.markdownBox {
-  max-height: 65vh;
-  overflow: auto;
-  padding: 14px 16px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
-  font-size: var(--dsw-font-xs-13, 13px);
-  line-height: 1.7;
-}
+/* ---------- Retests: two columns ---------- */
 
 .retestsGrid {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
   min-width: 0;
 }
@@ -74,176 +40,132 @@
   }
 }
 
-.listPane,
-.detailPane {
+.detailCol {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 28px;
   min-width: 0;
-  padding: 12px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
 }
 
-.listHead {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
+/* Finding picker card: a scrolling list of selectable rows, pager pinned below. */
+.pickCard {
+  overflow: hidden;
 }
 
-.findingsList {
+.pickList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   max-height: 34rem;
-  overflow-y: auto;
   margin: 0;
-  padding: 0;
+  padding: 4px;
+  overflow-y: auto;
   list-style: none;
 }
 
-.findingRow {
+.pick {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 10px;
   width: 100%;
-  padding: 8px;
-  border: none;
-  border-radius: var(--dsw-radius-sm);
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--dsw-radius-lg);
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.findingRow[aria-pressed="true"] {
-  background: var(--dsw-alias-bg-multi-select);
+  transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
 }
 
 @media (hover: hover) {
-  .findingRow:hover {
+  .pick:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
-.findingTitle {
-  font-size: var(--dsw-font-xs-13, 13px);
-  line-height: 20px;
-  word-break: break-word;
+.pick[aria-pressed="true"] {
+  background: var(--dsw-alias-interactive-bg-active);
 }
 
-.findingMeta {
+.pick:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.pickDot {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  height: 20px;
+}
+
+.pickText {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pickTitle {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .pager {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-top: 6px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  gap: 4px;
+  padding: 6px 8px 6px 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .pageInfo {
-  font-size: var(--dsw-font-xxs-12, 12px);
+  margin-right: auto;
+  font-size: 12px;
+  line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
-.detailHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
+/* ---------- Retest rows ---------- */
 
-.detailTitle {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--dsw-font-xs-13, 13px);
-  font-weight: 500;
-}
-
-.detailSummary {
-  margin: 0;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
-  word-break: break-word;
-}
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.panelHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.panelTitle {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.retestList {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.retestRow {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-2);
-}
-
-.retestHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.live {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-state-business-primary);
-}
-
-.retestTime {
-  margin-left: auto;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.retestNote {
-  margin: 0;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
-  word-break: break-word;
+/* Keeps the 8px dot on the label's first line when the row is top-aligned. */
+.retestDot {
+  display: grid;
+  place-items: center;
+  height: 22px;
 }
 
 .retestBody {
-  margin: 0;
-  font-size: var(--dsw-font-xs-13, 13px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.live {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.retestNote {
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-word;
+}
+
+.retestSummary {
+  padding: 8px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  font-size: 13px;
   line-height: 20px;
   color: var(--dsw-alias-label-primary);
   white-space: pre-wrap;
@@ -251,8 +173,13 @@
 }
 
 .retestError {
-  margin: 0;
-  font-size: var(--dsw-font-xxs-12, 12px);
   color: var(--dsw-alias-state-error-primary);
+  word-break: break-word;
+}
+
+.findingSummary {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
   word-break: break-word;
 }

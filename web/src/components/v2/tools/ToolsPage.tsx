@@ -13,23 +13,50 @@
  * 旧页依据：app/(main)/system/tools/page.tsx（T1–T10）。
  * DSH 依据：DSH 无工具目录页；按 ui-settings config-form 扩展（整页放在主区）。
  * 对照表行：P3:T1 P3:T2 P3:T3 P3:T4 P3:T5 P3:T6 P3:T7 P3:T8 P3:T9 P3:T10
+ *
+ * 版式（D3 设计重塑）：SettingsPage → PageHead（计数说明 + 刷新）→ FilterBar（内置 / 自定义，带计数）+ 搜索框
+ * → 主从分栏：左 = 内置按语义分组（每组成一个 kit Section：眉题 + 数目 + Card 行列表，组序固定见
+ * BUILTIN_GROUPS，组内按 key 稳定排序），自定义列表末尾 AddSlot 新建；
+ * 右 = Card 内的 kit Editor（描述 / 参数表 / 状态与绑定 …），底栏 EditorActions；未选中时是 Empty。
  */
 import * as React from "react";
 
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Checkbox } from "@/vendor/dsh/primitives/Checkbox";
-import { Input } from "@/vendor/dsh/primitives/Input";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
 import { Switch } from "@/vendor/dsh/primitives/Switch";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
 import {
-  IconPlayOutlineRegular,
+  IconCodeOutlineRegular,
   IconPlusOutlineRegular,
   IconRefreshOutlineRegular,
-  IconTrashOutlineRegular,
+  IconSearchOutlineRegular,
+  IconSlidersTwoOutlineRegular,
 } from "@/vendor/dsh/primitives/icons/index";
 
+import {
+  AddSlot,
+  Badge,
+  Card,
+  Dot,
+  Editor,
+  EditorActions,
+  EditorGroup,
+  Empty,
+  Field,
+  FieldGrid,
+  FilterBar,
+  IconButton,
+  Meta,
+  Notice,
+  PageHead,
+  Row,
+  Section,
+  SettingsPage,
+  Skeleton,
+  TextArea,
+  TextInput,
+  UnitInput,
+} from "@/components/v2/design/Kit";
 import type { Tool } from "@/lib/types";
 import { setToolBinding } from "@/v2/data/agent-resources";
 import { useAgents } from "@/v2/data/agents";
@@ -55,15 +82,12 @@ import {
   withParamRows,
 } from "@/v2/data/tools";
 import { toast } from "../settings/Toast";
+import shared from "../settings/SettingsDialog.module.css";
 import css from "./ToolsPage.module.css";
 
 const KIND_OPTIONS = CUSTOM_TOOL_KINDS.map((kind) => ({ value: kind, label: kind }));
-const TABS = [
-  { value: "builtin", label: "内置工具" },
-  { value: "custom", label: "自定义工具" },
-] as const;
 
-type Tab = (typeof TABS)[number]["value"];
+type Tab = "builtin" | "custom";
 
 function errorText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
@@ -83,7 +107,51 @@ function matches(tool: { key: string; description: string; agents: string[] }, q
 }
 
 /**
- * 工具目录页主体：两个 tab（内置 / 自定义），共用一条搜索框。
+ * 内置工具分组（DX-S1，2026-11-21）。
+ *
+ * 分组依据：后端 GET /tools（`Tool`，见 lib/types.ts）只有 key/system/kind 等字段，没有
+ * category/group；kind 对内置行恒为 "builtin"。因此按 key 命名规则归组，不写死 key 名单：
+ * - 大写驼峰 key（Monitor/TaskList/TaskOutput/TaskStop）是 harness 会话工具的移植命名，自成一组；
+ * - 其余小写 key 是渗透平台的业务处理器，按语义前缀（intent/work/task/asset/compan/scope/
+ *   fact/graph/hint/goal/constraint/finding/report/traffic/memory/team/skill/mcp/custom_tool/
+ *   llm_profile）从前到后先命中先归组，组序固定；
+ * - 没被任何谓词命中的 key 落到「其它」兜底组（目前为空），不丢行。
+ * 组内按 key 字典序稳定排序（key 全 ASCII）。
+ */
+const BUILTIN_GROUPS: readonly { id: string; title: string; test: RegExp }[] = [
+  { id: "session", title: "会话监控", test: /^[A-Z]/ },
+  { id: "taskctl", title: "任务派发", test: /^(add_intent|kill_work|list_tasks|pause_task|spawn_task|steer_work)$/ },
+  { id: "tasktrace", title: "任务过程", test: /^(get_task_|list_task_|get_worker_(output|trace)|search_.*worker_traces)/ },
+  { id: "assets", title: "资产与范围", test: /(asset|compan|scope)/ },
+  { id: "graph", title: "图谱与事实", test: /^(add_hint|add_task_hint|expand_digest|graph_overview|list_facts|list_findings|node_detail|record_fact)$/ },
+  { id: "goal", title: "目标与约束", test: /(goal|constraint)/ },
+  { id: "finding", title: "漏洞与复测", test: /(finding|report)/ },
+  { id: "traffic", title: "流量取证", test: /^traffic_/ },
+  { id: "memory", title: "记忆与团队", test: /(memory|^team_)/ },
+  { id: "platform", title: "平台扩展", test: /(custom_tool|_mcp$|skill|llm_profile)/ },
+];
+
+interface BuiltinGroup {
+  id: string;
+  title: string;
+  tools: Tool[];
+}
+
+/** 把过滤后的内置工具装进上述固定顺序的组；空组不渲染，组内稳定排序。 */
+function groupBuiltinTools(tools: Tool[]): BuiltinGroup[] {
+  const buckets = BUILTIN_GROUPS.map((group): BuiltinGroup => ({ id: group.id, title: group.title, tools: [] }));
+  const rest: BuiltinGroup = { id: "other", title: "其它", tools: [] };
+  for (const tool of tools) {
+    const index = BUILTIN_GROUPS.findIndex((group) => group.test.test(tool.key));
+    (index === -1 ? rest : buckets[index]).tools.push(tool);
+  }
+  const groups = [...buckets, rest].filter((group) => group.tools.length > 0);
+  for (const group of groups) group.tools.sort((a, b) => a.key.localeCompare(b.key));
+  return groups;
+}
+
+/**
+ * 工具目录页主体：两个子页（内置 / 自定义），共用一条搜索框。
  * @returns 设置弹窗「工具」分节的整页内容。
  */
 export function ToolsPage(): React.ReactNode {
@@ -92,55 +160,80 @@ export function ToolsPage(): React.ReactNode {
   const [tab, setTab] = React.useState<Tab>("builtin");
   const [query, setQuery] = React.useState("");
 
+  const refresh = (
+    <IconButton label="重新读取工具目录" spinning={catalog.phase === "loading"} onClick={catalog.reload}>
+      <IconRefreshOutlineRegular size={14} />
+    </IconButton>
+  );
+
   if (catalog.phase === "loading") {
     return (
-      <p className={css.state} data-tools-page="loading" role="status">
-        读取工具目录…
-      </p>
+      <SettingsPage data={{ "data-tools-page": "loading" }}>
+        <PageHead title="工具" lead="内置工具与自定义工具的描述、参数与 Agent 绑定。" actions={refresh} />
+        <Card>
+          <Skeleton label="读取工具目录" />
+        </Card>
+      </SettingsPage>
     );
   }
   if (catalog.phase === "offline") {
     return (
-      <div className={css.stateError} data-tools-page="offline" role="alert">
-        <span>读取失败：{catalog.error ?? "未连接后端"}</span>
-        <Button variant="outline" size="sm" onClick={catalog.reload}>
-          重试
-        </Button>
-      </div>
+      <SettingsPage data={{ "data-tools-page": "offline" }}>
+        <PageHead title="工具" lead="内置工具与自定义工具的描述、参数与 Agent 绑定。" actions={refresh} />
+        <Notice
+          tone="danger"
+          action={
+            <Button variant="ghost" size="sm" onClick={catalog.reload}>
+              重试
+            </Button>
+          }
+        >
+          读取失败：{catalog.error ?? "未连接后端"}
+        </Notice>
+      </SettingsPage>
     );
   }
 
   const builtin = catalog.tools.filter((tool) => tool.system === true);
-  const custom = catalog.tools.filter((tool) => !isCustomTool(tool));
+  // isCustomTool 本身就是 system !== true；早先写成 !isCustomTool(tool)，
+  // 会把全部内置工具也数进「自定义」（DX-S1 修复）。
+  const custom = catalog.tools.filter((tool) => isCustomTool(tool));
   const agentKeys = agents.agents.map((agent) => agent.key);
 
   return (
-    <div className={css.page} data-tools-page="ready">
-      <div className={css.head}>
-        <div>
-          <h2 className={css.title}>工具目录</h2>
-          <p className={css.lead}>
-            内置 {builtin.length} 个 · 自定义 {custom.length} 个。内置工具的参数名与类型由后端处理器固定，只能改描述、参数说明与默认值。
-          </p>
-        </div>
-        <div className={css.headActions}>
-          <span data-tools-tabs="">
-            <SegmentedControl id="tools-tab" label="工具分类" value={tab} options={TABS} onChange={setTab} />
-          </span>
-          <Button variant="outline" size="sm" icon={<IconRefreshOutlineRegular size={14} />} onClick={catalog.reload}>
-            重新读取
-          </Button>
-        </div>
-      </div>
+    <SettingsPage data={{ "data-tools-page": "ready" }}>
+      <PageHead
+        title="工具"
+        lead={`内置 ${builtin.length} 个 · 自定义 ${custom.length} 个。内置工具的参数名与类型由后端处理器固定，只能改描述、参数说明、默认值与绑定。`}
+        actions={refresh}
+      />
 
-      <div className={css.search}>
-        <Input
-          value={query}
-          placeholder="搜索名称 / 描述 / 绑定的 Agent"
-          aria-label="搜索工具"
-          data-tools-search=""
-          onChange={(event) => setQuery(event.target.value)}
-        />
+      <div className={css.filterRow}>
+        <span data-tools-tabs="">
+          <FilterBar<Tab>
+            id="tools-tab"
+            label="工具分类"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "builtin", label: "内置工具", count: builtin.length, data: { "data-tools-tab": "builtin" } },
+              { value: "custom", label: "自定义工具", count: custom.length, data: { "data-tools-tab": "custom" } },
+            ]}
+          />
+        </span>
+        <label className={css.search}>
+          <span className={css.searchIcon}>
+            <IconSearchOutlineRegular size={14} />
+          </span>
+          <TextInput
+            className={css.searchInput}
+            value={query}
+            placeholder="搜索名称 / 描述 / 绑定的 Agent"
+            aria-label="搜索工具"
+            data-tools-search=""
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
       </div>
 
       {tab === "builtin" ? (
@@ -148,11 +241,53 @@ export function ToolsPage(): React.ReactNode {
       ) : (
         <CustomTab tools={custom} query={query} agentKeys={agentKeys} onChanged={catalog.reload} />
       )}
-    </div>
+    </SettingsPage>
   );
 }
 
-/** 内置工具 tab：列表 + 选中行的编辑器。 */
+/** 列表行：等宽名称 + 两行描述 + 参数 / 绑定 / 启用元信息。 */
+function ToolRow({
+  tool,
+  active,
+  kind,
+  onClick,
+}: {
+  tool: Tool;
+  active: boolean;
+  kind?: string;
+  onClick: () => void;
+}): React.ReactNode {
+  const params = countParams(tool.schema);
+  return (
+    <Row
+      data={{ "data-tool-row": tool.key }}
+      className={active ? css.rowActive : undefined}
+      onClick={onClick}
+      muted={!tool.enabled}
+      label={<span className={css.key}>{tool.key}</span>}
+      labelAdornment={kind === undefined ? null : <Badge>{kind}</Badge>}
+      description={
+        <span className={css.desc}>
+          <span className={tool.description === "" ? `${css.clamp2} ${css.dimmed}` : css.clamp2}>
+            {tool.description === "" ? "无描述" : tool.description}
+          </span>
+          <Meta
+            items={[
+              <span key="p" className={css.tabular}>{`${params} 参数`}</span>,
+              <span key="b" className={css.tabular}>{`绑定 ${tool.agents.length}`}</span>,
+              <span key="e">
+                <Dot tone={tool.enabled ? "success" : "neutral"} />
+                {tool.enabled ? "启用" : "停用"}
+              </span>,
+            ]}
+          />
+        </span>
+      }
+    />
+  );
+}
+
+/** 内置工具子页：列表 + 选中行的编辑器。 */
 function BuiltinTab({
   tools,
   query,
@@ -166,36 +301,101 @@ function BuiltinTab({
 }): React.ReactNode {
   const [selected, setSelected] = React.useState<string | null>(null);
   const rows = tools.filter((tool) => matches(tool, query));
+  const groups = groupBuiltinTools(rows);
   const current = rows.find((tool) => tool.key === selected) ?? null;
 
   return (
-    <div className={css.split}>
-      <ul className={css.list} aria-label="内置工具列表">
-        {rows.length === 0 ? <li className={css.empty}>没有匹配的内置工具。</li> : null}
-        {rows.map((tool) => (
-          <li key={tool.key}>
-            <button
-              type="button"
-              className={`${css.row} ${tool.key === selected ? css.rowActive : ""}`}
-              data-tool-row={tool.key}
-              onClick={() => setSelected(tool.key === selected ? null : tool.key)}
-            >
-              <span className={css.rowKey}>{tool.key}</span>
-              <span className={css.rowDesc}>{tool.description === "" ? "（无描述）" : tool.description}</span>
-              <span className={css.rowMeta}>
-                {countParams(tool.schema)} 参数 · 绑定 {tool.agents.length} · {tool.enabled ? "启用" : "停用"}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+    <div className={css.split} id="tools-tab-builtin-panel" role="tabpanel" aria-labelledby="tools-tab-builtin">
+      <div className={css.master}>
+        {rows.length === 0 ? (
+          <Card>
+            <Empty
+              inCard
+              icon={<IconSearchOutlineRegular size={16} />}
+              title={query.trim() === "" ? "没有内置工具" : "没有匹配的内置工具"}
+              text={query.trim() === "" ? "后端没有返回 system 工具。" : "换个关键词，或清空搜索。"}
+            />
+          </Card>
+        ) : (
+          <div className={css.masterScroll} data-tool-groups={groups.length}>
+            {groups.map((group) => (
+              <Section key={group.id} title={group.title} count={group.tools.length} data={{ "data-tool-group": group.id }}>
+                <Card className={css.groupCard}>
+                  {group.tools.map((tool) => (
+                    <ToolRow
+                      key={tool.key}
+                      tool={tool}
+                      active={tool.key === selected}
+                      onClick={() => setSelected(tool.key === selected ? null : tool.key)}
+                    />
+                  ))}
+                </Card>
+              </Section>
+            ))}
+          </div>
+        )}
+      </div>
       <div className={css.detail}>
         {current === null ? (
-          <p className={css.lead}>从左侧选一个内置工具查看并编辑它的描述、参数说明与绑定。</p>
+          <Card className={css.placeholder}>
+            <Empty
+              inCard
+              icon={<IconSlidersTwoOutlineRegular size={16} />}
+              title="选择一个内置工具"
+              text="在左侧选中一个工具，查看并编辑它的描述、参数说明与 Agent 绑定。"
+            />
+          </Card>
         ) : (
           <BuiltinEditor key={current.key} tool={current} agentKeys={agentKeys} onChanged={onChanged} />
         )}
       </div>
+    </div>
+  );
+}
+
+/** 编辑器卡头：等宽名称 + 类型 Badge + 一行元信息。 */
+function EditorHead({ title, badge, meta }: { title: React.ReactNode; badge: React.ReactNode; meta: React.ReactNode[] }): React.ReactNode {
+  return (
+    <Row
+      lead={
+        <span className={shared.providerGlyph} aria-hidden="true">
+          <IconCodeOutlineRegular size={14} />
+        </span>
+      }
+      label={<span className={css.key}>{title}</span>}
+      labelAdornment={badge}
+      description={<Meta items={meta} />}
+    />
+  );
+}
+
+/** Agent 绑定复选网格。 */
+function BindGrid({
+  agentKeys,
+  bound,
+  disabled,
+  hook,
+  onToggle,
+}: {
+  agentKeys: string[];
+  bound: string[];
+  disabled: boolean;
+  hook: "data-tool-bind" | "data-custom-bind";
+  onToggle: (agentKey: string, next: boolean) => void;
+}): React.ReactNode {
+  if (agentKeys.length === 0) return <p className={css.hint}>读不到 Agent 列表。</p>;
+  return (
+    <div className={css.bindGrid} data-tool-bind-list="">
+      {agentKeys.map((agentKey) => (
+        <span className={css.bindItem} key={agentKey} {...{ [hook]: agentKey }} title={agentKey}>
+          <Checkbox
+            checked={bound.includes(agentKey)}
+            label={agentKey}
+            disabled={disabled}
+            onChange={(next) => onToggle(agentKey, next)}
+          />
+        </span>
+      ))}
     </div>
   );
 }
@@ -210,6 +410,7 @@ function BuiltinEditor({
   agentKeys: string[];
   onChanged: () => void;
 }): React.ReactNode {
+  const uid = React.useId();
   const [description, setDescription] = React.useState(tool.description);
   const [schemaRows, setSchemaRows] = React.useState<ParamRow[]>(() => paramRows(tool.schema));
   const [busy, setBusy] = React.useState(false);
@@ -232,28 +433,124 @@ function BuiltinEditor({
   };
 
   const editRow = (name: string, parentKey: string | undefined, patch: Partial<ParamRow>): void => {
-    setSchemaRows((rows) =>
-      rows.map((row) => (row.name === name && row.parentKey === parentKey ? { ...row, ...patch } : row)),
-    );
+    setSchemaRows((rows) => rows.map((row) => (row.name === name && row.parentKey === parentKey ? { ...row, ...patch } : row)));
   };
 
   return (
-    <section className={css.editor} data-builtin-editor={tool.key}>
-      <header className={css.editorHead}>
-        <div>
-          <div className={css.editorKey}>{tool.key}</div>
-          <div className={css.rowMeta}>内置工具 · 参数名与类型不可改 · 调用 {tool.calls ?? 0} 次</div>
-        </div>
-        <div className={css.headActions}>
-          <Button
-            variant="outline"
-            size="sm"
-            data-tool-reset=""
+    <Card selected className={css.editorCard} data={{ "data-builtin-editor": tool.key }}>
+      <EditorHead
+        title={tool.key}
+        badge={<Badge>内置</Badge>}
+        meta={[
+          "参数名与类型不可改",
+          <span key="calls" className={css.tabular}>{`调用 ${tool.calls ?? 0} 次`}</span>,
+        ]}
+      />
+      <Editor inCard>
+        <EditorGroup title="描述">
+          <TextArea
+            id={`${uid}-desc`}
+            aria-label="工具描述"
+            data-tool-field="description"
+            value={description}
+            rows={3}
             disabled={busy}
-            onClick={() => setResetOpen(true)}
-          >
-            恢复默认
-          </Button>
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </EditorGroup>
+
+        <EditorGroup
+          title={
+            <span className={css.groupHead}>
+              参数
+              <span className={css.groupCount}>{schemaRows.length}</span>
+            </span>
+          }
+        >
+          {schemaRows.length === 0 ? (
+            <p className={css.hint}>该工具没有参数。</p>
+          ) : (
+            <div className={css.params}>
+              {schemaRows.map((row) => (
+                <div className={css.paramRow} key={`${row.parentKey ?? ""}.${row.name}`} data-tool-param={row.name}>
+                  <div className={css.paramName}>
+                    <span className={css.paramKey}>{row.parentKey === undefined ? row.name : `${row.parentKey}[].${row.name}`}</span>
+                    <span className={css.paramTags}>
+                      <Badge>{row.type === "" ? "any" : row.type}</Badge>
+                      {row.required ? <Badge tone="info">必填</Badge> : null}
+                    </span>
+                  </div>
+                  <TextInput
+                    value={row.description}
+                    placeholder="参数说明"
+                    aria-label={`${row.name} 参数说明`}
+                    disabled={busy}
+                    onChange={(event) => editRow(row.name, row.parentKey, { description: event.target.value })}
+                  />
+                  <TextInput
+                    mono
+                    value={row.defaultStr}
+                    placeholder={row.scalar ? "默认值（可留空）" : "非标量，无默认值"}
+                    aria-label={`${row.name} 默认值`}
+                    disabled={busy || !row.scalar}
+                    data-tool-param-default={row.name}
+                    onChange={(event) => editRow(row.name, row.parentKey, { defaultStr: event.target.value })}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </EditorGroup>
+
+        <EditorGroup title="状态与绑定">
+          <div className={`${shared.optionCard} ${css.optionRows}`}>
+            <Row label="启用" description="停用的工具不会出现在任何 Agent 的工具清单里；开关立即写入。">
+              <span data-tool-enabled={tool.enabled ? "true" : "false"}>
+                <Switch
+                  checked={tool.enabled}
+                  label={`启用 ${tool.key}`}
+                  disabled={busy}
+                  onChange={(next) =>
+                    void run(
+                      () =>
+                        saveTool(tool.key, {
+                          description: tool.description,
+                          schema: tool.schema,
+                          agents: tool.agents,
+                          enabled: next,
+                        }),
+                      next ? `已启用 ${tool.key}` : `已停用 ${tool.key}`,
+                    )
+                  }
+                />
+              </span>
+            </Row>
+          </div>
+          <Field label={`绑定 Agent（${bound.length}）`} hint="勾选立即写入绑定列表。">
+            <BindGrid
+              agentKeys={agentKeys}
+              bound={bound}
+              disabled={busy}
+              hook="data-tool-bind"
+              onToggle={(agentKey, next) =>
+                void run(
+                  () => setToolBinding(tool, agentKey, next).then(() => undefined),
+                  next ? `已绑定 ${agentKey}` : `已解绑 ${agentKey}`,
+                )
+              }
+            />
+          </Field>
+        </EditorGroup>
+
+        {failure === null ? null : <Notice tone="danger">保存失败：{failure}</Notice>}
+
+        <EditorActions
+          start={
+            <Button variant="ghost" size="sm" data-tool-reset="" disabled={busy} onClick={() => setResetOpen(true)}>
+              恢复默认
+            </Button>
+          }
+        >
           <Button
             variant="primary"
             size="sm"
@@ -274,102 +571,8 @@ function BuiltinEditor({
           >
             保存
           </Button>
-        </div>
-      </header>
-
-      <label className={css.field}>
-        <span className={css.fieldLabel}>工具描述</span>
-        <textarea
-          className={css.textarea}
-          data-tool-field="description"
-          value={description}
-          rows={3}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </label>
-
-      <div className={css.field}>
-        <span className={css.fieldLabel}>参数（{schemaRows.length}）</span>
-        {schemaRows.length === 0 ? <p className={css.lead}>该工具没有参数。</p> : null}
-        <div className={css.params}>
-          {schemaRows.map((row) => (
-            <div className={css.paramRow} key={`${row.parentKey ?? ""}.${row.name}`} data-tool-param={row.name}>
-              <div className={css.paramName}>
-                <span>{row.parentKey === undefined ? row.name : `${row.parentKey}[].${row.name}`}</span>
-                <Tag tone="outline">{row.type === "" ? "any" : row.type}</Tag>
-                {row.required ? <Tag tone="info">必填</Tag> : null}
-              </div>
-              <Input
-                className={css.paramInput}
-                value={row.description}
-                placeholder="参数说明"
-                aria-label={`${row.name} 参数说明`}
-                disabled={busy}
-                onChange={(event) => editRow(row.name, row.parentKey, { description: event.target.value })}
-              />
-              <Input
-                className={css.paramInput}
-                value={row.defaultStr}
-                placeholder="默认值（留空表示不声明）"
-                aria-label={`${row.name} 默认值`}
-                disabled={busy || !row.scalar}
-                data-tool-param-default={row.name}
-                onChange={(event) => editRow(row.name, row.parentKey, { defaultStr: event.target.value })}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className={css.rowLine}>
-        <div>
-          <div className={css.fieldLabel}>启用</div>
-          <div className={css.hint}>停用的工具不会出现在任何 Agent 的工具清单里。</div>
-        </div>
-        <span data-tool-enabled={tool.enabled ? "true" : "false"}>
-          <Switch
-            checked={tool.enabled}
-            label={`启用 ${tool.key}`}
-            disabled={busy}
-            onChange={(next) =>
-              void run(
-                () =>
-                  saveTool(tool.key, {
-                    description: tool.description,
-                    schema: tool.schema,
-                    agents: tool.agents,
-                    enabled: next,
-                  }),
-                next ? `已启用 ${tool.key}` : `已停用 ${tool.key}`,
-              )
-            }
-          />
-        </span>
-      </div>
-
-      <div className={css.field}>
-        <span className={css.fieldLabel}>绑定 Agent（{bound.length}）</span>
-        <div className={css.bindList} data-tool-bind-list="">
-          {agentKeys.length === 0 ? <p className={css.hint}>读不到 Agent 列表。</p> : null}
-          {agentKeys.map((agentKey) => (
-            <span className={css.bindItem} key={agentKey} data-tool-bind={agentKey}>
-              <Checkbox
-                checked={bound.includes(agentKey)}
-                label={agentKey}
-                disabled={busy}
-                onChange={(next) =>
-                  void run(
-                    () => setToolBinding(tool, agentKey, next).then(() => undefined),
-                    next ? `已绑定 ${agentKey}` : `已解绑 ${agentKey}`,
-                  )
-                }
-              />
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {failure === null ? null : <p className={css.error}>保存失败：{failure}</p>}
+        </EditorActions>
+      </Editor>
 
       <Modal
         open={resetOpen}
@@ -400,11 +603,11 @@ function BuiltinEditor({
           </>
         }
       />
-    </section>
+    </Card>
   );
 }
 
-/** 自定义工具 tab：列表 + 新建/编辑表单。 */
+/** 自定义工具子页：列表 + 新建/编辑表单。 */
 function CustomTab({
   tools,
   query,
@@ -420,43 +623,48 @@ function CustomTab({
   const rows = tools.filter((tool) => matches(tool, query));
 
   return (
-    <div className={css.split}>
-      <div>
-        <div className={css.toolbar}>
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<IconPlusOutlineRegular size={14} />}
-            data-custom-new=""
-            onClick={() => setEditing("new")}
-          >
-            新建自定义工具
-          </Button>
-        </div>
-        <ul className={css.list} aria-label="自定义工具列表">
-          {rows.length === 0 ? <li className={css.empty}>还没有自定义工具。</li> : null}
-          {rows.map((tool) => (
-            <li key={tool.key}>
-              <button
-                type="button"
-                className={`${css.row} ${tool.key === editing ? css.rowActive : ""}`}
-                data-tool-row={tool.key}
+    <div className={css.split} id="tools-tab-custom-panel" role="tabpanel" aria-labelledby="tools-tab-custom">
+      <div className={css.master}>
+        {rows.length === 0 ? (
+          <Card>
+            <Empty
+              inCard
+              icon={<IconCodeOutlineRegular size={16} />}
+              title={tools.length === 0 ? "还没有自定义工具" : "没有匹配的自定义工具"}
+              text={
+                tools.length === 0
+                  ? "把一条命令、一段 Python 脚本或一个 HTTP 接口包装成 Agent 可调用的工具。"
+                  : "换个关键词，或清空搜索。"
+              }
+            />
+          </Card>
+        ) : (
+          <Card className={css.listCard}>
+            {rows.map((tool) => (
+              <ToolRow
+                key={tool.key}
+                tool={tool}
+                kind={rowKindLabel(tool)}
+                active={tool.key === editing}
                 onClick={() => setEditing(tool.key)}
-              >
-                <span className={css.rowKey}>{tool.key}</span>
-                <span className={css.rowDesc}>{tool.description === "" ? "（无描述）" : tool.description}</span>
-                <span className={css.rowMeta}>
-                  <Tag tone="outline">{rowKindLabel(tool)}</Tag> {countParams(tool.schema)} 参数 ·{" "}
-                  {tool.enabled ? "启用" : "停用"}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+              />
+            ))}
+          </Card>
+        )}
+        <AddSlot data={{ "data-custom-new": "" }} disabled={editing === "new"} onClick={() => setEditing("new")}>
+          <IconPlusOutlineRegular size={13} /> 新建自定义工具
+        </AddSlot>
       </div>
       <div className={css.detail}>
         {editing === null ? (
-          <p className={css.lead}>从左侧选一个自定义工具编辑，或新建一个。</p>
+          <Card className={css.placeholder}>
+            <Empty
+              inCard
+              icon={<IconSlidersTwoOutlineRegular size={16} />}
+              title="选择或新建一个自定义工具"
+              text="编辑执行规格、参数 Schema 与绑定，保存前可以先测试运行。"
+            />
+          </Card>
         ) : (
           <CustomEditor
             key={editing}
@@ -488,8 +696,7 @@ interface ExecState {
 function execStateOf(tool: Tool | null, kind: CustomToolKind): ExecState {
   const exec = tool?.exec ?? emptyExec(kind);
   const str = (key: string): string => (typeof exec[key] === "string" ? String(exec[key]) : "");
-  const num = (key: string, fallback: string): string =>
-    typeof exec[key] === "number" ? String(exec[key]) : fallback;
+  const num = (key: string, fallback: string): string => (typeof exec[key] === "number" ? String(exec[key]) : fallback);
   return {
     command: str("command"),
     commandTimeout: num("timeout_ms", "60000"),
@@ -517,6 +724,7 @@ function CustomEditor({
   onChanged: () => void;
   onDeleted: () => void;
 }): React.ReactNode {
+  const uid = React.useId();
   const initialKind: CustomToolKind = customKindOf(tool);
   const [key, setKey] = React.useState(tool?.key ?? "");
   const [description, setDescription] = React.useState(tool?.description ?? "");
@@ -592,28 +800,288 @@ function CustomEditor({
     }
   };
 
+  const timeoutField = (field: "commandTimeout" | "scriptTimeout" | "httpTimeout"): React.ReactNode => (
+    <Field label="超时" htmlFor={`${uid}-${field}`}>
+      <UnitInput unit="ms">
+        <TextInput
+          id={`${uid}-${field}`}
+          inputMode="numeric"
+          aria-label="超时（毫秒）"
+          value={exec[field]}
+          disabled={busy}
+          onChange={(event) => setExecField(field, event.target.value)}
+        />
+      </UnitInput>
+    </Field>
+  );
+
   return (
-    <section className={css.editor} data-custom-editor={isNew ? "new" : key}>
-      <header className={css.editorHead}>
-        <div>
-          <div className={css.editorKey}>{isNew ? "新建自定义工具" : key}</div>
-          <div className={css.rowMeta}>
-            自定义工具 · key 创建后不可改 · {isNew ? "尚未保存" : "改动需点保存"}
+    <Card selected className={css.editorCard} data={{ "data-custom-editor": isNew ? "new" : key }}>
+      <EditorHead
+        title={isNew ? "新建自定义工具" : key}
+        badge={<Badge tone="info">{kind}</Badge>}
+        meta={[
+          "key 创建后不可改",
+          isNew ? "尚未保存" : "改动需点保存",
+          isNew ? null : <span key="calls" className={css.tabular}>{`调用 ${tool?.calls ?? 0} 次`}</span>,
+        ]}
+      />
+      <Editor inCard>
+        <EditorGroup title="基本信息">
+          <FieldGrid>
+            <Field label="Key" htmlFor={`${uid}-key`} hint={isNew ? "小写字母开头，仅小写字母 / 数字 / 下划线。" : undefined}>
+              <TextInput
+                id={`${uid}-key`}
+                mono
+                value={key}
+                data-custom-key=""
+                placeholder="my_tool"
+                disabled={busy || !isNew}
+                onChange={(event) => setKey(event.target.value)}
+              />
+            </Field>
+            <Field label="类型">
+              <span data-custom-kind={kind}>
+                <FilterBar
+                  id="custom-tool-kind"
+                  label="自定义工具类型"
+                  value={kind}
+                  options={KIND_OPTIONS}
+                  disabled={busy}
+                  onChange={(next) => setKind(next as CustomToolKind)}
+                />
+              </span>
+            </Field>
+            <Field label="描述" htmlFor={`${uid}-desc`} span>
+              <TextArea
+                id={`${uid}-desc`}
+                className={css.short}
+                rows={2}
+                data-custom-description=""
+                value={description}
+                disabled={busy}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </Field>
+          </FieldGrid>
+        </EditorGroup>
+
+        <EditorGroup title={`执行规格 · ${kind}`}>
+          {kind === "shell" ? (
+            <Notice>shell 类型只作为环境提示进入 Bash 工具描述，不产生可调用工具，也没有执行规格。</Notice>
+          ) : null}
+
+          {kind === "command" ? (
+            <FieldGrid>
+              <Field label="命令模板" htmlFor={`${uid}-command`} span hint="参数用 {name} 占位。">
+                <TextArea
+                  id={`${uid}-command`}
+                  mono
+                  className={css.code}
+                  rows={3}
+                  spellCheck={false}
+                  data-custom-exec-command=""
+                  value={exec.command}
+                  disabled={busy}
+                  onChange={(event) => setExecField("command", event.target.value)}
+                />
+              </Field>
+              {timeoutField("commandTimeout")}
+            </FieldGrid>
+          ) : null}
+
+          {kind === "script" ? (
+            <FieldGrid>
+              <Field
+                label="Python 脚本"
+                htmlFor={`${uid}-code`}
+                span
+                hint="参数 JSON 从 stdin 传入，标量同时镜像成 TOOL_<NAME> 环境变量。"
+              >
+                <TextArea
+                  id={`${uid}-code`}
+                  mono
+                  className={css.codeTall}
+                  rows={6}
+                  spellCheck={false}
+                  data-custom-exec-code=""
+                  value={exec.code}
+                  disabled={busy}
+                  onChange={(event) => setExecField("code", event.target.value)}
+                />
+              </Field>
+              {timeoutField("scriptTimeout")}
+            </FieldGrid>
+          ) : null}
+
+          {kind === "http" ? (
+            <>
+              <FieldGrid columns={3}>
+                <Field label="方法" htmlFor={`${uid}-method`}>
+                  <TextInput
+                    id={`${uid}-method`}
+                    mono
+                    value={exec.method}
+                    disabled={busy}
+                    onChange={(event) => setExecField("method", event.target.value)}
+                  />
+                </Field>
+                {timeoutField("httpTimeout")}
+                <Field label="代理" htmlFor={`${uid}-proxy`} optional>
+                  <TextInput
+                    id={`${uid}-proxy`}
+                    mono
+                    value={exec.proxy}
+                    disabled={busy}
+                    onChange={(event) => setExecField("proxy", event.target.value)}
+                  />
+                </Field>
+                <Field label="URL" htmlFor={`${uid}-url`} span hint="参数用 {name} 占位。">
+                  <TextInput
+                    id={`${uid}-url`}
+                    mono
+                    value={exec.url}
+                    data-custom-exec-url=""
+                    placeholder="https://…"
+                    disabled={busy}
+                    onChange={(event) => setExecField("url", event.target.value)}
+                  />
+                </Field>
+              </FieldGrid>
+              <FieldGrid>
+                <Field label="Headers" htmlFor={`${uid}-headers`} hint="JSON 对象。">
+                  <TextArea
+                    id={`${uid}-headers`}
+                    mono
+                    className={css.code}
+                    rows={3}
+                    spellCheck={false}
+                    value={exec.headers}
+                    disabled={busy}
+                    onChange={(event) => setExecField("headers", event.target.value)}
+                  />
+                </Field>
+                <Field label="请求体" htmlFor={`${uid}-body`} hint="参数用 {name} 占位。">
+                  <TextArea
+                    id={`${uid}-body`}
+                    mono
+                    className={css.code}
+                    rows={3}
+                    spellCheck={false}
+                    value={exec.body}
+                    disabled={busy}
+                    onChange={(event) => setExecField("body", event.target.value)}
+                  />
+                </Field>
+              </FieldGrid>
+              <div className={`${shared.optionCard} ${css.optionRows}`}>
+                <Row label="走流量录制代理" description="请求经流量录制代理转发，并信任其 CA。">
+                  <Switch
+                    checked={exec.useRecordingProxy}
+                    label="走流量录制代理（信任其 CA）"
+                    disabled={busy}
+                    onChange={(next) => setExecField("useRecordingProxy", next)}
+                  />
+                </Row>
+              </div>
+            </>
+          ) : null}
+        </EditorGroup>
+
+        <EditorGroup title="参数 JSON Schema">
+          <TextArea
+            mono
+            className={css.codeTall}
+            rows={5}
+            spellCheck={false}
+            aria-label="参数 JSON Schema"
+            data-custom-schema=""
+            value={schemaText}
+            disabled={busy}
+            onChange={(event) => setSchemaText(event.target.value)}
+          />
+        </EditorGroup>
+
+        <EditorGroup title="状态与绑定">
+          <div className={`${shared.optionCard} ${css.optionRows}`}>
+            <Row label="启用" description="停用后不进入 Agent 工具清单。">
+              <Switch checked={enabled} label="启用该自定义工具" disabled={busy} onChange={setEnabled} />
+            </Row>
+            <Row label="延迟 schema" description="参数 schema 走搜索 / 执行工具延迟下发，节省上下文。">
+              <Switch checked={deferred} label="延迟 schema" disabled={busy} onChange={setDeferred} />
+            </Row>
           </div>
-        </div>
-        <div className={css.headActions}>
-          {isNew ? null : (
-            <Button
-              variant="outline"
-              size="sm"
-              data-custom-delete=""
+          <Field label={`绑定 Agent（${agentList.length}）`} hint="随保存一起写入。">
+            <BindGrid
+              agentKeys={agentKeys}
+              bound={agentList}
               disabled={busy}
-              icon={<IconTrashOutlineRegular size={14} />}
-              onClick={() => setDeleteOpen(true)}
-            >
-              删除
-            </Button>
+              hook="data-custom-bind"
+              onToggle={(agentKey, next) =>
+                setAgentList((prev) => (next ? [...prev, agentKey] : prev.filter((item) => item !== agentKey)))
+              }
+            />
+          </Field>
+        </EditorGroup>
+
+        <EditorGroup title="测试运行">
+          <p className={css.hint}>不保存，直接按上面的执行规格执行一次；示例参数用于渲染 {"{name}"} 占位。</p>
+          <TextArea
+            mono
+            className={css.short}
+            rows={2}
+            spellCheck={false}
+            aria-label="示例参数（JSON 对象）"
+            data-custom-test-params=""
+            value={paramsText}
+            disabled={busy}
+            onChange={(event) => setParamsText(event.target.value)}
+          />
+          {output === null ? null : (
+            <pre className={output.isError ? css.outputError : css.output} data-custom-test-output={output.isError ? "error" : "ok"}>
+              {output.text}
+            </pre>
           )}
+        </EditorGroup>
+
+        {failure === null ? null : <Notice tone="danger">操作失败：{failure}</Notice>}
+
+        <EditorActions
+          start={
+            isNew ? undefined : (
+              <button
+                type="button"
+                className={shared.dangerBtn}
+                data-custom-delete=""
+                disabled={busy}
+                onClick={() => setDeleteOpen(true)}
+              >
+                删除工具
+              </button>
+            )
+          }
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            data-custom-test=""
+            disabled={busy || kind === "shell"}
+            onClick={() =>
+              void run(async () => {
+                const draft = buildDraft();
+                if (draft === null) return;
+                const params = parseJsonObject(paramsText);
+                if (params.value === null) {
+                  setFailure(`示例参数：${params.error ?? "解析失败"}`);
+                  return;
+                }
+                const result = await testCustomTool(kind === "shell" ? "command" : kind, draft.exec, params.value);
+                setOutput({ text: result.output === "" ? "（无输出）" : result.output, isError: result.is_error });
+              }, "测试运行完成")
+            }
+          >
+            测试运行
+          </Button>
           <Button
             variant="primary"
             size="sm"
@@ -630,233 +1098,8 @@ function CustomEditor({
           >
             保存
           </Button>
-        </div>
-      </header>
-
-      <div className={css.formGrid}>
-        <label className={css.field}>
-          <span className={css.fieldLabel}>key</span>
-          <Input
-            value={key}
-            data-custom-key=""
-            placeholder="小写字母开头，仅小写字母/数字/下划线"
-            disabled={busy || !isNew}
-            onChange={(event) => setKey(event.target.value)}
-          />
-        </label>
-        <label className={css.field}>
-          <span className={css.fieldLabel}>类型</span>
-          <span data-custom-kind={kind}>
-            <SegmentedControl
-              id="custom-tool-kind"
-              label="自定义工具类型"
-              value={kind}
-              options={KIND_OPTIONS}
-              disabled={busy}
-              onChange={(next) => setKind(next as CustomToolKind)}
-            />
-          </span>
-        </label>
-      </div>
-
-      <label className={css.field}>
-        <span className={css.fieldLabel}>描述</span>
-        <textarea
-          className={css.textarea}
-          rows={2}
-          data-custom-description=""
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-        />
-      </label>
-
-      <div className={css.rowLine}>
-        <div>
-          <div className={css.fieldLabel}>启用</div>
-          <div className={css.hint}>停用后不进入 Agent 工具清单。</div>
-        </div>
-        <Switch checked={enabled} label="启用该自定义工具" disabled={busy} onChange={setEnabled} />
-      </div>
-      <div className={css.rowLine}>
-        <div>
-          <div className={css.fieldLabel}>延迟 schema</div>
-          <div className={css.hint}>开启后参数 schema 走搜索/执行工具延迟下发，省上下文。</div>
-        </div>
-        <Switch checked={deferred} label="延迟 schema" disabled={busy} onChange={setDeferred} />
-      </div>
-
-      {kind === "shell" ? (
-        <p className={css.hint}>shell 类型只作为环境提示进入 Bash 工具描述，不产生可调用工具，也没有执行规格。</p>
-      ) : null}
-
-      {kind === "command" ? (
-        <label className={css.field}>
-          <span className={css.fieldLabel}>命令模板（参数用 {"{name}"} 占位）</span>
-          <textarea
-            className={css.textarea}
-            rows={3}
-            data-custom-exec-command=""
-            value={exec.command}
-            onChange={(event) => setExecField("command", event.target.value)}
-          />
-        </label>
-      ) : null}
-
-      {kind === "script" ? (
-        <label className={css.field}>
-          <span className={css.fieldLabel}>Python 脚本（参数 JSON 从 stdin 传入，标量同时镜像成 TOOL_&lt;NAME&gt;）</span>
-          <textarea
-            className={css.textarea}
-            rows={6}
-            data-custom-exec-code=""
-            value={exec.code}
-            onChange={(event) => setExecField("code", event.target.value)}
-          />
-        </label>
-      ) : null}
-
-      {kind === "http" ? (
-        <>
-          <div className={css.formGrid}>
-            <label className={css.field}>
-              <span className={css.fieldLabel}>方法</span>
-              <Input value={exec.method} onChange={(event) => setExecField("method", event.target.value)} />
-            </label>
-            <label className={css.field}>
-              <span className={css.fieldLabel}>URL（参数用 {"{name}"} 占位）</span>
-              <Input
-                value={exec.url}
-                data-custom-exec-url=""
-                placeholder="http(s)://…"
-                onChange={(event) => setExecField("url", event.target.value)}
-              />
-            </label>
-          </div>
-          <label className={css.field}>
-            <span className={css.fieldLabel}>Headers（JSON 对象）</span>
-            <textarea
-              className={css.textarea}
-              rows={3}
-              value={exec.headers}
-              onChange={(event) => setExecField("headers", event.target.value)}
-            />
-          </label>
-          <label className={css.field}>
-            <span className={css.fieldLabel}>请求体（参数用 {"{name}"} 占位）</span>
-            <textarea
-              className={css.textarea}
-              rows={3}
-              value={exec.body}
-              onChange={(event) => setExecField("body", event.target.value)}
-            />
-          </label>
-          <div className={css.formGrid}>
-            <label className={css.field}>
-              <span className={css.fieldLabel}>代理（可留空）</span>
-              <Input value={exec.proxy} onChange={(event) => setExecField("proxy", event.target.value)} />
-            </label>
-            <label className={css.field}>
-              <span className={css.fieldLabel}>超时（毫秒）</span>
-              <Input value={exec.httpTimeout} onChange={(event) => setExecField("httpTimeout", event.target.value)} />
-            </label>
-          </div>
-          <Checkbox
-            checked={exec.useRecordingProxy}
-            label="走流量录制代理（信任其 CA）"
-            disabled={busy}
-            onChange={(next) => setExecField("useRecordingProxy", next)}
-          />
-        </>
-      ) : null}
-
-      {kind === "command" || kind === "script" ? (
-        <div className={css.formGrid}>
-          <label className={css.field}>
-            <span className={css.fieldLabel}>超时（毫秒）</span>
-            <Input
-              value={kind === "command" ? exec.commandTimeout : exec.scriptTimeout}
-              onChange={(event) =>
-                setExecField(kind === "command" ? "commandTimeout" : "scriptTimeout", event.target.value)
-              }
-            />
-          </label>
-        </div>
-      ) : null}
-
-      <label className={css.field}>
-        <span className={css.fieldLabel}>参数 JSON Schema</span>
-        <textarea
-          className={css.textarea}
-          rows={5}
-          data-custom-schema=""
-          value={schemaText}
-          onChange={(event) => setSchemaText(event.target.value)}
-        />
-      </label>
-
-      <div className={css.field}>
-        <span className={css.fieldLabel}>绑定 Agent（{agentList.length}）</span>
-        <div className={css.bindList}>
-          {agentKeys.map((agentKey) => (
-            <span className={css.bindItem} key={agentKey} data-custom-bind={agentKey}>
-              <Checkbox
-                checked={agentList.includes(agentKey)}
-                label={agentKey}
-                disabled={busy}
-                onChange={(next) =>
-                  setAgentList((prev) => (next ? [...prev, agentKey] : prev.filter((item) => item !== agentKey)))
-                }
-              />
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className={css.testBox}>
-        <div className={css.fieldLabel}>测试运行（不保存，直接执行下面的执行规格）</div>
-        <label className={css.field}>
-          <span className={css.hint}>示例参数（JSON 对象，用于渲染 {"{name}"} 占位）</span>
-          <textarea
-            className={css.textarea}
-            rows={2}
-            data-custom-test-params=""
-            value={paramsText}
-            onChange={(event) => setParamsText(event.target.value)}
-          />
-        </label>
-        <Button
-          variant="outline"
-          size="sm"
-          icon={<IconPlayOutlineRegular size={14} />}
-          data-custom-test=""
-          disabled={busy || kind === "shell"}
-          onClick={() =>
-            void run(async () => {
-              const draft = buildDraft();
-              if (draft === null) return;
-              const params = parseJsonObject(paramsText);
-              if (params.value === null) {
-                setFailure(`示例参数：${params.error ?? "解析失败"}`);
-                return;
-              }
-              const result = await testCustomTool(kind === "shell" ? "command" : kind, draft.exec, params.value);
-              setOutput({ text: result.output === "" ? "（无输出）" : result.output, isError: result.is_error });
-            }, "测试运行完成")
-          }
-        >
-          测试运行
-        </Button>
-        {output === null ? null : (
-          <pre
-            className={output.isError ? css.outputError : css.output}
-            data-custom-test-output={output.isError ? "error" : "ok"}
-          >
-            {output.text}
-          </pre>
-        )}
-      </div>
-
-      {failure === null ? null : <p className={css.error}>操作失败：{failure}</p>}
+        </EditorActions>
+      </Editor>
 
       <Modal
         open={deleteOpen}
@@ -888,6 +1131,6 @@ function CustomEditor({
           </>
         }
       />
-    </section>
+    </Card>
   );
 }

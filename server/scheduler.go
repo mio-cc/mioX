@@ -59,6 +59,11 @@ func (sc *Scheduler) Run(ctx context.Context) {
 // init seeds the watermarks on first run so pre-existing findings/goals don't all
 // fire at once — only events created AFTER the scheduler first starts count.
 func (sc *Scheduler) init() {
+	// 上个进程留下的 running 自动化运行随进程结束而中断:标记 failed。
+	// 过期未跑的自动化不在这里重放:第一次 tick 时 DueAutomations 只补跑最近一次。
+	if n, err := sc.pg.FailStaleAutomationRuns(); err == nil && n > 0 {
+		log.Printf("[automation] 启动：%d 条中断的运行已标记 failed", n)
+	}
 	if sc.mustState(schedKeyLastFinding) == "" {
 		var maxID int64
 		if evs, err := sc.pg.NewFindingsSince(0); err == nil {
@@ -115,6 +120,8 @@ func (sc *Scheduler) init() {
 }
 
 func (sc *Scheduler) step() {
+	// 自动化(定时任务,S-3):与触发器互不依赖,先跑,不受「没有触发器就返回」影响。
+	sc.s.fireAutomations(time.Now())
 	triggers, err := sc.pg.ListEnabledTriggers()
 	if err != nil {
 		return

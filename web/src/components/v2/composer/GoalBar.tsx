@@ -16,6 +16,7 @@
  */
 import * as React from "react";
 
+import { RowMenu } from "@/components/v2/design/Kit";
 import {
   IconCheckOutlineRegular,
   IconCloseOutlineRegular,
@@ -23,11 +24,41 @@ import {
   IconGoalOutlineRegular,
   IconPauseOutlineRegular,
   IconPlayOutlineRegular,
-  IconTrashOutlineRegular,
 } from "@/vendor/dsh/primitives/icons/index";
 import type { GoalSnapshot } from "@/lib/types";
 import type { GoalActions, GoalActionResult } from "@/v2/data/goal";
 import css from "./GoalBar.module.css";
+
+/**
+ * D5 目标模式：一个概念一个名字——用户下的那一条是「目标」，planner 拆出来、由
+ * prove_goal 逐条证实的是「验收项」（任务行 goals_met / goals_total）。目标条显示
+ * 「验收项 3/7」进度；清除收进 ⋯ 菜单并二次确认（渗透任务的目标重写成本高）；
+ * 「标记已达成」走 POST /goal/complete（后端 G-3）。
+ */
+export interface GoalProgress {
+  readonly met: number;
+  readonly total: number;
+}
+
+/** 进度环：14px、2px 描边，与上下文环同一画法。 */
+function ProgressRing({ met, total }: GoalProgress): React.ReactNode {
+  const radius = 5.5;
+  const circumference = 2 * Math.PI * radius;
+  const ratio = total > 0 ? Math.min(1, met / total) : 0;
+  return (
+    <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" className={css.ring}>
+      <circle className={css.ringTrack} cx="7" cy="7" r={radius} />
+      <circle
+        className={css.ringFill}
+        cx="7"
+        cy="7"
+        r={radius}
+        strokeDasharray={`${circumference * ratio} ${circumference}`}
+        transform="rotate(-90 7 7)"
+      />
+    </svg>
+  );
+}
 
 type Phase = "active" | "paused" | "blocked";
 
@@ -54,18 +85,41 @@ function visiblePhase(phase: string): Phase | null {
 export function GoalBar({
   goal,
   actions,
+  progress = null,
 }: {
   goal: GoalSnapshot | null;
   actions?: GoalActions;
+  /** 验收项进度（任务行 goals_met / goals_total）；total=0 时不显示胶囊。 */
+  progress?: GoalProgress | null;
 }): React.ReactNode {
-  const objective = goal?.objective ?? "";
   const phase = goal === null ? null : visiblePhase(goal.phase);
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState("");
   const [pending, setPending] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [clearedGoalId, setClearedGoalId] = React.useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = React.useState(false);
+  /** Goal id that just turned complete: show a 4s "achieved" strip, then hide. */
+  const [celebrate, setCelebrate] = React.useState<string | null>(null);
+  const lastPhase = React.useRef<{ id: string; phase: string } | null>(null);
   const pendingRef = React.useRef(false);
+
+  // A goal that transitions to `complete` while on screen gets a brief
+  // confirmation instead of vanishing silently (design §3.1.2).
+  React.useEffect(() => {
+    if (goal === null) {
+      lastPhase.current = null;
+      return undefined;
+    }
+    const previous = lastPhase.current;
+    lastPhase.current = { id: goal.id, phase: goal.phase };
+    if (goal.phase === "complete" && previous !== null && previous.id === goal.id && previous.phase !== "complete") {
+      setCelebrate(goal.id);
+      const timer = window.setTimeout(() => setCelebrate(null), 4000);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [goal]);
 
   // A new goal identity (cleared/completed/replaced externally) invalidates the
   // local edit state: without the reset a surviving draft's Enter would write
@@ -76,6 +130,7 @@ export function GoalBar({
     setDraft("");
     setActionError(null);
     setClearedGoalId(null);
+    setConfirmClear(false);
   }, [goalId]);
 
   // React state disables the controls on the next render; the ref closes the
@@ -118,8 +173,53 @@ export function GoalBar({
     void runAction(() => (resume ? actions.resume() : actions.pause()));
   }, [actions, phase, runAction]);
 
+  if (actions !== undefined && goal !== null && goal.phase === "complete" && celebrate === goal.id) {
+    return (
+      <div className={css.dock} data-goal-bar="" data-goal-phase="complete">
+        <div className={`${css.bar} ${css.doneBar}`} role="status">
+          <span className={css.glyph} aria-hidden="true">
+            <IconCheckOutlineRegular size={14} />
+          </span>
+          <span className={css.label}>目标已达成</span>
+          <span className={css.objective} title={goal.objective}>
+            {goal.objective}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   // Loading, absent, unplumbed and complete goals have no strip at all.
   if (actions === undefined || goal === null || phase === null || goal.id === clearedGoalId) return null;
+
+  if (confirmClear) {
+    return (
+      <div className={css.dock} data-goal-bar="" data-goal-phase={goal.phase} data-goal-confirm-clear="">
+        <div className={`${css.bar} ${css.confirmBar}`} role="alertdialog" aria-label="确认清除目标">
+          <span className={css.confirmText}>清除目标后不再注入系统提示；已拆出的验收项保留。</span>
+          {actionError !== null ? (
+            <span className={css.error} role="alert">
+              {actionError}
+            </span>
+          ) : null}
+          <div className={css.actions}>
+            <button type="button" className={css.textBtn} disabled={pending} onClick={() => setConfirmClear(false)}>
+              取消
+            </button>
+            <button
+              type="button"
+              className={`${css.textBtn} ${css.textBtnDanger}`}
+              disabled={pending}
+              data-goal-clear-confirm=""
+              onClick={() => void clear(goal.id)}
+            >
+              清除目标
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (editing) {
     return (
@@ -177,16 +277,27 @@ export function GoalBar({
 
   const resume = phase !== "active";
   const toggleLabel = resume ? "恢复目标" : "暂停目标";
+  const showProgress = progress !== null && progress.total > 0;
   return (
     <div className={css.dock} data-goal-bar="" data-goal-phase={goal.phase} data-goal-revision={goal.revision}>
       <div className={css.bar}>
-        <span className={css.glyph} aria-hidden="true">
+        <span className={css.glyph} data-breathing={phase === "active" ? "" : undefined} aria-hidden="true">
           <IconGoalOutlineRegular size={14} />
         </span>
         <span className={css.label}>{PHASE_LABEL[phase]}</span>
         <span className={css.objective} data-goal-objective="" title={goal.objective}>
           {goal.objective}
         </span>
+        {showProgress ? (
+          <span
+            className={css.progress}
+            data-goal-progress={`${progress.met}/${progress.total}`}
+            title={`验收项：已证实 ${progress.met} / 共 ${progress.total}（planner 拆出的子目标，逐条由事实证明）`}
+          >
+            <ProgressRing met={progress.met} total={progress.total} />
+            验收项 {progress.met}/{progress.total}
+          </span>
+        ) : null}
         {actionError !== null ? (
           <span className={css.error} role="alert">
             {actionError}
@@ -210,22 +321,35 @@ export function GoalBar({
             type="button"
             className={css.iconBtn}
             disabled={pending}
-            onClick={() => void clear(goal.id)}
-            aria-label="清除目标"
-            title="清除目标"
-          >
-            <IconTrashOutlineRegular size={14} />
-          </button>
-          <button
-            type="button"
-            className={css.iconBtn}
-            disabled={pending}
             onClick={toggle}
             aria-label={toggleLabel}
             title={toggleLabel}
+            data-goal-toggle={resume ? "resume" : "pause"}
           >
             {resume ? <IconPlayOutlineRegular size={14} /> : <IconPauseOutlineRegular size={14} />}
           </button>
+          <RowMenu
+            label="目标的更多操作"
+            disabled={pending}
+            data={{ "data-goal-more": "" }}
+            items={[
+              {
+                label: "标记为已达成",
+                onSelect: () => void runAction(() => actions.complete()),
+                data: { "data-goal-complete": "" },
+              },
+              {
+                label: "清除目标…",
+                danger: true,
+                separatorBefore: true,
+                onSelect: () => {
+                  setActionError(null);
+                  setConfirmClear(true);
+                },
+                data: { "data-goal-clear": "" },
+              },
+            ]}
+          />
         </div>
       </div>
     </div>

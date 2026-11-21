@@ -3,9 +3,12 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/Autumn-27/artex/agent"
 	pgdb "github.com/Autumn-27/artex/db"
@@ -136,7 +139,84 @@ func (s *Server) taskGoalSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordGoalCommand(t, objective)
-	writeJSON(w, 200, map[string]any{"goal": taskGoalDTO(goal)})
+	decompose := s.afterGoalSet(t, objective)
+	writeJSON(w, 200, map[string]any{"goal": taskGoalDTO(goal), "decompose": decompose})
+}
+
+// goalDecomposeInflight dedupes G-1 decompositions per task (a second `/goal`
+// while the first decomposition still runs must not start another LLM call).
+var goalDecomposeInflight sync.Map // taskID -> struct{}
+
+// afterGoalSet implements G-1. Returns what happened, for the response:
+//   - "notified":   the task already has acceptance items (goal nodes) → only
+//     NotifyGoal wakes the planner with the new objective;
+//   - "started":    no acceptance items → an async decomposition (createGoalsFor on
+//     the objective) was launched; its LLM steps stream as planner activity;
+//   - "bootstrap":  the task's engine has not started yet — its own round-0
+//     decomposition (startTaskEngine) is pending/running, so starting a second one
+//     here would race it (goals.go launchTask comment); skipped;
+//   - "running":    a G-1 decomposition for this task is already in flight;
+//   - "error":      the goal nodes could not be counted.
+func (s *Server) afterGoalSet(t *Task, objective string) string {
+	if t == nil || t.Store == nil {
+		return "error"
+	}
+	nodes, err := t.Store.ListByKind(pgdb.KindGoal, 1)
+	if err != nil {
+		return "error"
+	}
+	if len(nodes) > 0 {
+		t.NotifyGoal([]string{objective})
+		return "notified"
+	}
+	lifecycle := t.lifecycleSnapshot()
+	if s.engine.IsBootstrapping(t.ID) || (!s.engine.Started(t.ID) && !isTerminalStatus(lifecycle.Status) &&
+		(s.engine.ActiveLLMCalls(t.ID) > 0 || (lifecycle.Queued && lifecycle.QueueMode == "bootstrap"))) {
+		// Bootstrap (startTaskEngine) owns the first decomposition: it is either
+		// running right now (LLM call in flight before engine.Run marks the task
+		// started) or queued for admission in bootstrap mode. Do not race it.
+		return "bootstrap"
+	}
+	if _, busy := goalDecomposeInflight.LoadOrStore(t.ID, struct{}{}); busy {
+		return "running"
+	}
+	if !s.engine.beginTaskOperation(t.ID) {
+		goalDecomposeInflight.Delete(t.ID)
+		return "error"
+	}
+	go func() {
+		defer goalDecomposeInflight.Delete(t.ID)
+		defer s.engine.decInflight(t.ID)
+		ctx := s.ctx
+		if ctx.Err() != nil || s.engine.IsDeleting(t.ID) {
+			return
+		}
+		// Re-check under the in-flight guard: a planner set_goals may have landed
+		// between the count and here.
+		if again, err := t.Store.ListByKind(pgdb.KindGoal, 1); err == nil && len(again) > 0 {
+			t.NotifyGoal([]string{objective})
+			return
+		}
+		s.engine.emitActivity(t, pgdb.Activity{Worker: "planner", Kind: "round", Summary: "目标拆解（/goal）"})
+		specs := s.createGoalsFor(ctx, t, objective, func(r pgdb.Activity) { s.engine.emitActivity(t, r) })
+		if ctx.Err() != nil || s.engine.IsDeleting(t.ID) {
+			return
+		}
+		texts := make([]string, 0, len(specs))
+		for _, g := range specs {
+			summary := g.Text
+			if g.VulnClass != "" {
+				summary = fmt.Sprintf("[%s] %s", g.VulnClass, g.Text)
+			}
+			s.engine.emitActivity(t, pgdb.Activity{Worker: "planner", Kind: "text", Summary: summary})
+			texts = append(texts, g.Text)
+		}
+		if len(texts) > 0 {
+			t.NotifyGoal(texts)
+		}
+		log.Printf("[goal] task %s: /goal 无验收项 → 拆解出 %d 个验收项", t.ID, len(texts))
+	}()
+	return "started"
 }
 
 // recordGoalCommand writes the human `/goal <objective>` turn into the current
@@ -222,6 +302,12 @@ func (s *Server) taskGoalPause(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) taskGoalResume(w http.ResponseWriter, r *http.Request) {
 	s.taskGoalSetPhase(w, r, pgdb.GoalPhaseActive)
+}
+
+// taskGoalComplete marks the goal achieved by hand (G-3: POST .../goal/complete).
+// The automatic path is prove_goal's all-met branch (agent/tools.go, G-2).
+func (s *Server) taskGoalComplete(w http.ResponseWriter, r *http.Request) {
+	s.taskGoalSetPhase(w, r, pgdb.GoalPhaseComplete)
 }
 
 // taskGoalClear removes the goal; the GoalBar disappears because the task

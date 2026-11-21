@@ -15,7 +15,7 @@ import * as React from "react";
 
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Switch } from "@/vendor/dsh/primitives/Switch";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
+import { Badge, Card, Facts, Notice, Row as KitRow, Section } from "@/components/v2/design/Kit";
 import {
   IconChevronDownOutlineRegular,
   IconChevronRightOutlineRegular,
@@ -26,7 +26,6 @@ import {
 import { NewTaskDialog } from "../sidebar/NewTaskDialog";
 import { SelectMenu } from "./SelectMenu";
 import { toast } from "./Toast";
-import { SettingsRow } from "./SettingsRow";
 import {
   CONSTRAINT_INJECT_KEYS,
   constraintInjectValue,
@@ -41,8 +40,6 @@ import { activateLlmProfile, useActiveLlm, type ProfilesState } from "@/v2/data/
 import type { UpdateState } from "@/v2/data/update";
 import css from "./SettingsDialog.module.css";
 
-/** 行容器来自 SettingsRow（C22 起与 SettingsDialog.tsx 共用同一份，不各写一份）。 */
-const Row = SettingsRow;
 
 /**
  * 开关行的四种状态：读取中 / 读取失败可重试 / 就绪且有值 / 保存中或保存失败。
@@ -93,7 +90,7 @@ function ConstraintSwitchRow({
     ) : (
       <span className={css.inlineRow}>
         <span className={css.rowHint} data-field={key}>
-          {value ? "已开启" : "已关闭"}
+          {saving ? "保存中…" : value ? "已开启" : "已关闭"}
         </span>
         <Switch
           checked={value}
@@ -105,20 +102,20 @@ function ConstraintSwitchRow({
     );
 
   return (
-    <Row
+    <KitRow
       label={label}
-      hint={
-        target === "planner"
-          ? "把任务总览「操作约束」里的 allow / deny 条目拼进规划者的系统提示；默认开启，切换即时生效（下一轮读取）。"
-          : "把同一份操作约束拼进执行者的系统提示；默认开启，关闭后执行者不再看到约束。"
+      description={
+        failure !== null ? (
+          <span className={css.inlineError}>保存失败：{failure}</span>
+        ) : target === "planner" ? (
+          "把任务的 allow / deny 约束拼进规划者的系统提示；切换在下一轮读取时生效。"
+        ) : (
+          "把同一份约束拼进执行者的系统提示；关闭后执行者不再看到约束。"
+        )
       }
     >
-      <div className={css.inlineRow}>
-        {control}
-        {saving ? <Tag tone="neutral">保存中…</Tag> : null}
-      </div>
-      {failure !== null ? <div className={css.serverError}>保存失败：{failure}</div> : null}
-    </Row>
+      {control}
+    </KitRow>
   );
 }
 
@@ -128,15 +125,16 @@ function ConstraintSwitchRow({
  */
 export function ConstraintInjectSection({ server }: { server: SettingsState }): React.ReactNode {
   return (
-    <div className={css.subSection} data-field="constraint-inject">
-      <div className={css.subSectionTitle}>操作约束注入</div>
-      <div className={css.rowHint}>
-        开启后，把每个任务的「操作约束」（在任务总览「操作约束」里维护的 allow / deny 条目）拼进对应 Agent
-        的系统提示，用来框定探索边界（如「仅测当前端口」「禁止爆破」）。可分别控制注入到规划者与执行者；默认都开。
-      </div>
-      <ConstraintSwitchRow target="planner" server={server} />
-      <ConstraintSwitchRow target="worker" server={server} />
-    </div>
+    <Section
+      title="操作约束注入"
+      hint="把任务总览「操作约束」拼进 Agent 系统提示，框定探索边界"
+      data={{ "data-field": "constraint-inject" }}
+    >
+      <Card>
+        <ConstraintSwitchRow target="planner" server={server} />
+        <ConstraintSwitchRow target="worker" server={server} />
+      </Card>
+    </Section>
   );
 }
 
@@ -151,7 +149,16 @@ export function NewTaskRow({ onCreated }: { onCreated?: (id: string) => void }):
   const [created, setCreated] = React.useState<string | null>(null);
   return (
     <>
-      <Row label="新建任务" hint="与侧栏「新建任务」同一个表单：描述、目标、模型、分类、工作目录、覆盖度">
+      <KitRow
+        label="新建任务"
+        description={
+          created === null ? (
+            "与侧栏「新建任务」同一个表单：描述、目标、模型、分类、工作目录、覆盖度。"
+          ) : (
+            <span data-field="newtask-created">已创建任务：{created}</span>
+          )
+        }
+      >
         <Button
           variant="outline"
           size="sm"
@@ -161,12 +168,7 @@ export function NewTaskRow({ onCreated }: { onCreated?: (id: string) => void }):
         >
           新建任务
         </Button>
-      </Row>
-      {created === null ? null : (
-        <div className={css.rowHint} data-field="newtask-created">
-          已创建任务：{created}
-        </div>
-      )}
+      </KitRow>
       <NewTaskDialog
         open={open}
         onClose={() => setOpen(false)}
@@ -271,8 +273,7 @@ export function ModelQuickSwitch({ profiles }: { profiles: ProfilesState }): Rea
   }
 
   return (
-    <div className={css.subSection} data-field="model-quick-switch">
-      <div className={css.subSectionTitle}>快速切换生效模型</div>
+    <div className={css.quickSwitch} data-field="model-quick-switch">
       {body}
     </div>
   );
@@ -343,43 +344,47 @@ export function UpdateRestartRow({ update }: { update: UpdateState }): React.Rea
   };
 
   return (
-    <>
-      <Row
+    <Card>
+      <KitRow
         label="更新完成后"
-        hint="后端换装重启后，自动等待 GET /health 重新连上，再让你刷新页面（不会自动重载你正在看的页面）"
+        description="后端换装重启后，等待 GET /health 重新连上，再由你刷新页面（不会自动重载）。"
+        labelAdornment={
+          <Badge tone={ready ? "info" : "neutral"}>
+            <span data-field="update-phase">{phase === null ? "未收到进度" : updatePhaseLabel(phase)}</span>
+          </Badge>
+        }
       >
-        <div className={css.inlineRow}>
-          <span className={css.rowHint} data-field="update-phase">
-            {phase === null ? "未收到更新进度" : updatePhaseLabel(phase)}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            data-field="wait-restart"
-            disabled={!ready || waiting}
-            title={ready ? "轮询 GET /health 直到后端重新响应" : "只在更新进入「已就绪，等待重启」后可用"}
-            onClick={waitRestart}
-          >
-            {waiting ? "等待后端重启…" : "等待重启"}
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            data-field="reload-page"
-            disabled={!ready || waiting}
-            onClick={() => window.location.reload()}
-          >
-            刷新页面
-          </Button>
-        </div>
-      </Row>
-      {result === null ? null : (
-        <div className={css.rowHint} data-field="wait-restart-result">
-          {result}
+        <Button
+          variant="ghost"
+          size="sm"
+          data-field="wait-restart"
+          disabled={!ready || waiting}
+          title={ready ? "轮询 GET /health 直到后端重新响应" : "只在更新进入「已就绪，等待重启」后可用"}
+          onClick={waitRestart}
+        >
+          {waiting ? "等待后端重启…" : "等待重启"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          data-field="reload-page"
+          disabled={!ready || waiting}
+          onClick={() => window.location.reload()}
+        >
+          刷新页面
+        </Button>
+      </KitRow>
+      {result === null && failure === null ? null : (
+        <div className={css.cardNotice}>
+          {result === null ? null : (
+            <Notice tone="success" data={{ "data-field": "wait-restart-result" }}>
+              {result}
+            </Notice>
+          )}
+          {failure === null ? null : <Notice tone="danger">{failure}</Notice>}
         </div>
       )}
-      {failure === null ? null : <div className={css.serverError}>{failure}</div>}
-    </>
+    </Card>
   );
 }
 
@@ -422,45 +427,66 @@ export function AboutRecheckSection(): React.ReactNode {
       });
   };
 
+  const modelText =
+    activeLlm.phase === "loading"
+      ? "读取模型配置…"
+      : activeLlm.phase === "offline"
+        ? `读取失败（${activeLlm.error ?? "未知原因"}）`
+        : activeLlm.llm === null || activeLlm.llm.configured === false
+          ? "未配置"
+          : `${activeLlm.llm.provider} · ${activeLlm.llm.model}`;
   return (
-    <div className={css.subSection} data-field="about-recheck">
-      <div className={css.subSectionTitle}>初始化状态</div>
-      {/* P3:B6：品牌行与「模型」行（模型读 active=true 的真实配置）。 */}
-      <div className={css.rowHint} data-field="about-brand">
-        单机版 harness · /v2 前端（DSH 骨架）
-      </div>
-      <div className={css.rowHint} data-field="about-model">
-        {activeLlm.phase === "loading"
-          ? "读取模型配置…"
-          : activeLlm.phase === "offline"
-            ? `模型配置读取失败（${activeLlm.error ?? "未知原因"}）`
-            : activeLlm.llm === null || activeLlm.llm.configured === false
-              ? "当前模型：未配置"
-              : `当前模型：${activeLlm.llm.provider} · ${activeLlm.llm.model}`}
-      </div>
-      <div className={css.rowHint}>
-        重新读一次 GET /auth/status 与 GET /health，确认登录方式与后端版本。
-      </div>
-      <div className={css.inlineRow}>
-        <Button variant="outline" size="sm" disabled={busy} onClick={run} icon={<IconRefreshOutlineRegular size={12} />}>
+    <Section
+      title="关于"
+      data={{ "data-field": "about-recheck" }}
+      actions={
+        <Button variant="ghost" size="sm" disabled={busy} onClick={run} icon={<IconRefreshOutlineRegular size={12} />}>
           {busy ? "检查中…" : "重新检查"}
         </Button>
-        <span className={css.rowHint} data-field="about-checked-at">
-          {checkedAt === null ? "尚未检查" : `检查时间 ${checkedAt}`}
-        </span>
-      </div>
-      {probe === null ? null : probe.error !== null ? (
-        <div className={css.serverError} role="alert" data-field="about-error">
-          重新检查失败：{probe.error}
-        </div>
-      ) : (
-        <div className={css.rowHint} data-field="about-result">
-          {probe.authDisabled === true ? "已关闭密码登录（本机直连）" : "需要密码登录"}
-          {probe.initialized === true ? " · 已初始化" : " · 未初始化"}
-          {` · 后端版本 ${probe.version ?? "未知"}${probe.service === null ? "" : `（${probe.service}）`}`}
-        </div>
-      )}
-    </div>
+      }
+    >
+      <Card>
+        {/* P3:B6：品牌行与「模型」行（模型读 active=true 的真实配置）。 */}
+        <Facts
+          items={[
+            { key: "brand", label: "产品", value: <span data-field="about-brand">单机版 harness · /v2 前端（DSH 骨架）</span>, wrap: true },
+            { key: "model", label: "当前模型", value: <span data-field="about-model">{modelText}</span>, wrap: true },
+            {
+              key: "auth",
+              label: "登录方式",
+              value:
+                probe === null || probe.error !== null
+                  ? "—"
+                  : `${probe.authDisabled === true ? "已关闭密码登录（本机直连）" : "需要密码登录"}${probe.initialized === true ? " · 已初始化" : " · 未初始化"}`,
+              wrap: true,
+            },
+            {
+              key: "version",
+              label: "后端版本",
+              value:
+                probe === null || probe.error !== null
+                  ? "—"
+                  : `${probe.version ?? "未知"}${probe.service === null ? "" : `（${probe.service}）`}`,
+              mono: true,
+            },
+            { key: "checked", label: "检查时间", value: <span data-field="about-checked-at">{checkedAt === null ? "尚未检查" : checkedAt}</span> },
+          ]}
+        />
+        {probe === null ? null : probe.error !== null ? (
+          <div className={css.cardNotice}>
+            <Notice tone="danger" data={{ "data-field": "about-error" }}>
+              重新检查失败：{probe.error}
+            </Notice>
+          </div>
+        ) : (
+          <span className={css.visuallyHidden} data-field="about-result">
+            {probe.authDisabled === true ? "已关闭密码登录（本机直连）" : "需要密码登录"}
+            {probe.initialized === true ? " · 已初始化" : " · 未初始化"}
+            {` · 后端版本 ${probe.version ?? "未知"}${probe.service === null ? "" : `（${probe.service}）`}`}
+          </span>
+        )}
+      </Card>
+    </Section>
   );
 }
 
@@ -474,32 +500,34 @@ export function ModelQuickSwitchBox({ profiles }: { profiles: ProfilesState }): 
   const live = profiles.phase === "ready";
   const current = live ? profiles.profiles.find((item) => item.is_default) ?? null : null;
   return (
-    <>
-      <Row
-        label="模型"
-        hint={
-          profiles.phase === "loading"
-            ? "读取模型配置…"
-            : profiles.phase === "offline"
-              ? "模型配置读取失败（未连接后端）"
-              : current === null
-                ? "未指定生效模型（按后端默认）"
-                : `当前生效：${current.name} · ${current.model}`
-        }
-      >
-        <Button
-          variant="outline"
-          size="sm"
-          aria-expanded={open}
-          disabled={!live}
-          title={live ? "展开模型快捷切换" : "模型配置还没读取成功"}
-          onClick={() => setOpen((value) => !value)}
+    <Section title="模型">
+      <Card>
+        <KitRow
+          label="生效模型"
+          description={
+            profiles.phase === "loading"
+              ? "读取模型配置…"
+              : profiles.phase === "offline"
+                ? "模型配置读取失败（未连接后端）"
+                : current === null
+                  ? "未指定生效模型（按后端默认）"
+                  : `${current.name} · ${current.model}`
+          }
         >
-          {open ? <IconChevronDownOutlineRegular size={12} /> : <IconChevronRightOutlineRegular size={12} />}
-          {open ? "收起快捷切换" : "快捷切换"}
-        </Button>
-      </Row>
-      {open ? <ModelQuickSwitch profiles={profiles} /> : null}
-    </>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-expanded={open}
+            disabled={!live}
+            title={live ? "展开模型快捷切换" : "模型配置还没读取成功"}
+            onClick={() => setOpen((value) => !value)}
+          >
+            {open ? <IconChevronDownOutlineRegular size={12} /> : <IconChevronRightOutlineRegular size={12} />}
+            {open ? "收起" : "快捷切换"}
+          </Button>
+        </KitRow>
+        {open ? <ModelQuickSwitch profiles={profiles} /> : null}
+      </Card>
+    </Section>
   );
 }

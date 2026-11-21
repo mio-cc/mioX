@@ -81,7 +81,8 @@
 .brandName {
   font-size: 16px;
   line-height: 24px;
-  font-weight: 600;
+  /* 102 规范 §1：字重只用 400/500（HS 用 0.02em 补偿 500 的视觉体量）。 */
+  font-weight: 500;
   letter-spacing: 0.02em;
 }
 
@@ -165,71 +166,70 @@
 .newSessionRow {
   flex: none;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 6px;
-  margin-top: 2px;
+  /* DSH `.newSessionRow`：margin 0 calc(paint-inset + 1px)——3px 徽章内缩进。 */
+  margin: 0 4px;
 }
 
 .sidebarRail .newSessionRow {
   margin-top: 6px;
 }
 
-/* DSH `.newSession` (`SidebarRoot.module.css:434`): 38px, radius-md, elevated fill. */
+/* DSH `.newSession` (SidebarRoot.module.css:434-456)：38px 高、8px 12px 内距、
+   14/22/500 字号、icon-label gap 0、hover 用 button-floating-hover。 */
 .newSessionBtn {
+  container-type: inline-size;
+  position: relative;
   flex: 1 1 auto;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
-  height: 36px;
-  padding: 0 12px;
+  height: 38px;
+  padding: 8px 12px;
+  margin: 0;
+  box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-button-elevated-fill);
   color: var(--dsw-alias-label-primary);
   font-family: inherit;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 22px;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+  overflow: hidden;
+}
+
+.newSessionBtn > span {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebarRail .newSessionBtn {
   flex: none;
   width: 36px;
+  height: 36px;
   padding: 0;
   border-color: transparent;
   background: transparent;
 }
 
+.sidebarRail .newSessionBtn > span {
+  max-width: 0;
+}
+
 @media (hover: hover) {
   .newSessionBtn:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
+    background: var(--dsw-alias-button-floating-hover);
   }
-}
 
-.newSessionIconBtn {
-  flex: 0 0 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-button-elevated-fill);
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  .newSessionIconBtn:hover {
+  .sidebarRail .newSessionBtn:hover {
     background: var(--dsw-alias-interactive-bg-hover);
-    color: var(--dsw-alias-label-primary);
   }
 }
 
@@ -424,7 +424,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 26px;
+  min-height: 28px;
   padding: 0 2px 0 9px;
 }
 
@@ -556,10 +556,11 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 8px;
-  padding: 16px 9px;
+  /* DSH WorkspaceBrowser `.empty`（:541-545）：13px 三级色的空态行。 */
+  padding: 16px 12px;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .showAll {
@@ -707,6 +708,26 @@
   overflow: hidden;
 }
 
+/* Drawer-mode launch page: the conversation header (which owns the sidebar
+   toggle) is not mounted, so the fixed opener rides above the launch surface. */
+.launchDrawerButton {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
 /* Main-area page: replaces the Conversation column and owns its scroll.
    版心 1200px：≤1280 宽仍是 40px 边距，更宽时内容居中。 */
 .mainPage {
@@ -718,6 +739,11 @@
   color: var(--dsw-alias-label-primary);
   font-family: var(--dsw-font-family);
   animation: shell-fade-in var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+/* Drawer mode: narrow side padding, and room on top for the sidebar opener. */
+.mainPageDrawer {
+  padding: 60px 16px 40px;
 }
 
 /* ---- Right column --------------------------------------------------------- */

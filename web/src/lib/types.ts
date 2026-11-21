@@ -700,8 +700,24 @@ export interface Activity {
   is_error?: boolean;
   summary: string;
   detail?: string;
+  // UTF-8 安全的 detail 前 2000 字（列表接口随行返回）：正文行优先用它渲染，
+  // 而不是被 200/400 截断的 summary（那会把句子和 JSON 切成半截）。
+  detail_head?: string;
+
   metadata?: {
     llm_transition?: LLMTransition;
+    /** DSH sessionStats 口径：capture 在 usage 行记录的单次 LLM 调用计时（毫秒）。 */
+    ttft_ms?: number;
+    decode_ms?: number;
+    /**
+     * 本 step（一次模型调用）的增量用量。usage 行的 *_tokens 列是本次 Prompt 循环的
+     * **累计**值（harness query.go:456-461），这四个字段是相邻 usage 行的差值；
+     * 2026-11-21 16:1x 之前写入的行没有它们，前端按同 worker 相邻行差值回推。
+     */
+    step_input_tokens?: number;
+    step_output_tokens?: number;
+    step_cache_read_tokens?: number;
+    step_cache_write_tokens?: number;
   };
   source_task_id?: string;
   inherited?: boolean;
@@ -711,6 +727,67 @@ export interface Activity {
   output_tokens?: number;
   cache_read_tokens?: number;
   cache_write_tokens?: number;
+}
+
+// ---- 自动化（定时任务，D5；后端 server/automations.go，文档 .tmp/d5-backend-api.md §3） ----
+
+export type AutomationTimingKind = "once" | "every" | "daily" | "weekly" | "cron";
+
+/** once{at} / every{every_sec ≥ 300} / daily{time,tz?} / weekly{time,weekdays,tz?}（0=周日）/ cron{expr,tz?}。 */
+export interface AutomationTiming {
+  at?: string;
+  every_sec?: number;
+  time?: string;
+  weekdays?: number[];
+  tz?: string;
+  /** cron：5 字段表达式（分 时 日 月 周），timing_kind=cron 时必填。 */
+  expr?: string;
+}
+
+export interface Automation {
+  id: string;
+  title: string;
+  prompt: string;
+  target_kind: "task" | "agent" | "new_task";
+  task_id: string | null;
+  agent_key: string;
+  timing_kind: AutomationTimingKind;
+  timing: AutomationTiming;
+  enabled: boolean;
+  safety: "readonly" | "inherit";
+  next_run_at: string | null;
+  last_run_at: string | null;
+  /** "" | running | queued | ok | error */
+  last_status: string;
+  running: boolean;
+  created_at: string;
+  /** RFC3339Nano；PATCH 的 expected_updated_at 原样回传。 */
+  updated_at: string;
+}
+
+export interface AutomationInput {
+  title?: string;
+  prompt: string;
+  target_kind: "task" | "agent";
+  task_id?: string;
+  agent_key?: string;
+  timing_kind: AutomationTimingKind;
+  timing: AutomationTiming;
+  enabled?: boolean;
+  safety?: "readonly" | "inherit";
+}
+
+export interface AutomationRun {
+  id: string;
+  automation_id: string;
+  scheduled_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  status: "queued" | "running" | "done" | "failed" | "skipped";
+  summary: string;
+  findings_delta: number;
+  task_id: string | null;
+  error: string;
 }
 
 // 一个回合里被改写的文件。数据只由后端从记录下来的 Write/Edit/MultiEdit 调用

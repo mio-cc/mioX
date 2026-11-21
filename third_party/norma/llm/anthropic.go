@@ -357,13 +357,16 @@ func filterThinkingBlocks(msgs []Message, thinkingEnabled bool) []Message {
 	out := make([]Message, 0, len(msgs))
 	for _, m := range msgs {
 		content := m.Content
-		if !thinkingEnabled {
-			filtered := make([]ContentBlock, 0, len(content))
-			for _, b := range content {
-				if b.Type != BlockThinking {
-					filtered = append(filtered, b)
-				}
+		filtered := make([]ContentBlock, 0, len(content))
+		for _, b := range content {
+			// Content-part thinking from an OpenAI gateway carries a marker, not
+			// a real signature: Anthropic would reject it, so never replay it.
+			if b.Type == BlockThinking && (!thinkingEnabled || b.Signature == contentPartThinkingSig) {
+				continue
 			}
+			filtered = append(filtered, b)
+		}
+		if len(filtered) != len(content) {
 			content = filtered
 		}
 		if len(content) == 0 {

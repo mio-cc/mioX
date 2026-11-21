@@ -36,6 +36,13 @@
   white-space: nowrap;
 }
 
+/* 「· 强度」段：与模型名同排但退到三级色，模型名保持主读数。 */
+.effort {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
 .chevron {
   color: var(--dsw-alias-label-tertiary);
   transform: rotate(-90deg);

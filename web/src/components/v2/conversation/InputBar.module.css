@@ -11,7 +11,9 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
-  padding: 0 var(--dsh-composer-side-clearance, 16px) 14px;
+  /* DSH InputBar .root：底部 pad 4px；统计条的呼吸空间由 UsageBar 自己的
+     dock 语义(min-height/padding-top)承担，而不是这里的加厚。 */
+  padding: 0 var(--dsh-composer-side-clearance, 16px) 4px;
 }
 
 .hero {

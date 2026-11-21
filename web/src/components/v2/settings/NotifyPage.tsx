@@ -7,18 +7,50 @@
  *
  * 凭据语义：后端把 secret_keys 的值读成 `__masked__…`；界面不显示掩码原文，
  * 留空提交表示「保持原值」，填入新值才覆盖（api.ts:943）。
+ *
+ * 版式（D3 设计重塑）：SettingsPage → PageHead（状态徽标 + 刷新）→ 指标格 →
+ * 「总开关与回链」Card+Row → 「渠道」每个渠道一张 Card（类型字形 · 名称 · 目标/时机/过滤元信息 ·
+ * 启用开关 · ⋯ 菜单：测试发送/编辑/删除），编辑在卡内展开为 kit Editor，末尾虚线位添加渠道 →
+ * 「投递记录」筛选下拉在节头，卡内一行一条，分页在卡下。
  */
 import * as React from "react";
 
 import { Button } from "@/vendor/dsh/primitives/Button";
+import { Modal } from "@/vendor/dsh/primitives/Modal";
 import { Switch } from "@/vendor/dsh/primitives/Switch";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
 import {
+  IconLinkOutlineRegular,
+  IconMailUnreadOutlineRegular,
+  IconPaperPlaneOutlineRegular,
   IconPlusOutlineRegular,
-  IconRefreshOutlineRegular,
-  IconTrashOutlineRegular,
+  IconQueueOutlineRegular,
 } from "@/vendor/dsh/primitives/icons/index";
 
+import {
+  AddSlot,
+  AddSlots,
+  Badge,
+  Card,
+  Dot,
+  Editor,
+  EditorActions,
+  EditorGroup,
+  Empty,
+  Field,
+  FieldGrid,
+  type KitTone,
+  Meta,
+  Metrics,
+  Notice,
+  PageHead,
+  Row,
+  Section,
+  SettingsPage,
+  Skeleton,
+  TextInput,
+  Tile,
+  UnitInput,
+} from "@/components/v2/design/Kit";
 import type { NotificationChannel, NotificationDelivery, NotificationFilter } from "@/lib/types";
 import {
   createNotifyChannel,
@@ -34,7 +66,9 @@ import {
 import { useSettings } from "@/v2/data/settings";
 import { SelectMenu } from "./SelectMenu";
 import { toast } from "./Toast";
-import css from "./SettingsDialog.module.css";
+import { errorText, RefreshButton, RowMenu } from "./InterceptAdvanced";
+import shared from "./SettingsDialog.module.css";
+import own from "./NotifyPage.module.css";
 
 /** 渠道类型的展示名；只影响文案。 */
 const KIND_LABEL: Record<string, string> = {
@@ -162,6 +196,50 @@ const STATE_LABEL: Record<string, string> = {
   skipped: "跳过",
 };
 
+const STATE_TONE: Record<string, KitTone> = {
+  pending: "neutral",
+  sending: "info",
+  sent: "success",
+  failed: "danger",
+  skipped: "warning",
+};
+
+/** 渠道类型字形：国内 IM 用首字，其余用图标。 */
+function KindGlyph({ kind }: { kind: string }): React.ReactNode {
+  let glyph: React.ReactNode;
+  if (kind === "webhook") glyph = <IconLinkOutlineRegular size={15} />;
+  else if (kind === "telegram") glyph = <IconPaperPlaneOutlineRegular size={15} />;
+  else if (kind === "email") glyph = <IconMailUnreadOutlineRegular size={15} />;
+  else glyph = <span className={own.glyph}>{(KIND_LABEL[kind] ?? kind).trim().slice(0, 1).toUpperCase()}</span>;
+  return <Tile>{glyph}</Tile>;
+}
+
+/** 渠道的投递目标摘要：只显示非凭据的地址类字段（主机名或收件人）。 */
+function channelTarget(channel: NotificationChannel): string | null {
+  const pick = (key: string): string => {
+    const raw = asText(channel.config[key]);
+    return raw.startsWith("__masked__") ? "" : raw.trim();
+  };
+  const url = pick("webhook") || pick("url");
+  if (url !== "") {
+    try {
+      const parsed = new URL(url);
+      return `${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname}`;
+    } catch {
+      // 不是绝对 URL：原样显示。
+      return url;
+    }
+  }
+  if (channel.kind === "telegram") return pick("chat_id") === "" ? null : `chat ${pick("chat_id")}`;
+  if (channel.kind === "email") {
+    const to = channel.config.to;
+    if (Array.isArray(to) && to.length > 0) return to.map(asText).join(", ");
+    const host = pick("host");
+    return host === "" ? null : host;
+  }
+  return null;
+}
+
 function asText(value: unknown): string {
   if (typeof value === "string") return value;
   if (value === null || value === undefined) return "";
@@ -230,59 +308,93 @@ export function NotifyPage(): React.ReactNode {
     pageSize,
   );
 
-  if (meta.phase === "loading" || channels.phase === "loading") return <p className={css.pageLead}>读取通知配置…</p>;
+  const reloadAll = (): void => {
+    meta.reload();
+    channels.reload();
+  };
+  const head = (adornment?: React.ReactNode): React.ReactNode => (
+    <PageHead
+      title="通知推送"
+      lead="发现漏洞或状态变更时，按渠道推送到钉钉、飞书、企业微信、Telegram、邮件或任意 Webhook。"
+      adornment={adornment}
+      actions={<RefreshButton onClick={reloadAll} spinning={meta.phase === "loading" || channels.phase === "loading"} />}
+    />
+  );
+
+  if (meta.phase === "loading" || channels.phase === "loading") {
+    return (
+      <SettingsPage data={{ "data-settings-notify": "loading" }}>
+        {head()}
+        <Card>
+          <Skeleton label="读取通知配置" />
+        </Card>
+      </SettingsPage>
+    );
+  }
   if (meta.phase === "offline" || channels.phase === "offline") {
     return (
-      <>
-        <p className={css.pageLead}>未连接后端（读不到通知配置）</p>
-        {meta.error === null ? null : <p className={css.errorLine}>{meta.error}</p>}
-        {channels.error === null ? null : <p className={css.errorLine}>{channels.error}</p>}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            meta.reload();
-            channels.reload();
-          }}
-        >
-          重新读取
-        </Button>
-      </>
+      <SettingsPage data={{ "data-settings-notify": "offline" }}>
+        {head()}
+        <Notice tone="danger" action={<Button variant="ghost" size="sm" onClick={reloadAll}>重新读取</Button>}>
+          未连接后端（读不到通知配置）
+          {meta.error === null ? null : <div>{meta.error}</div>}
+          {channels.error === null ? null : <div>{channels.error}</div>}
+        </Notice>
+      </SettingsPage>
     );
   }
 
   const info = meta.meta;
   const kinds = info === null || info.kinds.length === 0 ? Object.keys(CHANNEL_FIELDS) : info.kinds.map((kind) => kind.kind);
-  const reloadAll = (): void => {
-    meta.reload();
-    channels.reload();
-  };
+  const stats = info?.stats;
+  const backlog = stats?.backlog_age_ms ?? 0;
+  const pageCount = Math.max(1, Math.ceil(deliveries.total / pageSize));
 
   return (
-    <>
-      <h2 className={css.pageTitle}>通知推送</h2>
-      <p className={css.pageLead}>
-        来自 GET /notify/meta 与 GET /notify/channels，共 {channels.channels.length} 个渠道；投递记录来自 GET
-        /notify/deliveries。
-      </p>
+    <SettingsPage data={{ "data-settings-notify": "ready" }}>
+      {head(
+        info?.enabled === true ? (
+          <Badge tone="success">
+            <Dot tone="success" />
+            已启用
+          </Badge>
+        ) : (
+          <Badge>未启用</Badge>
+        ),
+      )}
 
-      <div className={css.channelMeta} data-notify-stats>
-        <Tag tone={info?.enabled === true ? "success" : "quiet"}>{info?.enabled === true ? "通知已启用" : "通知未启用"}</Tag>
-        <span>渠道 {info?.stats.channels_on ?? 0}/{info?.stats.channels ?? channels.channels.length} 启用</span>
-        <span>· 待发送 {info?.stats.pending ?? 0}</span>
-        <span>· 失败 {info?.stats.failed ?? 0}</span>
-        <span>· 今日已发 {info?.stats.sent_today ?? 0}</span>
-        <span>· 积压 {(info?.stats.backlog_age_ms ?? 0) > 0 ? `${Math.round((info?.stats.backlog_age_ms ?? 0) / 1000)}s` : "无"}</span>
+      <div data-notify-stats="">
+        <Metrics
+          items={[
+            {
+              key: "channels",
+              label: "启用渠道",
+              value: `${stats?.channels_on ?? 0}/${stats?.channels ?? channels.channels.length}`,
+              muted: (stats?.channels_on ?? 0) === 0,
+            },
+            { key: "sent", label: "今日已发", value: stats?.sent_today ?? 0, muted: (stats?.sent_today ?? 0) === 0 },
+            {
+              key: "pending",
+              label: "待发送",
+              value: stats?.pending ?? 0,
+              foot: `积压 ${backlog > 0 ? `${Math.round(backlog / 1000)}s` : "无"}`,
+              tone: backlog > 0 ? "warning" : undefined,
+              muted: (stats?.pending ?? 0) === 0,
+            },
+            {
+              key: "failed",
+              label: "失败",
+              value: stats?.failed ?? 0,
+              tone: (stats?.failed ?? 0) > 0 ? "danger" : undefined,
+              muted: (stats?.failed ?? 0) === 0,
+            },
+          ]}
+        />
       </div>
 
-      <div className={css.group}>
-        <div className={css.groupLabel}>总开关与回链</div>
-        <div className={css.row}>
-          <div className={css.rowText}>
-            <div className={css.rowLabel}>启用通知推送</div>
-            <div className={css.rowHint}>关闭后所有渠道都停止投递（单个渠道的启停仍单独生效）</div>
-          </div>
-          <div className={css.rowControl}>
+      <Section title="总开关与回链">
+        <Card>
+          <Row label="启用通知推送" description="关闭后所有渠道都停止投递；单个渠道的启停仍单独生效。">
             <Switch
               checked={info?.enabled === true}
               label="启用通知推送"
@@ -295,149 +407,168 @@ export function NotifyPage(): React.ReactNode {
                 });
               }}
             />
-          </div>
-        </div>
-        <SettingTextField
-          label="回链地址"
-          hint="消息里「查看详情」指向的外部访问地址；空=不带回链"
-          placeholder="https://miox.example.com"
-          initial={info?.public_base_url ?? ""}
-          disabled={server.phase !== "ready"}
-          apply={(next) => server.save({ notify_public_base_url: next })}
-          onSaved={reloadAll}
-        />
-        <SettingNumberField
-          label="汇总周期（分钟）"
-          hint="汇总模式渠道的推送周期；后端默认 30 分钟"
-          initial={info?.digest_interval_min ?? ""}
-          disabled={server.phase !== "ready"}
-          apply={(next) => server.save({ notify_digest_interval_min: next })}
-          onSaved={reloadAll}
-        />
-      </div>
-
-      <div className={css.pageToolbar}>
-        <Button variant="outline" size="sm" onClick={() => setEditing(editing === "new" ? null : "new")}>
-          <IconPlusOutlineRegular size={13} /> 添加渠道
-        </Button>
-        <Button variant="ghost" size="sm" onClick={reloadAll}>
-          <IconRefreshOutlineRegular size={13} /> 刷新
-        </Button>
-      </div>
-
-      {editing === "new" ? (
-        <ChannelEditor
-          channel={null}
-          kinds={kinds}
-          metaRate={info?.kinds[0]?.default_rate_per_min ?? 30}
-          onSaved={() => {
-            setEditing(null);
-            reloadAll();
-          }}
-          onCancel={() => setEditing(null)}
-        />
-      ) : null}
-
-      {channels.channels.length === 0 ? (
-        <p className={css.pageLead}>还没有通知渠道；添加一个渠道后漏洞事件才会推送。</p>
-      ) : (
-        <div className={css.ruleList}>
-          {channels.channels.map((channel) =>
-            editing === channel.id ? (
-              <ChannelEditor
-                key={channel.id}
-                channel={channel}
-                kinds={kinds}
-                metaRate={channel.rate_per_min}
-                onSaved={() => {
-                  setEditing(null);
-                  reloadAll();
-                }}
-                onCancel={() => setEditing(null)}
-              />
-            ) : (
-              <ChannelRow key={channel.id} channel={channel} onEdit={() => setEditing(channel.id)} onChanged={reloadAll} />
-            ),
-          )}
-        </div>
-      )}
-
-      <div className={css.subSection}>
-        <div className={css.subSectionTitle}>投递记录</div>
-        <div className={css.filterBar}>
-          <SelectMenu
-            value={channelFilter}
-            options={[
-              { value: "all", label: "全部渠道" },
-              ...channels.channels.map((channel) => ({ value: String(channel.id), label: channel.name })),
-            ]}
-            onChange={(value) => {
-              setPage(1);
-              setChannelFilter(value);
-            }}
+          </Row>
+          <SettingTextField
+            label="回链地址"
+            hint="消息里「查看详情」指向的外部访问地址；留空则不带回链。"
+            placeholder="https://miox.example.com"
+            initial={info?.public_base_url ?? ""}
+            disabled={server.phase !== "ready"}
+            apply={(next) => server.save({ notify_public_base_url: next })}
+            onSaved={reloadAll}
           />
-          <SelectMenu
-            value={stateFilter}
-            options={[{ value: "all", label: "全部状态" }, ...Object.keys(STATE_LABEL).map((state) => ({ value: state, label: STATE_LABEL[state] }))]}
-            onChange={(value) => {
-              setPage(1);
-              setStateFilter(value);
-            }}
+          <SettingNumberField
+            label="汇总周期"
+            hint="汇总模式渠道的推送周期；后端默认 30 分钟。"
+            initial={info?.digest_interval_min ?? ""}
+            disabled={server.phase !== "ready"}
+            apply={(next) => server.save({ notify_digest_interval_min: next })}
+            onSaved={reloadAll}
           />
-          <Button variant="ghost" size="sm" onClick={deliveries.reload}>
-            <IconRefreshOutlineRegular size={13} /> 刷新
-          </Button>
-          <span className={css.deliveryTime}>共 {deliveries.total} 条</span>
-        </div>
-        {deliveries.phase === "offline" ? (
-          <p className={css.errorLine}>读取投递记录失败：{deliveries.error}</p>
+        </Card>
+      </Section>
+
+      <Section
+        title="渠道"
+        count={channels.channels.length === 0 ? undefined : channels.channels.length}
+        hint={channels.channels.length === 0 ? undefined : "每个渠道独立启停、限流与过滤"}
+      >
+        {channels.channels.length === 0 && editing !== "new" ? (
+          <Card>
+            <Empty
+              inCard
+              icon={<IconPaperPlaneOutlineRegular size={18} />}
+              title="还没有通知渠道"
+              text="添加一个渠道后，漏洞事件才会推送出去。"
+            />
+          </Card>
         ) : null}
-        <div className={css.deliveryList}>
+        {channels.channels.map((channel) => (
+          <ChannelCard
+            key={channel.id}
+            channel={channel}
+            open={editing === channel.id}
+            kinds={kinds}
+            onToggleEdit={() => setEditing(editing === channel.id ? null : channel.id)}
+            onSaved={() => {
+              setEditing(null);
+              reloadAll();
+            }}
+            onChanged={reloadAll}
+          />
+        ))}
+        {editing === "new" ? (
+          <Card selected data={{ "data-channel-new": "" }}>
+            <Row lead={<Tile><IconPlusOutlineRegular size={15} /></Tile>} label="添加通知渠道" description="选择类型并填写连接信息，保存后即可测试发送。" />
+            <ChannelEditor
+              channel={null}
+              kinds={kinds}
+              metaRate={info?.kinds[0]?.default_rate_per_min ?? 30}
+              onSaved={() => {
+                setEditing(null);
+                reloadAll();
+              }}
+              onCancel={() => setEditing(null)}
+            />
+          </Card>
+        ) : (
+          <AddSlots>
+            <AddSlot data={{ "data-channel-add": "" }} onClick={() => setEditing("new")}>
+              <IconPlusOutlineRegular size={13} /> 添加渠道
+            </AddSlot>
+          </AddSlots>
+        )}
+      </Section>
+
+      <Section
+        title="投递记录"
+        count={deliveries.total}
+        actions={
+          <>
+            <span className={own.filterSelect}>
+              <SelectMenu
+                value={channelFilter}
+                ariaLabel="按渠道筛选投递记录"
+                options={[
+                  { value: "all", label: "全部渠道" },
+                  ...channels.channels.map((channel) => ({ value: String(channel.id), label: channel.name })),
+                ]}
+                onChange={(value) => {
+                  setPage(1);
+                  setChannelFilter(value);
+                }}
+              />
+            </span>
+            <span className={own.filterSelect}>
+              <SelectMenu
+                value={stateFilter}
+                ariaLabel="按状态筛选投递记录"
+                options={[{ value: "all", label: "全部状态" }, ...Object.keys(STATE_LABEL).map((state) => ({ value: state, label: STATE_LABEL[state] }))]}
+                onChange={(value) => {
+                  setPage(1);
+                  setStateFilter(value);
+                }}
+              />
+            </span>
+            <RefreshButton label="刷新投递记录" onClick={deliveries.reload} spinning={deliveries.phase === "loading"} />
+          </>
+        }
+      >
+        {deliveries.phase === "offline" ? <Notice tone="danger">读取投递记录失败：{deliveries.error}</Notice> : null}
+        <Card data={{ "data-notify-deliveries": deliveries.phase }}>
           {deliveries.rows.length === 0 ? (
-            <p className={css.pageLead}>{deliveries.phase === "loading" ? "加载中…" : "暂无投递记录"}</p>
+            deliveries.phase === "loading" ? (
+              <Skeleton label="读取投递记录" />
+            ) : (
+              <Empty
+                inCard
+                icon={<IconQueueOutlineRegular size={18} />}
+                title="暂无投递记录"
+                text={channelFilter === "all" && stateFilter === "all" ? "渠道推送过消息后，每次投递的结果都会记在这里。" : "当前筛选下没有记录。"}
+              />
+            )
           ) : (
-            deliveries.rows.map((delivery) => (
-              <DeliveryRow key={delivery.id} delivery={delivery} onRetried={deliveries.reload} />
-            ))
+            deliveries.rows.map((delivery) => <DeliveryRow key={delivery.id} delivery={delivery} onRetried={deliveries.reload} />)
           )}
-        </div>
+        </Card>
         {deliveries.total > pageSize ? (
-          <div className={css.pager}>
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>
+          <div className={own.pager}>
+            <span>
+              第 {page} / {pageCount} 页
+            </span>
+            <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>
               上一页
             </Button>
-            <span>
-              {page} / {Math.max(1, Math.ceil(deliveries.total / pageSize))}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= Math.max(1, Math.ceil(deliveries.total / pageSize))}
-              onClick={() => setPage((prev) => prev + 1)}
-            >
+            <Button variant="ghost" size="sm" disabled={page >= pageCount} onClick={() => setPage((prev) => prev + 1)}>
               下一页
             </Button>
           </div>
         ) : null}
-      </div>
-    </>
+      </Section>
+    </SettingsPage>
   );
 }
 
-/** 渠道行：类型/时机/限流 + 编辑/启停/测试/删除。 */
-function ChannelRow({
+/** 渠道卡：一行摘要（类型字形 · 名称 · 目标/时机/过滤 · 启用开关 · ⋯ 菜单），编辑时卡内展开。 */
+function ChannelCard({
   channel,
-  onEdit,
+  open,
+  kinds,
+  onToggleEdit,
+  onSaved,
   onChanged,
 }: {
   channel: NotificationChannel;
-  onEdit: () => void;
+  open: boolean;
+  kinds: string[];
+  onToggleEdit: () => void;
+  onSaved: () => void;
   onChanged: () => void;
 }): React.ReactNode {
   const [confirming, setConfirming] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
-  const [testResult, setTestResult] = React.useState<string | null>(null);
+  const [testResult, setTestResult] = React.useState<{ ok: boolean; text: string } | null>(null);
 
   const toggle = (next: boolean): void => {
     setBusy(true);
@@ -447,7 +578,7 @@ function ChannelRow({
         toast(next ? "渠道已启用" : "渠道已停用");
         onChanged();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setBusy(false));
   };
 
@@ -457,13 +588,11 @@ function ChannelRow({
     void deleteNotifyChannel(channel.id)
       .then(() => {
         toast("渠道已删除");
+        setConfirming(false);
         onChanged();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
-      .finally(() => {
-        setBusy(false);
-        setConfirming(false);
-      });
+      .catch((reason: unknown) => setFailure(errorText(reason)))
+      .finally(() => setBusy(false));
   };
 
   const test = (): void => {
@@ -471,57 +600,100 @@ function ChannelRow({
     setTestResult(null);
     setFailure(null);
     void testNotifyChannel(channel.id)
-      .then((result) => setTestResult(result.ok ? `测试消息已发送（延迟 ${result.latency_ms}ms）` : "测试发送未成功"))
-      .catch((reason: unknown) => setTestResult(`测试失败：${reason instanceof Error ? reason.message : String(reason)}`))
+      .then((result) =>
+        setTestResult(result.ok ? { ok: true, text: `测试消息已发送（延迟 ${result.latency_ms}ms）` } : { ok: false, text: "测试发送未成功" }),
+      )
+      .catch((reason: unknown) => setTestResult({ ok: false, text: `测试失败：${errorText(reason)}` }))
       .finally(() => setBusy(false));
   };
 
+  const target = channelTarget(channel);
+
   return (
-    <div className={css.channelRow} data-channel-id={channel.id} data-channel-enabled={channel.enabled}>
-      <div className={css.channelHead}>
-        <div className={css.ruleMain}>
-          <div className={css.ruleMeta}>
-            <span className={css.rowLabel}>{channel.name}</span>
-            <Tag tone={channel.enabled ? "success" : "quiet"}>{channel.enabled ? "已启用" : "已停用"}</Tag>
-            <Tag tone="outline">{KIND_LABEL[channel.kind] ?? channel.kind}</Tag>
-            <Tag tone="neutral">{channel.mode === "digest" ? "汇总" : "实时"}</Tag>
-          </div>
-          <div className={css.channelMeta}>
-            <span>限流 {channel.rate_per_min}/分钟</span>
-            <span>· 过滤：{filterSummary(channel.filter)}</span>
-            {channel.secret_keys.length > 0 ? <span>· 凭据 {channel.secret_keys.length} 项（不回显）</span> : null}
-          </div>
+    <Card selected={open} data={{ "data-channel-id": String(channel.id), "data-channel-enabled": String(channel.enabled) }}>
+      <Row
+        lead={<KindGlyph kind={channel.kind} />}
+        label={<span className={channel.enabled ? undefined : own.labelOff}>{channel.name}</span>}
+        labelAdornment={
+          <>
+            <Badge>{KIND_LABEL[channel.kind] ?? channel.kind}</Badge>
+            <Badge tone={channel.mode === "digest" ? "info" : "neutral"}>{channel.mode === "digest" ? "汇总" : "实时"}</Badge>
+          </>
+        }
+        description={
+          <Meta
+            items={[
+              target === null ? null : (
+                <span key="target" className={own.target} title={target}>
+                  {target}
+                </span>
+              ),
+              `${channel.rate_per_min} 条/分`,
+              <span key="filter" className={own.clip} title={filterSummary(channel.filter)}>
+                {filterSummary(channel.filter)}
+              </span>,
+              channel.secret_keys.length > 0 ? `凭据 ${channel.secret_keys.length} 项` : null,
+            ]}
+          />
+        }
+      >
+        <Switch checked={channel.enabled} label={`启用渠道 ${channel.name}`} disabled={busy} onChange={toggle} />
+        <RowMenu
+          label={`渠道 ${channel.name} 的更多操作`}
+          disabled={busy}
+          data={{ "data-channel-more": String(channel.id) }}
+          items={[
+            { label: busy ? "测试中…" : "测试发送", onSelect: test, data: { "data-channel-test": String(channel.id) } },
+            { label: open ? "收起编辑" : "编辑", onSelect: onToggleEdit, data: { "data-channel-edit": String(channel.id) } },
+            {
+              label: "删除",
+              onSelect: () => setConfirming(true),
+              danger: true,
+              separatorBefore: true,
+              data: { "data-channel-delete": String(channel.id) },
+            },
+          ]}
+        />
+      </Row>
+      {testResult === null && failure === null ? null : (
+        <div className={own.cardNotice}>
+          {testResult === null ? null : <Notice tone={testResult.ok ? "success" : "danger"}>{testResult.text}</Notice>}
+          {failure === null ? null : <Notice tone="danger">操作失败：{failure}</Notice>}
         </div>
-        <div className={css.ruleActions}>
-          <Switch checked={channel.enabled} label={`启用渠道 ${channel.name}`} disabled={busy} onChange={toggle} />
-          <Button variant="outline" size="sm" disabled={busy} onClick={test}>
-            测试发送
-          </Button>
-          <Button variant="outline" size="sm" disabled={busy} onClick={onEdit}>
-            编辑
-          </Button>
-          {confirming ? (
-            <>
-              <Button variant="outline" size="sm" disabled={busy} onClick={remove}>
-                <IconTrashOutlineRegular size={13} /> 确认删除
-              </Button>
-              <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(false)}>
-                取消
-              </Button>
-            </>
-          ) : (
-            <button type="button" className={css.dangerBtn} disabled={busy} onClick={() => setConfirming(true)}>
-              删除
-            </button>
-          )}
+      )}
+      {open ? <ChannelEditor channel={channel} kinds={kinds} metaRate={channel.rate_per_min} onSaved={onSaved} onCancel={onToggleEdit} /> : null}
+
+      <Modal
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        title="删除通知渠道"
+        closeLabel="关闭"
+        tone="warning"
+        description={`将永久删除渠道「${channel.name}」，此操作不可撤销；之后的漏洞事件不再推送到这里。`}
+        footer={
+          <>
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => setConfirming(false)}>
+              取消
+            </Button>
+            <Button variant="primary" size="sm" disabled={busy} onClick={remove} data-channel-delete-confirm="">
+              {busy ? "删除中…" : "确认删除"}
+            </Button>
+          </>
+        }
+      >
+        <div className={own.dialogStack}>
+          <div className={own.targetBox}>
+            <KindGlyph kind={channel.kind} />
+            <span>{channel.name}</span>
+          </div>
+          {failure === null ? null : <Notice tone="danger">删除失败：{failure}</Notice>}
         </div>
-      </div>
-      {testResult === null ? null : <p className={css.fieldHint}>{testResult}</p>}
-      {failure === null ? null : <p className={css.errorLine}>{failure}</p>}
-    </div>
+      </Modal>
+    </Card>
   );
 }
 
+/** 投递记录一行：状态点 · 标题 · 渠道/时间/尝试次数/错误 · 失败可重试。 */
 function DeliveryRow({
   delivery,
   onRetried,
@@ -532,6 +704,7 @@ function DeliveryRow({
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
   const retryable = delivery.state === "failed" || delivery.state === "skipped";
+  const tone = STATE_TONE[delivery.state] ?? "neutral";
 
   const retry = (): void => {
     setBusy(true);
@@ -541,29 +714,44 @@ function DeliveryRow({
         toast("已重新入队");
         onRetried();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setBusy(false));
   };
 
   return (
-    <div className={css.deliveryRow} data-delivery-id={delivery.id} data-delivery-state={delivery.state}>
-      <span className={css.deliveryTime}>{formatTime(delivery.created_at)}</span>
-      <Tag tone={delivery.state === "failed" ? "danger" : delivery.state === "sent" ? "success" : "outline"}>
-        {STATE_LABEL[delivery.state] ?? delivery.state}
-      </Tag>
-      <span className={css.deliveryTitle} title={delivery.title}>
-        {delivery.title || "（无标题）"}
-      </span>
-      <span className={css.deliveryTime}>{delivery.channel_name}</span>
-      <span className={css.deliveryTime}>尝试 {delivery.attempts}</span>
-      {delivery.last_error === "" ? null : <span className={css.deliveryError} title={delivery.last_error}>{delivery.last_error}</span>}
+    <Row
+      data={{ "data-delivery-id": String(delivery.id), "data-delivery-state": delivery.state }}
+      lead={<Dot tone={tone} pulse={delivery.state === "sending"} />}
+      label={<span title={delivery.title}>{delivery.title || "（无标题）"}</span>}
+      labelAdornment={<Badge tone={tone}>{STATE_LABEL[delivery.state] ?? delivery.state}</Badge>}
+      description={
+        <>
+          <Meta
+            items={[
+              delivery.channel_name,
+              <span key="time" className={own.tabular}>
+                {formatTime(delivery.created_at)}
+              </span>,
+              <span key="attempts" className={own.tabular}>
+                尝试 {delivery.attempts}
+              </span>,
+              delivery.last_error === "" ? null : (
+                <span key="error" className={own.errorClip} title={delivery.last_error}>
+                  {delivery.last_error}
+                </span>
+              ),
+            ]}
+          />
+          {failure === null ? null : <span className={own.rowError}>重试失败：{failure}</span>}
+        </>
+      }
+    >
       {retryable ? (
-        <Button variant="outline" size="sm" disabled={busy} onClick={retry}>
-          重试
+        <Button variant="ghost" size="sm" disabled={busy} onClick={retry} data-delivery-retry="">
+          {busy ? "入队中…" : "重试"}
         </Button>
       ) : null}
-      {failure === null ? null : <span className={css.errorLine}>{failure}</span>}
-    </div>
+    </Row>
   );
 }
 
@@ -581,6 +769,7 @@ function ChannelEditor({
   onSaved: () => void;
   onCancel: () => void;
 }): React.ReactNode {
+  const uid = React.useId();
   const [name, setName] = React.useState(channel?.name ?? "");
   const [kind, setKind] = React.useState(channel?.kind ?? kinds[0] ?? "webhook");
   const [mode, setMode] = React.useState(channel?.mode ?? "realtime");
@@ -693,210 +882,223 @@ function ChannelEditor({
         toast(channel === null ? "通知渠道已创建" : "通知渠道已保存");
         onSaved();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setSaving(false));
   };
 
   return (
-    <div className={css.formCard}>
-      <div className={css.subTitle}>{channel === null ? "添加通知渠道" : `编辑渠道 · ${channel.name}`}</div>
-      <label className={css.fieldLabel}>
-        名称
-        <input
-          className={css.textField}
-          aria-label="渠道名称"
-          placeholder="给渠道起个名字"
-          value={name}
-          disabled={saving}
-          onChange={(event) => setName(event.currentTarget.value)}
-        />
-      </label>
-      <div className={css.formRow}>
-        <div className={css.fieldBlock}>
-          <div className={css.fieldLabel}>类型</div>
-          <SelectMenu
-            value={kind}
-            options={kindChoices.map((value) => ({ value, label: KIND_LABEL[value] ?? value }))}
-            disabled={saving || channel !== null}
-            onChange={changeKind}
-          />
-        </div>
-        <div className={css.fieldBlock}>
-          <div className={css.fieldLabel}>推送时机</div>
-          <SelectMenu
-            value={mode}
-            options={MODE_OPTIONS}
-            disabled={saving}
-            onChange={(value) => setMode(value === "digest" ? "digest" : "realtime")}
-          />
-        </div>
-        <label className={css.fieldLabel}>
-          限流（条/分钟）
-          <input
-            className={css.textField}
-            type="number"
-            aria-label="限流每分钟"
-            min={1}
-            value={rate}
-            disabled={saving}
-            onChange={(event) => setRate(event.currentTarget.value)}
-          />
-        </label>
-      </div>
+    <Editor inCard data={{ "data-channel-editor": channel === null ? "new" : String(channel.id) }}>
+      <EditorGroup title="基本">
+        <FieldGrid>
+          <Field label="名称" htmlFor={`${uid}-name`}>
+            <TextInput
+              id={`${uid}-name`}
+              aria-label="渠道名称"
+              placeholder="给渠道起个名字"
+              value={name}
+              disabled={saving}
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+          </Field>
+          <Field label="类型" htmlFor={`${uid}-kind`} hint={channel === null ? undefined : "已创建的渠道不能改类型"}>
+            <SelectMenu
+              id={`${uid}-kind`}
+              value={kind}
+              ariaLabel="渠道类型"
+              options={kindChoices.map((value) => ({ value, label: KIND_LABEL[value] ?? value }))}
+              disabled={saving || channel !== null}
+              onChange={changeKind}
+            />
+          </Field>
+          <Field label="推送时机" htmlFor={`${uid}-mode`} hint="汇总模式按「汇总周期」合并推送">
+            <SelectMenu
+              id={`${uid}-mode`}
+              value={mode}
+              ariaLabel="推送时机"
+              options={MODE_OPTIONS}
+              disabled={saving}
+              onChange={(value) => setMode(value === "digest" ? "digest" : "realtime")}
+            />
+          </Field>
+          <Field label="限流" htmlFor={`${uid}-rate`}>
+            <UnitInput unit="条/分">
+              <TextInput
+                id={`${uid}-rate`}
+                className={shared.numberInputKit}
+                type="number"
+                aria-label="限流每分钟"
+                min={1}
+                value={rate}
+                disabled={saving}
+                onChange={(event) => setRate(event.currentTarget.value)}
+              />
+            </UnitInput>
+          </Field>
+        </FieldGrid>
+      </EditorGroup>
 
-      {fields.length === 0 ? (
-        <p className={css.pageLead}>后端未声明该渠道类型的配置字段。</p>
-      ) : (
-        <>
-          <div className={css.subSectionTitle}>渠道配置</div>
-          {fields.map((field) => {
-            if (field.kind === "switch") {
-              return (
-                <div key={field.key} className={css.checkInline}>
-                  <Switch
-                    checked={bools[field.key] === true}
-                    label={field.label}
-                    disabled={saving}
-                    onChange={(next) => setBools((prev) => ({ ...prev, [field.key]: next }))}
-                  />
-                  <span>{field.label}</span>
-                  {field.help ? <span className={css.fieldHint}>（{field.help}）</span> : null}
-                </div>
-              );
-            }
-            const secretField = secretKeys.has(field.key);
-            const masked = secretField && asText(channel?.config[field.key]).startsWith("__masked__") && (texts[field.key] ?? "") === "";
-            return (
-              <label key={field.key} className={css.fieldLabel}>
-                {field.label}
-                {field.kind === "select" ? (
-                  <SelectMenu
-                    value={texts[field.key] ?? field.options?.[0]?.value ?? ""}
-                    options={field.options ?? []}
-                    disabled={saving}
-                    onChange={(value) => setTexts((prev) => ({ ...prev, [field.key]: value }))}
-                  />
-                ) : field.kind === "textarea" || field.kind === "kv" ? (
-                  <textarea
-                    className={css.textArea}
-                    aria-label={field.label}
-                    rows={field.kind === "kv" ? 3 : 4}
-                    placeholder={field.placeholder}
-                    value={texts[field.key] ?? ""}
-                    disabled={saving}
-                    onChange={(event) => {
-                      const next = event.currentTarget.value;
-                      setTexts((prev) => ({ ...prev, [field.key]: next }));
-                    }}
-                  />
-                ) : (
-                  <input
-                    className={css.textField}
-                    aria-label={field.label}
-                    type={secretField ? "password" : field.kind === "number" ? "number" : "text"}
-                    autoComplete={secretField ? "new-password" : "off"}
-                    placeholder={masked ? "已保存（不回显）；留空保持不变" : field.placeholder}
-                    value={texts[field.key] ?? ""}
-                    disabled={saving}
-                    onChange={(event) => {
-                      const next = event.currentTarget.value;
-                      setTexts((prev) => ({ ...prev, [field.key]: next }));
-                    }}
-                  />
-                )}
-                {masked ? (
-                  <p className={css.fieldHint}>已保存凭据（不回显）；留空保持不变，填入新值即覆盖。</p>
-                ) : field.help ? (
-                  <p className={css.fieldHint}>{field.help}</p>
-                ) : null}
-              </label>
-            );
-          })}
-        </>
-      )}
+      <EditorGroup title="连接">
+        {fields.length === 0 ? (
+          <Notice tone="warning">后端未声明该渠道类型的配置字段。</Notice>
+        ) : (
+          <>
+            <FieldGrid>
+              {fields
+                .filter((field) => field.kind !== "switch")
+                .map((field) => {
+                  const secretField = secretKeys.has(field.key);
+                  const masked = secretField && asText(channel?.config[field.key]).startsWith("__masked__") && (texts[field.key] ?? "") === "";
+                  const wide = field.kind === "textarea" || field.kind === "kv" || field.key === "webhook" || field.key === "url";
+                  const id = `${uid}-cfg-${field.key}`;
+                  return (
+                    <Field
+                      key={field.key}
+                      label={field.label}
+                      htmlFor={id}
+                      span={wide}
+                      hint={masked ? "已保存凭据（不回显）；留空保持不变，填入新值即覆盖。" : field.help}
+                    >
+                      {field.kind === "select" ? (
+                        <SelectMenu
+                          id={id}
+                          value={texts[field.key] ?? field.options?.[0]?.value ?? ""}
+                          options={field.options ?? []}
+                          ariaLabel={field.label}
+                          disabled={saving}
+                          onChange={(value) => setTexts((prev) => ({ ...prev, [field.key]: value }))}
+                        />
+                      ) : field.kind === "textarea" || field.kind === "kv" ? (
+                        <textarea
+                          id={id}
+                          className={`${own.textArea} ${own.mono}`}
+                          aria-label={field.label}
+                          rows={field.kind === "kv" ? 3 : 4}
+                          placeholder={field.placeholder}
+                          value={texts[field.key] ?? ""}
+                          disabled={saving}
+                          onChange={(event) => {
+                            const next = event.currentTarget.value;
+                            setTexts((prev) => ({ ...prev, [field.key]: next }));
+                          }}
+                        />
+                      ) : (
+                        <TextInput
+                          id={id}
+                          mono={field.kind !== "number"}
+                          className={field.kind === "number" ? shared.numberInputKit : undefined}
+                          aria-label={field.label}
+                          type={secretField ? "password" : field.kind === "number" ? "number" : "text"}
+                          autoComplete={secretField ? "new-password" : "off"}
+                          placeholder={masked ? "已保存（不回显）；留空保持不变" : field.placeholder}
+                          value={texts[field.key] ?? ""}
+                          disabled={saving}
+                          onChange={(event) => {
+                            const next = event.currentTarget.value;
+                            setTexts((prev) => ({ ...prev, [field.key]: next }));
+                          }}
+                        />
+                      )}
+                    </Field>
+                  );
+                })}
+            </FieldGrid>
+            {fields.some((field) => field.kind === "switch") ? (
+              <div className={shared.optionCard}>
+                {fields
+                  .filter((field) => field.kind === "switch")
+                  .map((field) => (
+                    <Row key={field.key} label={field.label} description={field.help}>
+                      <Switch
+                        checked={bools[field.key] === true}
+                        label={field.label}
+                        disabled={saving}
+                        onChange={(next) => setBools((prev) => ({ ...prev, [field.key]: next }))}
+                      />
+                    </Row>
+                  ))}
+              </div>
+            ) : null}
+          </>
+        )}
+      </EditorGroup>
 
-      <div className={css.subSectionTitle}>过滤规则</div>
-      <div className={css.formRow}>
-        <div className={css.fieldBlock}>
-          <div className={css.fieldLabel}>最低严重度</div>
-          <SelectMenu
-            value={minSeverity}
-            options={SEVERITY_OPTIONS}
-            disabled={saving}
-            onChange={(value) => setMinSeverity(value)}
-          />
+      <EditorGroup title="过滤">
+        <FieldGrid columns={3}>
+          <Field label="最低严重度" htmlFor={`${uid}-severity`}>
+            <SelectMenu
+              id={`${uid}-severity`}
+              value={minSeverity}
+              ariaLabel="最低严重度"
+              options={SEVERITY_OPTIONS}
+              disabled={saving}
+              onChange={(value) => setMinSeverity(value)}
+            />
+          </Field>
+          <Field label="类型包含" htmlFor={`${uid}-include`} optional hint="关键词，逗号或换行分隔">
+            <TextInput
+              id={`${uid}-include`}
+              aria-label="类型包含关键词"
+              value={includeText}
+              disabled={saving}
+              onChange={(event) => setIncludeText(event.currentTarget.value)}
+            />
+          </Field>
+          <Field label="类型排除" htmlFor={`${uid}-exclude`} optional>
+            <TextInput
+              id={`${uid}-exclude`}
+              aria-label="类型排除关键词"
+              value={excludeText}
+              disabled={saving}
+              onChange={(event) => setExcludeText(event.currentTarget.value)}
+            />
+          </Field>
+        </FieldGrid>
+        <FieldGrid>
+          <Field label="任务 ID" htmlFor={`${uid}-tasks`} hint="留空 = 不限">
+            <TextInput
+              id={`${uid}-tasks`}
+              mono
+              aria-label="任务ID过滤"
+              value={taskIDsText}
+              disabled={saving}
+              onChange={(event) => setTaskIDsText(event.currentTarget.value)}
+            />
+          </Field>
+          <Field label="资产 ID" htmlFor={`${uid}-assets`} hint="留空 = 不限">
+            <TextInput
+              id={`${uid}-assets`}
+              mono
+              aria-label="资产ID过滤"
+              value={assetIDsText}
+              disabled={saving}
+              onChange={(event) => setAssetIDsText(event.currentTarget.value)}
+            />
+          </Field>
+        </FieldGrid>
+        <div className={shared.optionCard}>
+          <Row label="接收漏洞状态变更" description="除新漏洞外，也推送漏洞处置状态的变化。">
+            <Switch checked={onStatusChange} label="接收漏洞状态变更" disabled={saving} onChange={(next) => setOnStatusChange(next)} />
+          </Row>
+          <Row label="启用渠道" description="保存后立即生效。">
+            <Switch checked={enabled} label="启用渠道" disabled={saving} onChange={(next) => setEnabled(next)} />
+          </Row>
         </div>
-        <label className={css.fieldLabel}>
-          类型包含（关键词，逗号/换行分隔）
-          <input
-            className={css.textField}
-            aria-label="类型包含关键词"
-            value={includeText}
-            disabled={saving}
-            onChange={(event) => setIncludeText(event.currentTarget.value)}
-          />
-        </label>
-        <label className={css.fieldLabel}>
-          类型排除
-          <input
-            className={css.textField}
-            aria-label="类型排除关键词"
-            value={excludeText}
-            disabled={saving}
-            onChange={(event) => setExcludeText(event.currentTarget.value)}
-          />
-        </label>
-      </div>
-      <div className={css.formRow}>
-        <label className={css.fieldLabel}>
-          任务 ID（空=不限）
-          <input
-            className={css.textField}
-            aria-label="任务ID过滤"
-            value={taskIDsText}
-            disabled={saving}
-            onChange={(event) => setTaskIDsText(event.currentTarget.value)}
-          />
-        </label>
-        <label className={css.fieldLabel}>
-          资产 ID（空=不限）
-          <input
-            className={css.textField}
-            aria-label="资产ID过滤"
-            value={assetIDsText}
-            disabled={saving}
-            onChange={(event) => setAssetIDsText(event.currentTarget.value)}
-          />
-        </label>
-      </div>
-      <div className={css.checkInline}>
-        <Switch
-          checked={onStatusChange}
-          label="接收漏洞状态变更"
-          disabled={saving}
-          onChange={(next) => setOnStatusChange(next)}
-        />
-        <span>也接收漏洞处置状态变更事件</span>
-      </div>
-      <div className={css.checkInline} style={{ marginTop: 10 }}>
-        <Switch checked={enabled} label="启用渠道" disabled={saving} onChange={(next) => setEnabled(next)} />
-        <span>保存后立即生效</span>
-      </div>
+      </EditorGroup>
 
-      {failure === null ? null : <p className={css.errorLine}>{failure}</p>}
-      <div className={css.formActions}>
-        <Button variant="outline" size="sm" disabled={saving} onClick={onCancel}>
+      {failure === null ? null : <Notice tone="danger">{failure}</Notice>}
+      <EditorActions>
+        <Button variant="ghost" size="sm" disabled={saving} onClick={onCancel}>
           取消
         </Button>
-        <Button variant="primary" size="sm" disabled={saving} onClick={save}>
-          {saving ? "保存中…" : "保存"}
+        <Button variant="primary" size="sm" disabled={saving} onClick={save} data-channel-save="">
+          {saving ? "保存中…" : channel === null ? "创建渠道" : "保存"}
         </Button>
-      </div>
-    </div>
+      </EditorActions>
+    </Editor>
   );
 }
 
-/** 文本设置行：初值来自 GET /notify/meta，保存写回 PUT /settings。 */
+/** 文本设置行：初值来自 GET /notify/meta，保存写回 PUT /settings；未改动时保存不可点。 */
 function SettingTextField({
   label,
   hint,
@@ -918,13 +1120,22 @@ function SettingTextField({
   const [saving, setSaving] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
   React.useEffect(() => setDraft(initial), [initial]);
+  const dirty = draft.trim() !== initial.trim();
   return (
-    <div className={css.block}>
-      <div className={css.rowLabel}>{label}</div>
-      <div className={css.rowHint}>{hint}</div>
-      <div className={css.blockControl}>
-        <input
-          className={css.textField}
+    <Row
+      label={label}
+      description={
+        <>
+          {hint}
+          {failure === null ? null : <span className={own.rowError}>保存失败：{failure}</span>}
+        </>
+      }
+      wideControl
+      data={{ "data-notify-setting": "public_base_url" }}
+    >
+      <span className={own.inline}>
+        <TextInput
+          mono
           aria-label={label}
           placeholder={placeholder}
           value={draft}
@@ -932,9 +1143,9 @@ function SettingTextField({
           onChange={(event) => setDraft(event.currentTarget.value)}
         />
         <Button
-          variant="outline"
+          variant={dirty ? "outline" : "ghost"}
           size="sm"
-          disabled={disabled || saving}
+          disabled={disabled || saving || !dirty}
           onClick={() => {
             setSaving(true);
             setFailure(null);
@@ -947,11 +1158,10 @@ function SettingTextField({
               .finally(() => setSaving(false));
           }}
         >
-          保存
+          {saving ? "保存中…" : "保存"}
         </Button>
-      </div>
-      {failure === null ? null : <p className={css.errorLine}>保存失败：{failure}</p>}
-    </div>
+      </span>
+    </Row>
   );
 }
 
@@ -975,44 +1185,55 @@ function SettingNumberField({
   const [saving, setSaving] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
   React.useEffect(() => setDraft(initial), [initial]);
+  const dirty = draft.trim() !== initial.trim();
   return (
-    <div className={css.block}>
-      <div className={css.rowLabel}>{label}</div>
-      <div className={css.rowHint}>{hint}</div>
-      <div className={css.blockControl}>
-        <input
-          className={css.textField}
-          type="number"
-          aria-label={label}
-          value={draft}
-          disabled={disabled || saving}
-          onChange={(event) => setDraft(event.currentTarget.value)}
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={disabled || saving}
-          onClick={() => {
-            const parsed = Number.parseInt(draft, 10);
-            if (!Number.isFinite(parsed) || parsed <= 0) {
-              setFailure("必须是正整数（分钟）。");
-              return;
-            }
-            setSaving(true);
-            setFailure(null);
-            void apply(parsed)
-              .then((error) => {
-                if (error !== null) return setFailure(error);
-                toast(`${label}已保存`);
-                onSaved();
-              })
-              .finally(() => setSaving(false));
-          }}
-        >
-          保存
-        </Button>
-      </div>
-      {failure === null ? null : <p className={css.errorLine}>保存失败：{failure}</p>}
-    </div>
+    <Row
+      label={label}
+      description={
+        <>
+          {hint}
+          {failure === null ? null : <span className={own.rowError}>保存失败：{failure}</span>}
+        </>
+      }
+      data={{ "data-notify-setting": "digest_interval_min" }}
+    >
+      <span className={own.unitBox}>
+        <UnitInput unit="分钟">
+          <TextInput
+            className={shared.numberInputKit}
+            type="number"
+            aria-label={label}
+            value={draft}
+            placeholder="30"
+            disabled={disabled || saving}
+            onChange={(event) => setDraft(event.currentTarget.value)}
+          />
+        </UnitInput>
+      </span>
+      <Button
+        variant={dirty ? "outline" : "ghost"}
+        size="sm"
+        disabled={disabled || saving || !dirty}
+        onClick={() => {
+          const parsed = Number.parseInt(draft, 10);
+          if (!Number.isFinite(parsed) || parsed <= 0) {
+            setFailure("必须是正整数（分钟）。");
+            return;
+          }
+          setSaving(true);
+          setFailure(null);
+          void apply(parsed)
+            .then((error) => {
+              if (error !== null) return setFailure(error);
+              toast(`${label}已保存`);
+              onSaved();
+            })
+            .finally(() => setSaving(false));
+        }}
+      >
+        {saving ? "保存中…" : "保存"}
+      </Button>
+    </Row>
   );
 }
+

@@ -1,0 +1,175 @@
+/*
+ * 通知推送节在设计 kit 之上的特有小件。骨架（SettingsPage / PageHead / Section / Card /
+ * Row / Metrics / Editor / Field）全部来自 Kit；这里只放：渠道类型字形、行内输入组、
+ * 卡内提示条的内边距、投递记录筛选与分页、多行文本框。
+ * 只用 --dsw-alias-* 颜色、--dsw-radius-* 圆角、0.5px 分隔线、400/500 字重。
+ */
+
+/* 渠道类型字形：32px tile 里的单字或图标。 */
+.glyph {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 停用渠道：名称退到三级灰。 */
+.labelOff {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 行内「输入框 + 保存」组合。 */
+.inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.inline > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.inline > button,
+.saveButton {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.unitBox {
+  flex: 0 0 120px;
+  width: 120px;
+}
+
+/* 行内失败说明。 */
+.rowError {
+  display: block;
+  margin-top: 2px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 卡内、行下方的提示条（测试结果 / 写入失败）。 */
+.cardNotice {
+  padding: 0 16px 12px;
+}
+
+/* 等宽目标地址，一行截断。 */
+.target {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* 元信息里的长文本：限宽截断。 */
+.clip {
+  display: inline-block;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.errorClip {
+  composes: clip;
+  max-width: 300px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 投递记录筛选：两个紧凑下拉。 */
+.filterSelect {
+  width: 132px;
+}
+
+.filterSelect > button {
+  min-width: 0;
+  height: 28px;
+  font-size: 12px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 分页：右对齐、安静。 */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 多行文本：与 kit 输入框同材质。 */
+.textArea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  resize: vertical;
+  transition: border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.textArea::placeholder {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+@media (hover: hover) {
+  .textArea:hover:not(:disabled):not(:focus) {
+    border-color: var(--dsw-alias-border-l3);
+  }
+}
+
+.textArea:focus {
+  outline: none;
+  border-color: var(--dsw-alias-border-selected);
+}
+
+.textArea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mono {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+}
+
+/* 删除确认里被删对象的摘要块。 */
+.targetBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dialogStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

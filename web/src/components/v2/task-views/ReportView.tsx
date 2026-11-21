@@ -5,14 +5,43 @@
  * 旧页面依据：ARTEX/web/src/app/(main)/function/tasks/detail/_tabs/report-tab.tsx:14-90（报告）、
  * retests-tab.tsx:26-168（复测：左侧本任务漏洞分页 + 右侧复测记录）。
  * DSH 依据：DSH 无报告页，按「会话视图 tab 扩展」实现（100-实施计划总表 §4.2）。
+ *
+ * D2 版式：PageHead（复制全文 / 刷新）+ 页内 FilterBar（报告 / 复测记录）→
+ * 报告：「报告正文」Section，Markdown 放进 padded 卡，按舒适的阅读宽度排；
+ * 复测：左栏漏洞选择卡（严重度点 + 标题 + 元信息，底部分页），右栏选中漏洞的概要卡 +
+ * 「复测记录」卡（每次复测一行：状态点 + 状态 + 结论徽标 + 时间，说明/摘要/错误在行下）。
  */
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-import type { Finding, Task } from "@/lib/types";
+import type { Finding, FindingRetest, Task } from "@/lib/types";
 import { toast } from "@/components/v2/settings/Toast";
+import {
+  Badge,
+  Card,
+  Dot,
+  Empty,
+  FilterBar,
+  IconButton,
+  type KitTone,
+  Meta,
+  Notice,
+  Page,
+  PageHead,
+  Row,
+  Section,
+  Skeleton,
+} from "@/components/v2/design/Kit";
 import { Button } from "@/vendor/dsh/primitives/Button";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
+import {
+  IconCheckOutlineRegular,
+  IconChevronLeftOutlineRegular,
+  IconChevronRightOutlineRegular,
+  IconCopyOutlineRegular,
+  IconListPenOutlineRegular,
+  IconRefreshOutlineRegular,
+  IconRightUpOutlineRegular,
+  IconShieldOutlineRegular,
+} from "@/vendor/dsh/primitives/icons/index";
 import { MarkdownText, type MarkdownLabels } from "@/vendor/dsh/primitives/markdown/MarkdownText";
 import { useFindingRetests, findingRetestActive } from "@/v2/data/finding-detail";
 import { findingStatusLabel, formatFindingTime, severityLabel } from "@/v2/data/findings-page";
@@ -44,65 +73,98 @@ function openFindingDetail(id: string): void {
 }
 
 /**
- * 复测状态对应的 Tag 色调。
- * @param status - 复测状态。
- * @returns Tag 的 tone。
+ * 严重度对应的语义色调。
+ * @param severity - 后端严重等级。
+ * @returns kit 色调。
  */
-function retestTone(status: string): "neutral" | "info" | "success" | "warning" | "danger" {
-  if (status === "completed") return "success";
-  if (status === "running") return "info";
-  if (status === "pending") return "neutral";
-  if (status === "failed") return "danger";
-  return "warning";
+function severityTone(severity: string): KitTone {
+  if (severity === "critical") return "danger";
+  if (severity === "high") return "warning";
+  if (severity === "medium") return "info";
+  return "neutral";
+}
+
+/** 复测状态的中文与色调；未知值原样显示。 */
+const RETEST_STATUS: Record<string, { label: string; tone: KitTone }> = {
+  pending: { label: "排队中", tone: "neutral" },
+  running: { label: "进行中", tone: "info" },
+  completed: { label: "已完成", tone: "success" },
+  failed: { label: "失败", tone: "danger" },
+  stopped: { label: "已停止", tone: "warning" },
+};
+
+/** 复测结论的中文与色调。 */
+const RETEST_VERDICT: Record<string, { label: string; tone: KitTone }> = {
+  reproduced: { label: "仍可复现", tone: "danger" },
+  fixed: { label: "已修复", tone: "success" },
+  inconclusive: { label: "无法判定", tone: "neutral" },
+};
+
+/**
+ * 一次复测的显示时间：结束 > 开始 > 创建。
+ * @param row - 复测记录。
+ * @returns 格式化时间。
+ */
+function retestTime(row: FindingRetest): string {
+  return formatFindingTime(row.finished_at ?? row.started_at ?? row.created_at);
 }
 
 /**
- * 右侧复测记录：某个漏洞的复测历史。
+ * 右栏复测记录：某个漏洞的复测历史。
  * @param props.findingId - 漏洞 id。
- * @param props.findingName - 漏洞显示名。
- * @returns 复测记录列表。
+ * @returns 「复测记录」Section。
  */
-function RetestHistory({ findingId, findingName }: { findingId: string; findingName: string }): ReactNode {
+function RetestHistory({ findingId }: { findingId: string }): ReactNode {
   const retests = useFindingRetests(findingId);
-  if (retests.phase === "loading") return <div className={css.state}>加载复测记录…</div>;
-  if (retests.phase === "offline") return <div className={css.state}>复测记录读取失败。</div>;
-  if (retests.items.length === 0) {
-    return (
-      <div className={css.panel}>
-        <div className={css.panelHead}>
-          <span className={css.panelTitle}>{findingName}</span>
-        </div>
-        <p className={css.empty}>这个漏洞还没有复测记录。</p>
-      </div>
-    );
-  }
   return (
-    <div className={css.panel}>
-      <div className={css.panelHead}>
-        <span className={css.panelTitle}>{findingName}</span>
-      </div>
-      <ul className={css.retestList}>
-        {retests.items.map((row) => (
-          <li key={row.id} className={css.retestRow} data-retest-id={row.id} data-status={row.status}>
-            <div className={css.retestHead}>
-              <Tag tone={retestTone(row.status)}>{row.status}</Tag>
-              {findingRetestActive(row) ? <span className={css.live}>进行中</span> : null}
-              <span className={css.retestTime}>
-                {formatFindingTime(row.finished_at ?? row.started_at ?? row.created_at)}
-              </span>
-            </div>
-            {row.notes !== "" ? <p className={css.retestNote}>说明：{row.notes}</p> : null}
-            {row.verdict !== "" ? <p className={css.retestNote}>结论：{row.verdict}</p> : null}
-            {row.summary !== "" ? <p className={css.retestBody}>{row.summary}</p> : null}
-            {row.error !== "" ? (
-              <p className={css.retestError} role="alert">
-                失败：{row.error}
-              </p>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <Section
+      title="复测记录"
+      count={retests.phase === "ready" && retests.items.length > 0 ? `${retests.items.length} 次` : undefined}
+    >
+      {retests.phase === "loading" ? (
+        <Card>
+          <Skeleton label="加载复测记录" />
+        </Card>
+      ) : null}
+      {retests.phase === "offline" ? <Notice tone="danger">复测记录读取失败。</Notice> : null}
+      {retests.phase === "ready" && retests.items.length === 0 ? (
+        <Card>
+          <Empty inCard title="还没有复测记录" text="对这个漏洞发起复测后，每一次的状态、结论和摘要都会按时间列在这里。" />
+        </Card>
+      ) : null}
+      {retests.phase === "ready" && retests.items.length > 0 ? (
+        <Card>
+          {retests.items.map((row) => {
+            const status = RETEST_STATUS[row.status] ?? { label: row.status, tone: "neutral" as KitTone };
+            const verdict = row.verdict === "" ? null : (RETEST_VERDICT[row.verdict] ?? { label: row.verdict, tone: "neutral" as KitTone });
+            const active = findingRetestActive(row);
+            const hasBody = row.notes !== "" || row.summary !== "" || row.error !== "";
+            return (
+              <Row
+                key={row.id}
+                top={hasBody}
+                data={{ "data-retest-id": String(row.id), "data-status": row.status }}
+                lead={<span className={css.retestDot}><Dot tone={status.tone} pulse={active} /></span>}
+                label={status.label}
+                labelAdornment={verdict === null ? null : <Badge tone={verdict.tone}>{verdict.label}</Badge>}
+                description={
+                  <span className={css.retestBody}>
+                    <Meta items={[retestTime(row), active ? <span key="live" className={css.live}>进行中</span> : null, `#${row.id}`]} />
+                    {row.notes !== "" ? <span className={css.retestNote}>说明：{row.notes}</span> : null}
+                    {row.summary !== "" ? <span className={css.retestSummary}>{row.summary}</span> : null}
+                    {row.error !== "" ? (
+                      <span className={css.retestError} role="alert">
+                        失败：{row.error}
+                      </span>
+                    ) : null}
+                  </span>
+                }
+              />
+            );
+          })}
+        </Card>
+      ) : null}
+    </Section>
   );
 }
 
@@ -130,58 +192,98 @@ export function ReportView({ task }: { task: Task }): ReactNode {
       });
   };
 
+  const hasReport = report.phase === "ready" && report.text.trim() !== "";
+  const charCount = hasReport ? report.text.trim().length : 0;
+
   return (
-    <div className={css.wrap} data-report-view="">
-      <div className={css.toolbar}>
-        <SegmentedControl
+    <Page data={{ "data-report-view": "" }}>
+      <div className={css.head}>
+        <PageHead
+          title="报告"
+          lead={
+            pane === "report"
+              ? "agent 汇总产出的 Markdown 报告全文；复测记录里可以逐个漏洞查看每一次复测的结论。"
+              : "按漏洞查看复测历史：左侧选择本任务的漏洞，右侧列出它的每一次复测。"
+          }
+          actions={
+            pane === "report" ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={copied ? <IconCheckOutlineRegular size={14} /> : <IconCopyOutlineRegular size={14} />}
+                  disabled={report.text === ""}
+                  data-report-copy=""
+                  onClick={copy}
+                >
+                  {copied ? "已复制" : "复制全文"}
+                </Button>
+                <IconButton
+                  label="刷新"
+                  spinning={report.phase === "loading"}
+                  onClick={report.reload}
+                  data-report-refresh=""
+                >
+                  <IconRefreshOutlineRegular size={14} />
+                </IconButton>
+              </>
+            ) : undefined
+          }
+        />
+        <FilterBar
           id="report-pane"
           label="报告或复测记录"
           value={pane}
           options={PANE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
           onChange={(next) => setPane(next as Pane)}
         />
-        {pane === "report" ? (
-          <div className={css.toolbarRight}>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={report.text === ""}
-              data-report-copy=""
-              onClick={copy}
-            >
-              {copied ? "已复制" : "复制全文"}
-            </Button>
-            <Button variant="outline" size="sm" onClick={report.reload} data-report-refresh="">
-              刷新
-            </Button>
-          </div>
-        ) : null}
       </div>
 
       {pane === "report" ? (
-        <>
-          {report.phase === "loading" ? <div className={css.state}>加载报告…</div> : null}
+        <Section
+          title="报告正文"
+          count={hasReport ? `${charCount.toLocaleString("zh-CN")} 字` : undefined}
+          hint={hasReport ? "Markdown" : undefined}
+        >
+          {report.phase === "loading" && report.text === "" ? (
+            <Card>
+              <Skeleton label="加载报告" />
+            </Card>
+          ) : null}
           {report.phase === "offline" ? (
-            <div className={css.stateError} role="alert">
-              <span>报告读取失败：{report.error}</span>
-              <Button variant="outline" size="sm" onClick={report.reload}>
-                重试
-              </Button>
-            </div>
+            <Notice
+              tone="danger"
+              action={
+                <Button variant="ghost" size="sm" onClick={report.reload}>
+                  重试
+                </Button>
+              }
+            >
+              报告读取失败：{report.error}
+            </Notice>
           ) : null}
           {report.phase === "ready" && report.text.trim() === "" ? (
-            <p className={css.empty}>这个任务还没有报告。等 agent 产出报告后，这里会显示 Markdown 全文。</p>
+            <Card>
+              <Empty
+                inCard
+                icon={<IconListPenOutlineRegular size={18} />}
+                title="还没有报告"
+                text="等 agent 汇总产出报告后，这里会显示 Markdown 全文，可一键复制。"
+              />
+            </Card>
           ) : null}
-          {report.phase === "ready" && report.text.trim() !== "" ? (
-            <div className={css.markdownBox} data-report-body="">
-              <MarkdownText text={report.text} labels={MD_LABELS} />
-            </div>
+          {hasReport ? (
+            <Card padded className={css.reportCard} data={{ "data-report-body": "" }}>
+              <div className={css.markdown}>
+                <MarkdownText text={report.text} labels={MD_LABELS} />
+              </div>
+            </Card>
           ) : null}
-        </>
+        </Section>
       ) : (
         <RetestsPane taskId={task.id} />
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -210,83 +312,129 @@ function RetestsPane({ taskId }: { taskId: string }): ReactNode {
     [findings.items, selectedId],
   );
 
-  if (findings.phase === "loading") return <div className={css.state}>加载本任务漏洞…</div>;
+  if (findings.phase === "loading") {
+    return (
+      <Section title="本任务漏洞">
+        <Card>
+          <Skeleton label="加载本任务漏洞" />
+        </Card>
+      </Section>
+    );
+  }
   if (findings.phase === "offline") {
     return (
-      <div className={css.stateError} role="alert">
-        <span>漏洞读取失败：{findings.error}</span>
-        <Button variant="outline" size="sm" onClick={findings.reload}>
-          重试
-        </Button>
-      </div>
+      <Notice
+        tone="danger"
+        action={
+          <Button variant="ghost" size="sm" onClick={findings.reload}>
+            重试
+          </Button>
+        }
+      >
+        漏洞读取失败：{findings.error}
+      </Notice>
     );
   }
   if (findings.total === 0) {
-    return <p className={css.empty}>本任务还没有漏洞。发现漏洞后，可以在这里查看复测记录。</p>;
+    return (
+      <Card>
+        <Empty
+          icon={<IconShieldOutlineRegular size={18} />}
+          title="本任务还没有漏洞"
+          text="发现漏洞并发起复测后，可以在这里按漏洞查看每一次复测的状态与结论。"
+        />
+      </Card>
+    );
   }
 
   return (
     <div className={css.retestsGrid}>
-      <div className={css.listPane}>
-        <div className={css.listHead}>选择漏洞 · {findings.total}</div>
-        <ul className={css.findingsList}>
-          {findings.items.map((row: Finding) => (
-            <li key={row.id}>
-              <button
-                type="button"
-                className={css.findingRow}
-                aria-pressed={row.id === selectedId}
-                data-finding-row={row.id}
-                onClick={() => setSelectedId(row.id)}
+      <Section title="选择漏洞" count={findings.total}>
+        <Card className={css.pickCard}>
+          <ul className={css.pickList}>
+            {findings.items.map((row: Finding) => {
+              const on = row.id === selectedId;
+              return (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    className={css.pick}
+                    aria-pressed={on}
+                    data-finding-row={row.id}
+                    onClick={() => setSelectedId(row.id)}
+                  >
+                    <span className={css.pickDot}>
+                      <Dot tone={severityTone(row.severity)} />
+                    </span>
+                    <span className={css.pickText}>
+                      <span className={css.pickTitle} title={findingLabel(row)}>
+                        {findingLabel(row)}
+                      </span>
+                      <Meta items={[severityLabel(row.severity), findingStatusLabel(row.status)]} />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {pageCount > 1 ? (
+            <div className={css.pager}>
+              <span className={css.pageInfo}>
+                {page} / {pageCount}
+              </span>
+              <IconButton
+                label="上一页漏洞"
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
               >
-                <span className={css.findingTitle}>{findingLabel(row)}</span>
-                <span className={css.findingMeta}>
-                  <Tag tone="outline">{severityLabel(row.severity)}</Tag>
-                  <Tag tone="outline">{findingStatusLabel(row.status)}</Tag>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        {pageCount > 1 ? (
-          <div className={css.pager}>
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label="上一页漏洞"
-              disabled={page <= 1}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-            >
-              上一页
-            </Button>
-            <span className={css.pageInfo}>
-              第 {page} / {pageCount} 页
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label="下一页漏洞"
-              disabled={page >= pageCount}
-              onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
-            >
-              下一页
-            </Button>
-          </div>
-        ) : null}
-      </div>
-      <div className={css.detailPane}>
+                <IconChevronLeftOutlineRegular size={14} />
+              </IconButton>
+              <IconButton
+                label="下一页漏洞"
+                disabled={page >= pageCount}
+                onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+              >
+                <IconChevronRightOutlineRegular size={14} />
+              </IconButton>
+            </div>
+          ) : null}
+        </Card>
+      </Section>
+
+      <div className={css.detailCol}>
         {selected === null ? (
-          <p className={css.empty}>选择左侧的一个漏洞查看复测记录。</p>
+          <Card>
+            <Empty inCard title="选择一个漏洞" text="在左侧选择漏洞，查看它的复测记录。" />
+          </Card>
         ) : (
           <>
-            <div className={css.detailHead}>
-              <span className={css.detailTitle}>{findingLabel(selected)}</span>
-              <Button variant="outline" size="sm" data-finding-open="" onClick={() => openFindingDetail(selected.id)}>
-                打开漏洞详情
-              </Button>
-            </div>
-            {selected.summary !== "" ? <p className={css.detailSummary}>{selected.summary}</p> : null}
-            <RetestHistory findingId={selected.id} findingName={findingLabel(selected)} />
+            <Section title="漏洞">
+              <Card>
+                <Row
+                  top={selected.summary !== ""}
+                  lead={<span className={css.retestDot}><Dot tone={severityTone(selected.severity)} /></span>}
+                  label={<span title={findingLabel(selected)}>{findingLabel(selected)}</span>}
+                  labelAdornment={<Badge tone={severityTone(selected.severity)}>{severityLabel(selected.severity)}</Badge>}
+                  description={
+                    <span className={css.retestBody}>
+                      <Meta items={[findingStatusLabel(selected.status), selected.ts === "" ? null : formatFindingTime(selected.ts)]} />
+                      {selected.summary !== "" ? <span className={css.findingSummary}>{selected.summary}</span> : null}
+                    </span>
+                  }
+                >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<IconRightUpOutlineRegular size={14} />}
+                    data-finding-open=""
+                    onClick={() => openFindingDetail(selected.id)}
+                  >
+                    打开详情
+                  </Button>
+                </Row>
+              </Card>
+            </Section>
+            <RetestHistory findingId={selected.id} />
           </>
         )}
       </div>

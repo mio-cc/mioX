@@ -236,8 +236,10 @@ func (s *Server) startAdmittedTask(t *Task, mode string) {
 		if s.engine.IsPaused(t.ID) {
 			s.engine.Resume(t)
 		}
+		s.engine.SetBootstrapping(t.ID, true)
 		go func() {
 			defer s.engine.decInflight(t.ID)
+			defer s.engine.SetBootstrapping(t.ID, false)
 			s.startTaskEngine(t)
 		}()
 		return
@@ -372,6 +374,15 @@ func (s *Server) createGoals(ctx context.Context, t *Task, emit func(db.Activity
 	if t == nil {
 		return nil
 	}
+	return s.createGoalsFor(ctx, t, t.Goal, emit)
+}
+
+// createGoalsFor is createGoals on an explicit goal text: the bootstrap path passes
+// the task's static goal, `/goal <objective>` (G-1) passes the operator objective.
+func (s *Server) createGoalsFor(ctx context.Context, t *Task, goalText string, emit func(db.Activity)) []goalSpec {
+	if t == nil {
+		return nil
+	}
 	// Use the SAME LLM the task runs on (its pinned profile, else the active profile),
 	// NOT agent.FromEnv() — the LLM is configured via the UI (DB profile), not env vars,
 	// so FromEnv returned empty and every task silently fell back to the crude rule
@@ -384,7 +395,7 @@ func (s *Server) createGoals(ctx context.Context, t *Task, emit func(db.Activity
 	taskID, _ := strconv.ParseInt(t.ID, 10, 64)
 	s.engine.BeginLLMCall(t.ID)
 	goalRuntime := s.agentsForTask(t).runtime
-	decomposed := agent.DecomposeGoalsWithProvider(ctx, goalRuntime, s.m.dir, t.Goal, t.Description, as, t.Store, taskID, goalRuntime.nonStreaming(), goalRuntime.maxTokens(), emit)
+	decomposed := agent.DecomposeGoalsWithProvider(ctx, goalRuntime, s.m.dir, goalText, t.Description, as, t.Store, taskID, goalRuntime.nonStreaming(), goalRuntime.maxTokens(), emit)
 	s.engine.EndLLMCall(t.ID)
 	for _, g := range decomposed {
 		if strings.TrimSpace(g.Text) != "" {
@@ -395,7 +406,7 @@ func (s *Server) createGoals(ctx context.Context, t *Task, emit func(db.Activity
 		// No decomposed goals (LLM error / no provider): use the raw task goal verbatim
 		// as a single goal so the task still has something to judge against. This is the
 		// only path that writes here — decomposed goals are already persisted by the tool.
-		if g := strings.TrimSpace(t.Goal); g != "" {
+		if g := strings.TrimSpace(goalText); g != "" {
 			log.Printf("[goals] task %s: LLM 目标拆解无产出，回退为「原始目标作为单目标」", t.ID)
 			origin, _ := t.Store.OriginFactID()
 			id, _ := t.Store.AddNode(db.KindGoal, map[string]any{"text": g}, 0, "open", "system", nil)

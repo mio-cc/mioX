@@ -908,12 +908,48 @@ func (m *Manager) CreateTaskWithOptions(description, goal string, opts pgdb.Task
 	if err != nil {
 		return nil, err
 	}
+	m.quarantineStaleTranscripts(pt.ExplorationID)
 	t := taskFromPG(pt, m.pg.Exploration(pt.ExplorationID), m.interceptor)
 	m.mu.Lock()
 	m.tasks[t.ID] = t
 	m.active = t.ID
 	m.mu.Unlock()
 	return t, nil
+}
+
+// quarantineStaleTranscripts moves transcript files left over from an earlier
+// database that used the same exploration id. A brand-new exploration has no
+// history, but after a DB reset the ids restart and transcripts/exp<id>-*.jsonl
+// from the old run were silently loaded as the new task's conversation (task 270
+// on 2026-11-21 inherited a 5-day-old "一句话确认在线" prompt). Files are moved to
+// transcripts/.stale/, never deleted.
+func (m *Manager) quarantineStaleTranscripts(explorationID int64) {
+	if m.dir == "" {
+		return
+	}
+	dir := filepath.Join(m.dir, "transcripts")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	prefix := fmt.Sprintf("exp%d-", explorationID)
+	staleDir := filepath.Join(dir, ".stale")
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		if err := os.MkdirAll(staleDir, 0o700); err != nil {
+			log.Printf("[transcript] 无法创建 %s: %v", staleDir, err)
+			return
+		}
+		dst := filepath.Join(staleDir, fmt.Sprintf("%s.%d", name, time.Now().UnixNano()))
+		if err := os.Rename(filepath.Join(dir, name), dst); err != nil {
+			log.Printf("[transcript] 新探索 %d 的遗留记录 %s 移走失败: %v", explorationID, name, err)
+			continue
+		}
+		log.Printf("[transcript] 新探索 %d 发现遗留记录 %s（旧库同 id），已移到 .stale/", explorationID, name)
+	}
 }
 
 // RenameTaskCategory persists a category name and refreshes every live task DTO

@@ -46,13 +46,15 @@ export interface GoalActionResult {
   readonly error?: { readonly code: string; readonly message: string };
 }
 
-/** The four mutations a present goal offers (creation belongs to the `/goal` command). */
+/** The mutations a present goal offers (creation belongs to the `/goal` command). */
 export interface GoalActions {
   /** Save an edited objective; `revision` comes from the loaded snapshot (CAS). */
   edit(objective: string): Promise<GoalActionResult>;
   pause(): Promise<GoalActionResult>;
   resume(): Promise<GoalActionResult>;
   clear(): Promise<GoalActionResult>;
+  /** Mark achieved by hand (D5 G-3). */
+  complete(): Promise<GoalActionResult>;
 }
 
 export interface TaskGoalState {
@@ -105,6 +107,11 @@ export function resumeTaskGoal(taskId: string): Promise<GoalSnapshot | null> {
 /** Delete the goal; the next read answers `null` and the strip disappears. */
 export function clearTaskGoal(taskId: string): Promise<{ ok: boolean; cleared: boolean }> {
   return api.clearTaskGoal(taskId);
+}
+
+/** Mark the goal achieved by hand (`phase=complete`, D5 G-3). */
+export function completeTaskGoal(taskId: string): Promise<GoalSnapshot | null> {
+  return api.completeTaskGoal(taskId);
 }
 
 /** Backend errors are plain `Error`s: the message is the server's text, sometimes `METHOD path: status`. */
@@ -226,6 +233,7 @@ export function useTaskGoal(taskId: string | null): TaskGoalState {
         await clearTaskGoal(id);
         return null;
       }),
+    complete: () => run((id) => completeTaskGoal(id)),
   };
 
   return { phase, goal, error, reload, actions };

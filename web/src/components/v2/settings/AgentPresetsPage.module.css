@@ -1,0 +1,414 @@
+/*
+ * Agent 预设节（列表 + 编辑器 + 触发器）在设计 kit 之上的特有小件。
+ * 骨架（SettingsPage / PageHead / Section / Card / Row / Editor / Field / FilterBar）全部来自 Kit；
+ * 这里只放：字母 tile 字形、行摘要、卡内提示条、编辑分区面板、变量 chip、代码块（预览 / 版本 / 对比）、
+ * 触发器子编辑器、工具多选网格、删除确认摘要块。
+ * 只用 --dsw-alias-* 颜色、--dsw-radius-* 圆角、0.5px 分隔线、400/500 字重。
+ */
+
+/* ---------------- 列表行 ---------------- */
+
+/* 32px tile 里的首字。 */
+.glyph {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 行说明：一行描述 + 一行元信息。 */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.summaryText {
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summaryEmpty {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+.mono {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 行尾：⋯ 菜单 + 展开箭头。 */
+.rowTrail {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.chevron svg {
+  transition: transform var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.chevronOpen svg {
+  transform: rotate(90deg);
+}
+
+/* 卡内、行下方的提示条（删除确认 / 写入失败）。 */
+.cardNotice {
+  padding: 0 12px 12px;
+}
+
+.noticeActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------------- 编辑器 ---------------- */
+
+/* 基本信息：Facts 已在填充模块里，去掉它自带的内边距。 */
+.basics {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.basics [data-kit-facts] {
+  padding: 0;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+/* 编辑组标题：标题 + 计数 + 右侧动作。 */
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 24px;
+}
+
+.groupCount {
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.groupHeadEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-weight: 400;
+}
+
+/* 接口数据驱动的编辑区：接在「基本信息」组之后，自带一条与 EditorGroup 相同的分隔线。 */
+.chain {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding-top: 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* 面板内的小标题：12px/500 二级灰 + 计数 + 右侧动作。 */
+.subHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.subBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* 分区切换条下方的面板。 */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+/* 选项小卡里的行：与 Models 编辑器同节奏。 */
+.optionRows > [data-kit-row] {
+  min-height: 48px;
+  padding: 8px 14px;
+}
+
+/* 系统提示词编辑区：等宽大文本框。 */
+textarea.prompt {
+  min-height: 280px;
+  font-size: 12px;
+  line-height: 20px;
+  tab-size: 2;
+}
+
+textarea.short {
+  min-height: 64px;
+}
+
+textarea.medium {
+  min-height: 144px;
+}
+
+/* 长描述：两行截断。 */
+.clamp2 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* 只读描述段落。 */
+.descText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* 数字框不需要撑满一整列。 */
+.narrow {
+  max-width: 200px;
+}
+
+/* 变量 chip：点击插入占位符。 */
+.vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.varChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+  transition:
+    color var(--ds-transition-duration-fast) var(--ds-ease-in-out),
+    border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+@media (hover: hover) {
+  .varChip:hover:not(:disabled) {
+    border-color: var(--dsw-alias-border-l3);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.varChip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.varSource {
+  font-family: var(--dsw-font-family);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 代码块：渲染预览 / 版本正文 / 版本对比 / 内置默认。 */
+.code {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.codeHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 6px 4px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.codeTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codeBody {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 10px 12px;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.codeError {
+  padding: 8px 12px 0;
+}
+
+.diffLine {
+  display: block;
+  min-height: 18px;
+}
+
+.diffAdd {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.diffDel {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 版本号：等宽、主色。 */
+.version {
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+}
+
+/* ---------------- 触发器 ---------------- */
+
+/* 新建 / 编辑触发器的子编辑器：嵌在填充模块里的 layer-1 小卡。 */
+.subEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.subEditorTitle {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 六种触发条件：每条 = 一行开关 + 打开后的字段。 */
+.conds {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cond + .cond {
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.cond > [data-kit-row] {
+  min-height: 44px;
+  padding: 8px 0;
+}
+
+.condBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 12px;
+}
+
+/* 工具多选：两列可滚网格。 */
+.pick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+  max-height: 200px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.pickItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+}
+
+.pickDesc {
+  overflow: hidden;
+  padding-left: 24px;
+  font-family: var(--dsw-font-family);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 删除确认里被删对象的摘要块。 */
+.targetBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dialogStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

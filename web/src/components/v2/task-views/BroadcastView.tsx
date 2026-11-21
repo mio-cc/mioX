@@ -5,6 +5,10 @@
  * 旧页面依据：ARTEX/web/src/app/(main)/function/tasks/detail/_tabs/broadcast-tab.tsx（整页：过滤条、时间轴行、展开看上下游与 payload、分页 20/50/100、8 秒轮询）。
  * DSH 依据：DSH 无播报板；按「会话视图 tab 扩展」实现（100-实施计划总表 §4.2），分页条照抄 `components/v2/data-pages/AssetPager.tsx`。
  * 接口：`api.explorationNodes(task, query)`（api.ts:797）→ `{ items, total, page, size, edges, refs, assets }`（types.ts:441）。
+ *
+ * D2 版式：PageHead（实时开关 + 刷新）→ 筛选区（搜索、种类多选、排序；15 个状态收进一行可展开的「状态筛选」）
+ * → 时间线：按日期分组，每组一张卡，条目是可展开的行（时间 / 种类 / 摘要 + #id·优先级·来源 / 状态）
+ * → 底部分页条。数据、轮询与筛选行为不变。
  */
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
@@ -12,14 +16,30 @@ import { useDebouncedValue } from "@/components/v2/data-pages/use-debounced-valu
 import type { Edge, ExploreKind, Task, TaskNode } from "@/lib/types";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Input } from "@/vendor/dsh/primitives/Input";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
+import {
+  Badge,
+  Card,
+  Dot,
+  Empty,
+  FilterBar,
+  FilterSep,
+  Facts,
+  IconButton,
+  kit,
+  Meta,
+  Notice,
+  Page,
+  PageHead,
+  Section,
+  Skeleton,
+  type KitTone,
+} from "@/components/v2/design/Kit";
 import {
   IconChevronDownOutlineRegular,
   IconChevronLeftOutlineRegular,
   IconChevronRightOutlineRegular,
-  IconChevronRightOutlineRegular as IconRowChevron,
   IconChevronUpOutlineRegular,
+  IconClockOutlineRegular,
   IconRefreshOutlineRegular,
   IconSearchOutlineRegular,
 } from "@/vendor/dsh/primitives/icons/index";
@@ -61,12 +81,25 @@ const ORDER_OPTIONS: readonly { value: OrderValue; label: string }[] = [
 ];
 
 /**
- * Tag 色调（状态取值见 `types.ts:420-423`）。
+ * 状态的 kit 色调（状态取值见 `types.ts:420-423`；旧 Tag 的 outline 归为中性）。
  * @param state - 后端状态。
- * @returns Tag 的 tone。
+ * @returns Badge 色调。
  */
-function stateTone(state: string): "neutral" | "info" | "success" | "warning" | "danger" | "outline" {
-  return exploreStateTone(state);
+function stateTone(state: string): KitTone {
+  const tone = exploreStateTone(state);
+  return tone === "outline" ? "neutral" : tone;
+}
+
+/**
+ * 种类的 kit 色调：漏洞醒目、意图/目标用强调色，其余中性。
+ * @param kind - 节点类型。
+ * @returns Badge 色调。
+ */
+function kindTone(kind: string): KitTone {
+  if (kind === "finding") return "danger";
+  if (kind === "intent") return "info";
+  if (kind === "goal") return "done";
+  return "neutral";
 }
 
 /**
@@ -104,17 +137,17 @@ function NodeDetail({
     if (rows.length === 0) return null;
     return (
       <div className={css.relBlock}>
-        <span className={css.relTitle}>{title}</span>
+        <span className={css.label}>{title}</span>
         <ul className={css.relList}>
           {rows.map((row) => (
             <li key={`${row.rel}-${row.id}`} className={css.relRow} data-broadcast-rel-id={row.id}>
-              <Tag tone="quiet">{broadcastRelLabel(row.rel)}</Tag>
+              <span className={css.relName}>{broadcastRelLabel(row.rel)}</span>
               {row.node === null ? (
-                <span className={css.muted}>节点 #{row.id}</span>
+                <span className={kit.muted}>节点 #{row.id}</span>
               ) : (
                 <>
-                  <Tag tone="outline">{exploreKindLabel(row.node.type)}</Tag>
-                  <span className={css.relTitleText} title={explorationNodeTitle(row.node)}>
+                  <Badge tone={kindTone(row.node.type)}>{exploreKindLabel(row.node.type)}</Badge>
+                  <span className={css.relTitle} title={explorationNodeTitle(row.node)}>
                     {explorationNodeTitle(row.node)}
                   </span>
                 </>
@@ -128,24 +161,35 @@ function NodeDetail({
 
   return (
     <div className={css.detail} data-broadcast-detail={node.id}>
-      <div className={css.detailMeta}>
-        <span>节点 #{node.id}</span>
-        <span>类型 {exploreKindLabel(node.type)}</span>
-        <span>来源 {node.origin === "" ? "system" : node.origin}</span>
-        <span>{node.ts === "" ? "无时间" : new Date(node.ts).toLocaleString("zh-CN")}</span>
-        {node.source_task_id === undefined || node.source_task_id === "" ? null : (
-          <span>来自任务 {node.source_task_id}</span>
-        )}
-        {node.inherited === true ? <Tag tone="neutral">继承</Tag> : null}
-      </div>
+      <Card quiet>
+        <Facts
+          items={[
+            { key: "id", label: "节点", value: `#${node.id}`, mono: true },
+            { key: "type", label: "类型", value: exploreKindLabel(node.type) },
+            { key: "origin", label: "来源", value: node.origin === "" ? "system" : node.origin, mono: true },
+            { key: "ts", label: "时间", value: node.ts === "" ? "无时间" : new Date(node.ts).toLocaleString("zh-CN") },
+            ...(node.source_task_id === undefined || node.source_task_id === ""
+              ? []
+              : [
+                  {
+                    key: "src",
+                    label: "来自任务",
+                    value: (
+                      <span className={css.inline}>
+                        {node.source_task_id}
+                        {node.inherited === true ? <Badge>继承</Badge> : null}
+                      </span>
+                    ),
+                  },
+                ]),
+          ]}
+        />
+      </Card>
       {node.state === "deleted" && node.delete_reason !== undefined && node.delete_reason !== "" ? (
-        <div className={css.deleteReason}>
-          <span className={css.deleteLabel}>删除原因</span>
-          <span>{node.delete_reason}</span>
-        </div>
+        <Notice tone="warning">删除原因：{node.delete_reason}</Notice>
       ) : null}
       {upstream.length === 0 && downstream.length === 0 ? (
-        <span className={css.muted}>本页没有与这条播报相关的边。</span>
+        <span className={css.note}>本页没有与这条播报相关的边。</span>
       ) : (
         <div className={css.relWrap}>
           {renderRows("上游 · 由此而来", upstream)}
@@ -153,7 +197,7 @@ function NodeDetail({
         </div>
       )}
       <div className={css.payloadBlock}>
-        <span className={css.relTitle}>payload</span>
+        <span className={css.label}>payload</span>
         <pre className={css.payload}>{prettyPayload(node.payload)}</pre>
       </div>
     </div>
@@ -168,6 +212,7 @@ function NodeDetail({
 export function BroadcastView({ task }: { task: Task }): ReactNode {
   const [kinds, setKinds] = useState<readonly ExploreKind[]>([]);
   const [states, setStates] = useState<readonly string[]>([]);
+  const [statesOpen, setStatesOpen] = useState(false);
   const [queryInput, setQueryInput] = useState("");
   const [order, setOrder] = useState<OrderValue>("desc");
   const [page, setPage] = useState(1);
@@ -214,39 +259,54 @@ export function BroadcastView({ task }: { task: Task }): ReactNode {
     setOrder("desc");
   };
 
+  const stateSummary =
+    states.length === 0
+      ? "全部状态"
+      : BROADCAST_STATE_OPTIONS.filter((option) => states.includes(option.value))
+          .map((option) => option.label)
+          .join("、");
+
   return (
-    <div className={css.wrap} data-broadcast-view="">
-      <div className={css.toolbar}>
-        <Input
-          value={queryInput}
-          placeholder="搜索内容 / 来源 / 节点 id"
-          aria-label="搜索播报"
-          icon={<IconSearchOutlineRegular size={14} />}
-          data-broadcast-search=""
-          onChange={(event) => {
-            setQueryInput(event.target.value);
-            setPage(1);
-          }}
-        />
-        <div className={css.chipGroup}>
-          {KIND_FILTERS.map((kind) => {
-            const active = kinds.includes(kind);
-            return (
-              <Button
-                key={kind}
-                variant={active ? "primary" : "ghost"}
-                size="sm"
-                aria-pressed={active}
-                data-broadcast-kind={kind}
-                onClick={() => toggleKind(kind)}
-              >
-                {exploreKindLabel(kind)}
-              </Button>
-            );
-          })}
-        </div>
-        <div className={css.toolbarRight}>
-          <SegmentedControl
+    <Page data={{ "data-broadcast-view": "" }}>
+      <PageHead
+        title="播报"
+        lead="Agent 在探索中产生的目标、意图、事实与漏洞，按时间排成一条时间线；点开一条看上下游与原始 payload。"
+        actions={
+          <>
+            <button
+              type="button"
+              className={css.liveToggle}
+              aria-pressed={live}
+              aria-label={live ? "暂停自动刷新" : "恢复自动刷新"}
+              title={live ? "每 8 秒刷新一次（页面不可见时暂停）" : "恢复自动刷新"}
+              data-broadcast-live={live ? "on" : "off"}
+              onClick={() => setLive((value) => !value)}
+            >
+              <Dot tone={live ? "success" : "neutral"} pulse={live} />
+              {live ? "实时" : "已暂停"}
+            </button>
+            <IconButton label="刷新" spinning={state.phase === "loading"} data-broadcast-refresh="" onClick={state.reload}>
+              <IconRefreshOutlineRegular size={14} />
+            </IconButton>
+          </>
+        }
+      />
+
+      <div className={css.filters}>
+        <div className={css.filterTop}>
+          <Input
+            className={css.search}
+            value={queryInput}
+            placeholder="搜索内容 / 来源 / 节点 id"
+            aria-label="搜索播报"
+            icon={<IconSearchOutlineRegular size={14} />}
+            data-broadcast-search=""
+            onChange={(event) => {
+              setQueryInput(event.target.value);
+              setPage(1);
+            }}
+          />
+          <FilterBar
             id="broadcast-order"
             label="播报排序"
             value={order}
@@ -256,148 +316,186 @@ export function BroadcastView({ task }: { task: Task }): ReactNode {
               setPage(1);
             }}
           />
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label={live ? "暂停自动刷新" : "恢复自动刷新"}
-            title={live ? "每 8 秒刷新一次（页面不可见时暂停）" : "恢复自动刷新"}
-            data-broadcast-live={live ? "on" : "off"}
-            onClick={() => setLive((value) => !value)}
-          >
-            {live ? "自动刷新" : "已暂停"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            icon={<IconRefreshOutlineRegular size={13} />}
-            data-broadcast-refresh=""
-            onClick={state.reload}
-          >
-            刷新
-          </Button>
         </div>
-      </div>
 
-      <div className={css.filterLine}>
-        <span className={css.filterLabel}>状态</span>
-        <div className={css.chipGroup}>
-          {BROADCAST_STATE_OPTIONS.map((option) => {
-            const active = states.includes(option.value);
-            return (
-              <Button
-                key={option.value}
-                variant={active ? "primary" : "ghost"}
-                size="sm"
-                aria-pressed={active}
-                data-broadcast-state={option.value}
-                onClick={() => toggleState(option.value)}
-              >
-                {option.label}
-              </Button>
-            );
-          })}
-        </div>
-        {filtered ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            data-broadcast-clear=""
-            onClick={() => {
-              setKinds([]);
-              setStates([]);
-              setQueryInput("");
-              setPage(1);
-            }}
+        <div className={css.filterLine}>
+          <div className={kit.filterBar} role="group" aria-label="播报种类" data-kit-filter-toggles="">
+            {KIND_FILTERS.map((kind) => {
+              const active = kinds.includes(kind);
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={active}
+                  className={active ? `${kit.filter} ${kit.filterActive}` : kit.filter}
+                  data-broadcast-kind={kind}
+                  onClick={() => toggleKind(kind)}
+                >
+                  {exploreKindLabel(kind)}
+                </button>
+              );
+            })}
+          </div>
+          <FilterSep />
+          <button
+            type="button"
+            className={states.length > 0 ? `${kit.filter} ${kit.filterActive}` : kit.filter}
+            aria-expanded={statesOpen}
+            aria-controls="broadcast-state-panel"
+            data-broadcast-state-toggle=""
+            onClick={() => setStatesOpen((value) => !value)}
           >
-            清除筛选
-          </Button>
-        ) : null}
+            <span className={css.stateSummary}>{states.length === 0 ? "状态" : stateSummary}</span>
+            {states.length === 0 ? null : <span className={kit.filterCount}>{states.length}</span>}
+            {statesOpen ? <IconChevronUpOutlineRegular size={12} /> : <IconChevronDownOutlineRegular size={12} />}
+          </button>
+          {filtered ? (
+            <button
+              type="button"
+              className={css.clear}
+              data-broadcast-clear=""
+              onClick={() => {
+                setKinds([]);
+                setStates([]);
+                setQueryInput("");
+                setPage(1);
+              }}
+            >
+              清除筛选
+            </button>
+          ) : null}
+        </div>
+
+        {/* 状态档位常驻 DOM（折叠时 hidden），保留每项的 data-broadcast-state 钩子。 */}
+        <div id="broadcast-state-panel" className={css.statePanel} hidden={!statesOpen}>
+          <div className={css.stateGrid} role="group" aria-label="按状态筛选">
+            {BROADCAST_STATE_OPTIONS.map((option) => {
+              const active = states.includes(option.value);
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  className={active ? `${kit.filter} ${kit.filterActive}` : kit.filter}
+                  data-broadcast-state={option.value}
+                  onClick={() => toggleState(option.value)}
+                >
+                  <Dot tone={stateTone(option.value)} />
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {!fresh.atLive && fresh.pending > 0 ? (
-        <div className={css.pendingLine}>
-          <Button variant="ghost" size="sm" icon={<IconChevronUpOutlineRegular size={13} />} onClick={backToLive}>
-            {fresh.pending > 99 ? "99+" : fresh.pending} 条新播报 · 回到最新
-          </Button>
-        </div>
+        <button type="button" className={css.pending} onClick={backToLive}>
+          <IconChevronUpOutlineRegular size={13} />
+          {fresh.pending > 99 ? "99+" : fresh.pending} 条新播报 · 回到最新
+        </button>
       ) : null}
 
-      {state.phase === "loading" ? <div className={css.state}>加载播报…</div> : null}
+      {state.phase === "loading" ? (
+        <Card>
+          <Skeleton label="加载播报" />
+        </Card>
+      ) : null}
 
       {state.phase === "offline" ? (
-        <div className={css.stateError} role="alert">
-          <span>播报读取失败：{state.error}</span>
-          <Button variant="outline" size="sm" onClick={state.reload}>
-            重试
-          </Button>
-        </div>
+        <Notice
+          tone="danger"
+          action={
+            <Button variant="ghost" size="sm" onClick={state.reload}>
+              重试
+            </Button>
+          }
+        >
+          播报读取失败：{state.error}
+        </Notice>
       ) : null}
 
       {state.phase === "ready" && total === 0 ? (
-        <p className={css.empty}>
-          {filtered ? "没有符合条件的播报。" : "这个任务还没有产生探索节点。"}
-        </p>
+        <Card>
+          <Empty
+            inCard
+            icon={filtered ? <IconSearchOutlineRegular size={18} /> : <IconClockOutlineRegular size={18} />}
+            title={filtered ? "没有符合条件的播报" : "还没有播报"}
+            text={filtered ? "放宽种类或状态，或换个关键词。" : "这个任务还没有产生探索节点；Agent 开始探索后会实时出现在这里。"}
+          />
+        </Card>
       ) : null}
 
       {state.phase === "ready" && rowCount > 0
         ? groups.map((group) => (
-            <section key={group.day} className={css.group}>
-              <div className={css.groupDay}>{group.day}</div>
-              <ul className={css.list}>
+            <Section key={group.day} title={group.day} count={group.rows.length}>
+              <Card className={css.timeline}>
                 {group.rows.map((node) => {
                   const time = broadcastTime(node.ts);
                   const open = openId === node.id;
                   const isFresh = fresh.freshIds.has(node.id);
+                  const title = explorationNodeTitle(node);
                   return (
-                    <li
+                    <div
                       key={node.id}
-                      className={isFresh ? `${css.row} ${css.rowFresh}` : css.row}
+                      className={isFresh ? `${css.item} ${css.itemFresh}` : css.item}
                       data-broadcast-node={node.id}
                       data-broadcast-fresh={isFresh ? "" : undefined}
+                      data-open={open ? "true" : undefined}
                     >
-                      <div className={css.timeCol}>
+                      <button
+                        type="button"
+                        className={css.head}
+                        aria-expanded={open}
+                        data-broadcast-toggle={node.id}
+                        onClick={() => setOpenId(open ? null : node.id)}
+                      >
                         <span className={css.clock} title={node.ts}>
                           {time.clock}
                         </span>
-                      </div>
-                      <div className={css.mainCol}>
-                        <button
-                          type="button"
-                          className={css.head}
-                          aria-expanded={open}
-                          data-broadcast-toggle={node.id}
-                          onClick={() => setOpenId(open ? null : node.id)}
-                        >
-                          {open ? (
-                            <IconChevronDownOutlineRegular size={13} className={css.caret} />
-                          ) : (
-                            <IconRowChevron size={13} className={css.caret} />
-                          )}
-                          <Tag tone="outline">{exploreKindLabel(node.type)}</Tag>
-                          <span className={css.nodeId}>#{node.id}</span>
-                          <Tag tone={stateTone(node.state)}>{exploreStateLabel(node.state)}</Tag>
-                          <span className={css.priority} title="优先级（0–10）">
-                            P{node.priority}
+                        <span className={css.kind}>
+                          <Badge tone={kindTone(node.type)}>{exploreKindLabel(node.type)}</Badge>
+                        </span>
+                        <span className={css.body}>
+                          <span className={css.title} title={title}>
+                            {title}
                           </span>
-                          {isFresh ? <Tag tone="info">新</Tag> : null}
-                          <span className={css.title} title={explorationNodeTitle(node)}>
-                            {explorationNodeTitle(node)}
-                          </span>
-                          <span className={css.origin}>{node.origin === "" ? "system" : node.origin}</span>
-                        </button>
-                        {open ? <NodeDetail node={node} edges={state.data?.edges ?? []} index={index} /> : null}
-                      </div>
-                    </li>
+                          <Meta
+                            items={[
+                              <span key="id" className={kit.mono}>
+                                #{node.id}
+                              </span>,
+                              <span key="p" title="优先级（0–10）">
+                                P{node.priority}
+                              </span>,
+                              node.origin === "" ? "system" : node.origin,
+                              isFresh ? (
+                                <span key="new" className={css.freshMark}>
+                                  新
+                                </span>
+                              ) : null,
+                            ]}
+                          />
+                        </span>
+                        <span className={css.state}>
+                          <Badge tone={stateTone(node.state)}>{exploreStateLabel(node.state)}</Badge>
+                        </span>
+                        <span className={css.caret} aria-hidden="true">
+                          {open ? <IconChevronDownOutlineRegular size={14} /> : <IconChevronRightOutlineRegular size={14} />}
+                        </span>
+                      </button>
+                      {open ? <NodeDetail node={node} edges={state.data?.edges ?? []} index={index} /> : null}
+                    </div>
                   );
                 })}
-              </ul>
-            </section>
+              </Card>
+            </Section>
           ))
         : null}
 
       {state.phase === "ready" && total > 0 ? (
         <div className={css.pager} data-broadcast-pager="">
-          <SegmentedControl
+          <FilterBar
             id="broadcast-page-size"
             label="每页条数"
             value={String(size)}
@@ -407,34 +505,32 @@ export function BroadcastView({ task }: { task: Task }): ReactNode {
               setPage(1);
             }}
           />
-          <span className={css.range} data-broadcast-range="">
-            {start}–{end} / {total}
-          </span>
           <span className={css.pagerRight}>
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label="上一页"
+            <span className={css.range} data-broadcast-range="">
+              {start}–{end} / {total}
+            </span>
+            <IconButton
+              label="上一页"
               title={page <= 1 ? "已经是第一页" : "上一页"}
               disabled={page <= 1}
-              icon={<IconChevronLeftOutlineRegular size={13} />}
               onClick={() => setPage((value) => Math.max(1, value - 1))}
-            />
+            >
+              <IconChevronLeftOutlineRegular size={14} />
+            </IconButton>
             <span className={css.pageInfo} data-broadcast-page-info="">
               {page} / {pageCount}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label="下一页"
+            <IconButton
+              label="下一页"
               title={page >= pageCount ? "已经是最后一页" : "下一页"}
               disabled={page >= pageCount}
-              icon={<IconChevronRightOutlineRegular size={13} />}
               onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
-            />
+            >
+              <IconChevronRightOutlineRegular size={14} />
+            </IconButton>
           </span>
         </div>
       ) : null}
-    </div>
+    </Page>
   );
 }

@@ -136,6 +136,11 @@ type Engine struct {
 
 	plannerRound sync.Map // taskID -> int, planner round counter (for UI round separators)
 
+	// bootstrapping marks a task whose round-0 goal decomposition (startTaskEngine)
+	// has not finished. Until it has, "no open goal" means "goals not written yet",
+	// not "all goals met": the goalless branch must not settle the task as done.
+	bootstrapping sync.Map // taskID -> bool
+
 	// 任务级超时(见 docs/任务级超时与收尾设计.md):
 	settling     sync.Map // taskID -> bool, 任务已进入收尾时序(停止派/领新意图)
 	deadline     sync.Map // taskID -> int64 unix, 绝对截止时刻(首次运行时盖章;0/缺省=不限)
@@ -280,6 +285,7 @@ func (e *Engine) StopTask(taskID string) {
 	e.paused.Delete(taskID)
 	e.dropCnt.Delete(taskID)
 	e.plannerRound.Delete(taskID)
+	e.bootstrapping.Delete(taskID)
 	e.settling.Delete(taskID)
 	e.deadline.Delete(taskID)
 	e.stamped.Delete(taskID)
@@ -343,6 +349,21 @@ func (e *Engine) execContextFor(parent context.Context, taskID string) context.C
 func (e *Engine) IsPaused(taskID string) bool {
 	v, ok := e.paused.Load(taskID)
 	return ok && v.(bool)
+}
+
+// SetBootstrapping marks/unmarks a task's round-0 goal decomposition as in flight.
+func (e *Engine) SetBootstrapping(taskID string, on bool) {
+	if on {
+		e.bootstrapping.Store(taskID, true)
+		return
+	}
+	e.bootstrapping.Delete(taskID)
+}
+
+// IsBootstrapping reports whether a task's round-0 goal decomposition is in flight.
+func (e *Engine) IsBootstrapping(taskID string) bool {
+	_, ok := e.bootstrapping.Load(taskID)
+	return ok
 }
 
 // Started reports whether the engine loops are running for a task.
@@ -843,6 +864,12 @@ func (e *Engine) plannerLoop(ctx context.Context, t *Task) {
 		// 还有 open/running 意图 → 保持 running、静默等待；意图已全部跑干 → 落 done。
 		// 整段纯 Go、不触发任何 LLM 调用，也不打规划轮 marker。
 		if open, err := t.Store.HasOpenGoal(); err == nil && !open {
+			if e.IsBootstrapping(t.ID) {
+				// 第 0 轮目标拆解还没写完验收项：「没有 open 目标」只是还没写，不是已达成。
+				// 2026-11-21 任务 270：打开新任务时 setActive 提前 Run，这里误报
+				// 「目标已全部达成」并落 done，拆解出的目标随后永远不会被规划。
+				return
+			}
 			t.drainTriggers() // 丢弃累积的 done/finding 触发，避免 goalless 长会话里无界增长
 			if active, err := t.Store.HasActiveIntent(); err == nil && !active {
 				// frontier 抽干且无在跑意图 → 收尾。用 Guarded 版做 CAS，避免踩到并发的

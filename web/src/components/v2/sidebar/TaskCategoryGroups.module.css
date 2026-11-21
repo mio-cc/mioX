@@ -21,6 +21,48 @@
   align-items: center;
   min-width: 0;
   padding: 2px 0 0;
+  gap: 0;
+}
+
+/* DSH WorkspaceBrowser `.iconButton`（:28-41）：透底 icon button——
+   分类组头的行内新建「+」，hover 才给 interactive-bg-hover 填充。 */
+.groupNewBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 100ms ease, background-color 100ms ease;
+}
+
+@media (hover: hover) {
+  .groupNewBtn:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+  .groupHead:hover .groupNewBtn {
+    opacity: 1;
+  }
+}
+
+.groupNewBtn:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.groupNewBtn:disabled {
+  opacity: 0;
+  cursor: default;
+  pointer-events: none;
 }
 
 .groupToggle {
@@ -35,8 +77,9 @@
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font-family: inherit;
+  /* DSH WorkspaceBrowser .sectionLabel：20px 行高的三级标题行（:101）。 */
   font-size: 11px;
-  line-height: 16px;
+  line-height: 20px;
   text-align: left;
   cursor: pointer;
 }
@@ -65,7 +108,8 @@
   background: var(--dsw-alias-bg-multi-select);
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
-  line-height: 16px;
+  /* DSH Rows 11/17 Tag 档（Tag.module.css:4），行高跟组头 20px 走。 */
+  line-height: 20px;
   font-variant-numeric: tabular-nums;
 }
 

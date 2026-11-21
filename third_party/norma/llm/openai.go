@@ -103,6 +103,12 @@ func toOpenAIMessages(system string, msgs []Message) []oaMessage {
 				case BlockText:
 					text.WriteString(b.Text)
 				case BlockThinking:
+					// Thinking that the gateway streamed as a content part was
+					// never a reasoning_content field; echoing it back as one is
+					// rejected ("extra_forbidden", 422 on the mi gateway).
+					if b.Signature == contentPartThinkingSig {
+						continue
+					}
 					// DeepSeek-style thinking mode requires the previous turn's
 					// reasoning_content to be passed back verbatim; dropping it
 					// makes the API reject the request with a 400. Thinking text
@@ -449,7 +455,7 @@ func parseOpenAIResponse(raw []byte) (Message, string, Usage, error) {
 	var r struct {
 		Choices []struct {
 			Message struct {
-				Content          string       `json:"content"`
+				Content          oaContent    `json:"content"`
 				ReasoningContent string       `json:"reasoning_content"`
 				Reasoning        string       `json:"reasoning"`
 				ReasoningText    string       `json:"reasoning_text"`
@@ -491,9 +497,11 @@ func parseOpenAIResponse(raw []byte) (Message, string, Usage, error) {
 	var blocks []ContentBlock
 	if think := pickReasoning(ch.Message.ReasoningContent, ch.Message.Reasoning, ch.Message.ReasoningText); think != "" {
 		blocks = append(blocks, ContentBlock{Type: BlockThinking, Thinking: think})
+	} else if ch.Message.Content.Thinking != "" {
+		blocks = append(blocks, ContentBlock{Type: BlockThinking, Thinking: ch.Message.Content.Thinking, Signature: contentPartThinkingSig})
 	}
-	if ch.Message.Content != "" {
-		blocks = append(blocks, TextBlock(ch.Message.Content))
+	if ch.Message.Content.Text != "" {
+		blocks = append(blocks, TextBlock(ch.Message.Content.Text))
 	} else if ch.Message.Refusal != "" {
 		// A refused turn carries content:null and the reason in `refusal`. Reading
 		// only content would hand the caller an empty assistant turn — the model
@@ -551,11 +559,87 @@ func pickReasoning(fields ...string) string {
 	return ""
 }
 
+// oaContent is a Chat Completions `content` field. Most gateways send a plain
+// string, but some (seen on the mi / zai-glm-5-3 gateway, 2026-11-21) switch to
+// an array of typed parts mid-stream, e.g.
+//
+//	"content":[{"type":"thinking","thinking":[{"type":"text","text":"."}],"closed":true},
+//	           {"type":"text","text":"在线确认"}]
+//
+// Decoding that into a Go string fails the whole frame, which silently dropped
+// the first visible text chunk of the reply (the turn started with "：1、2…").
+// Text parts become text; thinking parts become thinking.
+type oaContent struct {
+	Text     string
+	Thinking string
+}
+
+// contentPartThinkingSig marks a thinking block that came from a content part
+// (not reasoning_content). It is kept for display and transcripts but never
+// replayed: not as reasoning_content (the gateway rejects that field) and not to
+// Anthropic (it is not a real signature) — see filterThinkingBlocks.
+const contentPartThinkingSig = "norma:openai-content-part"
+
+func (c *oaContent) UnmarshalJSON(b []byte) error {
+	*c = oaContent{}
+	if len(b) == 0 || string(b) == "null" {
+		return nil
+	}
+	if b[0] == '"' {
+		return json.Unmarshal(b, &c.Text)
+	}
+	var parts []struct {
+		Type     string          `json:"type"`
+		Text     string          `json:"text"`
+		Thinking json.RawMessage `json:"thinking"`
+	}
+	if err := json.Unmarshal(b, &parts); err != nil {
+		return nil // unknown shape: ignore this field, keep the rest of the frame
+	}
+	var text, think strings.Builder
+	for _, p := range parts {
+		switch p.Type {
+		case "text", "output_text", "":
+			text.WriteString(p.Text)
+		case "thinking", "reasoning":
+			think.WriteString(oaPartText(p.Thinking))
+			if len(p.Thinking) == 0 {
+				think.WriteString(p.Text)
+			}
+		}
+	}
+	c.Text, c.Thinking = text.String(), think.String()
+	return nil
+}
+
+// oaPartText flattens a thinking payload that is either a string or a list of
+// {type:"text", text} parts.
+func oaPartText(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var parts []struct {
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &parts) != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, p := range parts {
+		b.WriteString(p.Text)
+	}
+	return b.String()
+}
+
 func parseOpenAIFrame(data string, started map[int]bool) (evs []StreamEvent, stopReason string, usage Usage, hasUsage bool) {
 	var f struct {
 		Choices []struct {
 			Delta struct {
-				Content          string       `json:"content"`
+				Content          oaContent    `json:"content"`
 				ReasoningContent string       `json:"reasoning_content"`
 				Reasoning        string       `json:"reasoning"`
 				ReasoningText    string       `json:"reasoning_text"`
@@ -585,9 +669,16 @@ func parseOpenAIFrame(data string, started map[int]bool) (evs []StreamEvent, sto
 	ch := f.Choices[0]
 	if think := pickReasoning(ch.Delta.ReasoningContent, ch.Delta.Reasoning, ch.Delta.ReasoningText); think != "" {
 		evs = append(evs, StreamEvent{Type: SEThinkingDelta, Text: think})
+	} else if ch.Delta.Content.Thinking != "" {
+		// Thinking that arrived as a content part is display-only: tag it so the
+		// replay path does not echo it back as reasoning_content (see
+		// contentPartThinkingSig).
+		evs = append(evs,
+			StreamEvent{Type: SEThinkingDelta, Text: ch.Delta.Content.Thinking},
+			StreamEvent{Type: SEThinkingSignature, Text: contentPartThinkingSig})
 	}
-	if ch.Delta.Content != "" {
-		evs = append(evs, StreamEvent{Type: SETextDelta, Text: ch.Delta.Content})
+	if ch.Delta.Content.Text != "" {
+		evs = append(evs, StreamEvent{Type: SETextDelta, Text: ch.Delta.Content.Text})
 	}
 	if ch.Delta.Refusal != "" {
 		// See parseOpenAIResponse: a refusal streams in `refusal`, not `content`.

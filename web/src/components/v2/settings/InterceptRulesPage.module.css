@@ -1,0 +1,231 @@
+/*
+ * 拦截规则节（规则 / 工具范围 / 模型审批 / 资产黑名单）在设计 kit 之上的特有小件。
+ * 版式骨架（SettingsPage / PageHead / Section / Card / Row / Field）全部来自 Kit；
+ * 这里只放 kit 没有的：页签条与标题的组合、规则模式的等宽截断、优先级小格、
+ * 规则编辑弹窗的宽度与滚动、粘底保存栏、多行文本框。
+ * 只用 --dsw-alias-* 颜色、--dsw-radius-* 圆角、0.5px 分隔线、400/500 字重。
+ */
+
+/* PageHead + 子页签：两者是一个头部块，间距比节间距更紧。 */
+.headBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* 页签文字与标题左缘对齐（FilterBar 项自带 10px 内边距）。 */
+.tabs {
+  margin-left: -10px;
+}
+
+/* 停用的规则：名称退到三级灰，开关仍是主信号。 */
+.labelOff {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 规则模式：等宽、一行截断，完整内容在 title 里。 */
+.pattern {
+  display: inline-block;
+  max-width: 340px;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* 资产黑名单：匹配内容本身就是行标题。 */
+.patternLabel {
+  max-width: 100%;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* 行尾优先级：小号 tabular 数字格，列表按它排序，竖向对齐成一列。 */
+.prio {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 32px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 行内错误条：挂在所属行下方，与行文字左缘对齐。 */
+.rowNotice {
+  padding: 0 16px 12px;
+}
+
+/* 规则编辑弹窗：比默认 380px 宽，正文自滚，底栏固定。 */
+.modal.modal {
+  width: min(600px, 100%);
+  max-height: 100%;
+}
+
+.modalContent {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding-bottom: 4px;
+}
+
+/* 多行文本：与 kit 输入框同材质。 */
+.textArea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  resize: vertical;
+  transition: border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+}
+
+.textArea::placeholder {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+@media (hover: hover) {
+  .textArea:hover:not(:disabled):not(:focus) {
+    border-color: var(--dsw-alias-border-l3);
+  }
+}
+
+.textArea:focus {
+  outline: none;
+  border-color: var(--dsw-alias-border-selected);
+}
+
+.textArea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 审批提示词：等宽、高一些。 */
+.prompt {
+  min-height: 240px;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* 行内的数字 + 单位、下拉：固定宽度，竖向对齐。 */
+.unitBox {
+  width: 136px;
+}
+
+.selectBox {
+  width: 220px;
+}
+
+/* 粘在设置面板底部的保存栏：有改动时才亮起保存。 */
+.saveBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -8px;
+  padding: 12px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.saveBarNote {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-right: auto;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 提示词卡：标题行 + 文本框。 */
+.promptMeta {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 删除确认里被删对象的摘要块。 */
+.target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.targetText {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialogStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 行内失败说明（开关 / 写入失败），跟在行说明下方。 */
+.rowError {
+  display: block;
+  margin-top: 2px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 元信息里的长文本（拒绝消息、备注）：限宽截断。 */
+.metaClip {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.metaClipWide {
+  max-width: 360px;
+}
+
+/* 工具描述：一行截断。 */
+.clamp {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

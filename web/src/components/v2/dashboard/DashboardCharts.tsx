@@ -19,7 +19,7 @@
 import { type ReactNode, useMemo, useState } from "react";
 
 import { Button } from "@/vendor/dsh/primitives/Button";
-import { SegmentedControl, type SegmentedControlOption } from "@/vendor/dsh/primitives/SegmentedControl";
+import { FilterBar, type FilterOption } from "@/components/v2/design/Kit";
 import { Tag } from "@/vendor/dsh/primitives/Tag";
 import { IconRefreshOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 import type { TrafficExchange } from "@/lib/types";
@@ -54,7 +54,7 @@ import {
 import css from "./dashboard.module.css";
 
 /** 每日趋势的范围档位（`TokenDays`）；旧页 :768-775 的 90 岁以上长尾不画，改用「更多」保留 60 天。 */
-const TOKEN_DAY_OPTIONS: readonly SegmentedControlOption<string>[] = [
+const TOKEN_DAY_OPTIONS: readonly FilterOption<string>[] = [
   { value: "7", label: "7 天" },
   { value: "14", label: "14 天" },
   { value: "30", label: "30 天" },
@@ -62,7 +62,7 @@ const TOKEN_DAY_OPTIONS: readonly SegmentedControlOption<string>[] = [
 ];
 
 /** 数据源档位（旧页 :597-612）。 */
-const TOKEN_VERSION_OPTIONS: readonly SegmentedControlOption<string>[] = [
+const TOKEN_VERSION_OPTIONS: readonly FilterOption<string>[] = [
   { value: "legacy", label: "旧版" },
   { value: "ledger", label: "新版" },
 ];
@@ -343,8 +343,8 @@ export function DashboardCharts({
   }, [profiles]);
 
   /** profile 页签：默认配置的桶用「全部」之外的独立项表达（旧页 :642-674）。 */
-  const profileOptions = useMemo<readonly SegmentedControlOption<string>[]>(() => {
-    const options: SegmentedControlOption<string>[] = [{ value: "all", label: "全部" }];
+  const profileOptions = useMemo<readonly FilterOption<string>[]>(() => {
+    const options: FilterOption<string>[] = [{ value: "all", label: "全部" }];
     for (const profile of profiles) {
       options.push({
         value: String(profile.id),
@@ -423,14 +423,14 @@ export function DashboardCharts({
         <header className={css.chartHead}>
           <h2 className={css.chartTitle}>LLM Token 消耗</h2>
           <div className={css.chartTools} role="toolbar" aria-label="Token 图表设置">
-            <SegmentedControl
+            <FilterBar
               id="dashboard-token-version"
               value={tokenVersion}
               options={TOKEN_VERSION_OPTIONS}
               onChange={(next) => setTokenVersion(next === "ledger" ? "ledger" : "legacy")}
               label="Token 数据源"
             />
-            <SegmentedControl
+            <FilterBar
               id="dashboard-token-days"
               value={String(tokenDays)}
               options={TOKEN_DAY_OPTIONS}
@@ -467,7 +467,7 @@ export function DashboardCharts({
         {tokenUsage.phase === "ready" ? (
           <>
             {profileOptions.length > 1 ? (
-              <SegmentedControl
+              <FilterBar
                 id="dashboard-token-profile"
                 value={selectedProfile}
                 options={profileOptions}

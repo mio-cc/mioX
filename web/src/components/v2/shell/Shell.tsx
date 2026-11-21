@@ -18,23 +18,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Composer } from "@/components/v2/composer/Composer";
 import { ConversationRoot } from "@/components/v2/conversation/ConversationRoot";
-import { CommandPalette } from "@/components/v2/shell/CommandPalette";
+import { ConversationUsageBar } from "@/components/v2/conversation/ConversationUsageBar";
 import {
   JOBS_CHIP_ACTION,
   MORE_MENU_UTILITY,
   PLAN_MODE_ACTION,
   RIGHT_PANEL_TOGGLE_UTILITY,
+  SCHEDULE_CLOCK_UTILITY,
 } from "@/components/v2/conversation/headerSlotContributions";
 import { RightPanel } from "@/components/v2/right-panel/RightPanel";
 import type { SettingsSectionId } from "@/components/v2/settings/SettingsDialog";
 import { SettingsDialog } from "@/components/v2/settings/SettingsDialog";
 import { ToastHost, toast } from "@/components/v2/settings/Toast";
+import { CommandPalette } from "@/components/v2/shell/CommandPalette";
+import { Modal } from "@/vendor/dsh/primitives/Modal";
+import { Button } from "@/vendor/dsh/primitives/Button";
 import { MioxMark } from "@/components/v2/sidebar/MioxMark";
-import { NewTaskDialog } from "@/components/v2/sidebar/NewTaskDialog";
 import { NewTaskPage } from "@/components/v2/sidebar/NewTaskPage";
 import type { Session } from "@/components/v2/sidebar/SessionRow";
-import { TaskArchiveView, TaskListSwitch } from "@/components/v2/sidebar/TaskArchiveView";
 import type { TaskListView } from "@/components/v2/sidebar/TaskArchiveView";
+import { TaskArchiveView, TaskListSwitch } from "@/components/v2/sidebar/TaskArchiveView";
 import { TaskBulkBar, useTaskMultiSelect } from "@/components/v2/sidebar/TaskBulkBar";
 import { TaskCategoryGroups } from "@/components/v2/sidebar/TaskCategoryGroups";
 import { TaskDetailPanel } from "@/components/v2/sidebar/TaskDetailPanel";
@@ -53,20 +56,23 @@ import {
   pauseTask as pauseTaskRequest,
   pinTask,
   renameTask,
+  resumeTask as resumeTaskRequest,
   setTaskPermissionLevel,
   setTaskPlanMode,
 } from "@/v2/data/task-actions";
-import { useActiveTaskSync, useTasks } from "@/v2/data/tasks";
+import { NativeDirPicker } from "@/components/v2/sidebar/NativeDirPicker";
+import { groupTasksByCategory, moveTaskToCategory } from "@/v2/data/task-categories";
+import { useTaskCategories } from "@/v2/data/task-create";
+import { setTaskTeamMode } from "@/v2/data/task-mode";
 import {
   applyTaskOrder,
   readTaskOrder,
   sortTasks,
   type TaskSortPreference,
+  useActiveTaskSync,
+  useTasks,
 } from "@/v2/data/tasks";
 import { tasksToSessions } from "@/v2/data/tasks-map";
-import { useTaskCategories } from "@/v2/data/task-create";
-import { groupTasksByCategory } from "@/v2/data/task-categories";
-import { setTaskTeamMode } from "@/v2/data/task-mode";
 import { useUpdate } from "@/v2/data/update";
 import {
   computeColumns,
@@ -81,10 +87,8 @@ import {
   IconAppsAddOutlineRegular,
   IconChevronsUpDownOutlineRegular,
   IconCloseOutlineRegular,
-  IconCordisPluginOutlineRegular,
   IconDarkOutlineRegular,
   IconInfoOutlineRegular,
-  IconFolderOpenOutlineRegular,
   IconLightOutlineRegular,
   IconNewChatOutlineRegular,
   IconPanelLeftOutlineRegular,
@@ -98,28 +102,6 @@ import { Tooltip } from "@/vendor/dsh/primitives/Tooltip";
 import css from "./Shell.module.css";
 
 /**
- * Fixed navigation rows above the registry pages.
- *
- * `插件` is the one row that opens a dialog instead of navigating: it lands on the
- * settings dialog's MCP section, which is the /v2 home of the legacy 「插件」 nav
- * row (`_components/sidebar/nav-main.tsx` + `navigation/sidebar/sidebar-items.ts:94`).
- * 旧页面依据：ARTEX/web/src/app/(main)/_components/sidebar/nav-main.tsx:195-213；
- * 对照表行：P3:W1。
- *
- * DSH's 自动化任务 / 更多 rows are gone: 「自动化任务」只跳 `/v2/tasks`（任务总览，
- * 与会话栏同一份数据），「更多」只跳 `/v2`（把 shell 自己重新加载一次），都是
- * DSH 独有功能在 mioX 没有对应物时的空壳入口。规范 102 §0 C 类：没有真实功能就不放
- * 入口。插件行保留，因为它打开的是真实的设置分节。`/v2/tasks` 路由本身仍在
- * （`app/v2/tasks/page.tsx`），只是侧栏不再给一行去重复任务列表。
- */
-const NAV: {
-  id: string;
-  label: string;
-  settings: SettingsSectionId;
-  Icon: (props: { size?: number }) => React.ReactNode;
-}[] = [{ id: "plugins", label: "插件", settings: "mcp", Icon: IconCordisPluginOutlineRegular }];
-
-/**
  * Menu entries for the sidebar's page launcher: one captioned run per registry group.
  *
  * DSH keeps the sidebar's navigation to a short pinned launcher list and moves the
@@ -127,6 +109,8 @@ const NAV: {
  * `PanelMoreMenu` `:124-144`), so the workspace region below gets the column's
  * remaining height (`:453-458`). mioX has twelve whole pages instead of DSH's three
  * panels, so all of them go behind the launcher, grouped by their registry caption.
+ * The fixed 「插件」 row is gone with it: MCP lives in 设置, and one settings entry
+ * is the only system surface the sidebar keeps (`102 §0 C`：与设置重复的入口不单占一行).
  * @param pages - Rows from `listMainPages()`.
  * @returns Label rows and page rows for `Menu`'s `items`.
  */
@@ -159,6 +143,7 @@ type Flow = { kind: "add" } | { kind: "rename"; id: string } | { kind: "delete";
 function ShellHeaderSlots(): React.ReactNode {
   useSlotRegister("conversation.header.actions", PLAN_MODE_ACTION);
   useSlotRegister("conversation.header.actions", JOBS_CHIP_ACTION);
+  useSlotRegister("conversation.header.utilities", SCHEDULE_CLOCK_UTILITY);
   useSlotRegister("conversation.header.utilities", RIGHT_PANEL_TOGGLE_UTILITY);
   useSlotRegister("conversation.header.utilities", MORE_MENU_UTILITY);
   return null;
@@ -224,8 +209,12 @@ export function Shell(): React.ReactNode {
   // the dialog keeps owning later nav clicks.
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>("general");
   const [newTaskOpen, setNewTaskOpen] = useState(false);
-  // 「从目录新建」reuses the A05 dialog and opens it with the directory picker on.
-  const [pickDirOnOpen, setPickDirOnOpen] = useState(false);
+  // 分类组头行内「+」按钮传来的分类 id：NewTaskPage 创建后绑定该分类。
+  const [pendingCategoryId, setPendingCategoryId] = useState<number | null>(null);
+  // 新建工作区（DSH WorkspacePicker）：打开 NativeDirPicker 浏览服务器目录，
+  // 选中的路径成为下一个任务的 workDir。替代旧版的「输入名字→mkdir」步骤。
+  const [mkdirOpen, setMkdirOpen] = useState(false);
+  const [selectedWorkDir, setSelectedWorkDir] = useState<string | null>(null);
   const [dark, setDark] = useState(false);
   // P1:E5 命令面板（Ctrl / Cmd+K）。打开是纯本地动作，结果全部来自页面注册表与
   // 真实的 `GET /tasks`，面板自己不新增请求。
@@ -250,10 +239,7 @@ export function Shell(): React.ReactNode {
   // （`POST /tasks/{id}/active`）。钩子自己做守卫：列表里没有该 id 就不写，
   // 所以 GET /tasks 的自动选中、被删掉的行走不到这里。写入失败不打断界面，
   // 只在控制台留证据（右栏与列表各自有自己的 offline 态）。
-  useActiveTaskSync(
-    active,
-    taskState.tasks === null ? null : taskState.tasks.map((row) => row.id),
-  );
+  useActiveTaskSync(active, taskState.tasks === null ? null : taskState.tasks.map((row) => row.id));
   // C09/C10：侧栏列表接上 TaskList（拖动排序 + 行内字段 + 多选），
   // 多选与批量条复用 sidebar 组件，选择状态由 hook 持有。
   const taskSelection = useTaskMultiSelect(taskState.tasks);
@@ -286,17 +272,37 @@ export function Shell(): React.ReactNode {
       clearInterval(timer);
     };
   }, [refreshLiveTasks]);
-  // Pause a running task from that chip. The control call is the only
-  // mutation; the paused row leaves the roster on the refreshed snapshots.
+  // Pause a task: the header jobs chip and the composer's Stop seat share this
+  // call. The control request is the only mutation (it rejects on failure so
+  // each caller reports it in place); the row is updated optimistically and the
+  // 1.5s poll plus the list reload correct it.
   const pauseTask = useCallback(
     async (id: string): Promise<void> => {
-      await pauseTaskRequest(id);
-      setLiveTasks((rows) =>
-        rows === null
-          ? rows
-          : rows.map((row) => (row.id === id ? { ...row, status: "paused" as const, paused: true } : row)),
-      );
-      taskState.reload();
+      try {
+        await pauseTaskRequest(id);
+        setLiveTasks((rows) =>
+          rows === null
+            ? rows
+            : rows.map((row) => (row.id === id ? { ...row, status: "paused" as const, paused: true } : row)),
+        );
+      } finally {
+        taskState.reload();
+      }
+    },
+    [taskState.reload],
+  );
+  // Resume a paused task; the composer calls it before sending to a paused task.
+  const resumeTask = useCallback(
+    async (id: string): Promise<void> => {
+      try {
+        const result = await resumeTaskRequest(id);
+        const status = result.queued ? ("queued" as const) : ("running" as const);
+        setLiveTasks((rows) =>
+          rows === null ? rows : rows.map((row) => (row.id === id ? { ...row, status, paused: false } : row)),
+        );
+      } finally {
+        taskState.reload();
+      }
     },
     [taskState.reload],
   );
@@ -387,6 +393,27 @@ export function Shell(): React.ReactNode {
     window.history.replaceState(window.history.state, "", url.toString());
   }, [active, mounted]);
 
+  // D6·U4 旧页面深链别名的落地动作（一次性，幂等）：`readShellPageParam` 已把
+  // `?page=tools/companies` 映射到现存页面（null / assets），这里只负责两件地址
+  // 与弹窗的收尾——`tools` 打开设置弹窗并停在「工具」节（组件挂在
+  // SettingsDialog 的 tools 分节），然后把 `page` 从地址里去掉；`companies` 把
+  // 地址规范化成 `?page=assets&tab=company`（AssetsDataPage 首渲染还会直接认
+  // 旧值，所以这里只改地址，不承担页面落地）。
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const raw = url.searchParams.get("page");
+    if (raw === "tools") {
+      url.searchParams.delete("page");
+      window.history.replaceState(window.history.state, "", url.toString());
+      setSettingsSection("tools");
+      setSettingsOpen(true);
+    } else if (raw === "companies") {
+      url.searchParams.set("page", "assets");
+      url.searchParams.set("tab", "company");
+      window.history.replaceState(window.history.state, "", url.toString());
+    }
+  }, [setSettingsOpen, setSettingsSection]);
+
   // Dark theme is a body attribute in the ported theme, matching what the real
   // theme presenter toggles; restore the stored choice, then keep both in sync.
   useEffect(() => {
@@ -444,7 +471,8 @@ export function Shell(): React.ReactNode {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       const target = event.target;
-      if (target instanceof Element && target.closest('[role="dialog"][aria-modal="true"], [role="menu"]') !== null) return;
+      if (target instanceof Element && target.closest('[role="dialog"][aria-modal="true"], [role="menu"]') !== null)
+        return;
       setRightOverlayOpen(false);
       setDrawerOpen(false);
     };
@@ -515,7 +543,7 @@ export function Shell(): React.ReactNode {
     const next = activeTask?.plan_mode !== true;
     void setTaskPlanMode(active, next)
       .then(() => taskState.reload())
-      .catch((reason: unknown) => console.error("[v2] plan mode failed", reason));
+      .catch((reason: unknown) => toast(`计划模式切换失败：${reason instanceof Error ? reason.message : String(reason)}`));
   };
 
   // Team mode is the second, independent Session flag (`PATCH /tasks/{id}/team-mode`):
@@ -526,7 +554,7 @@ export function Shell(): React.ReactNode {
     const next = activeTask?.team_mode !== true;
     void setTaskTeamMode(active, next)
       .then(() => taskState.reload())
-      .catch((reason: unknown) => console.error("[v2] team mode failed", reason));
+      .catch((reason: unknown) => toast(`团队模式切换失败：${reason instanceof Error ? reason.message : String(reason)}`));
   };
 
   // After the selected task leaves the list (archive/delete), land on the next
@@ -541,6 +569,9 @@ export function Shell(): React.ReactNode {
   // replaces that step instead: a page that is no longer on screen must not
   // come back on Back.
   const selectPage = (id: string | null): void => {
+    // Any navigation leaves the new-session launch page: it has no close button
+    // of its own — picking a session, opening a page or creating a task is the exit.
+    setNewTaskOpen(false);
     if (id === pageId) return;
     const url = new URL(window.location.href);
     if (id === null) url.searchParams.delete("page");
@@ -578,19 +609,19 @@ export function Shell(): React.ReactNode {
           if (active === id) selectFallbackTask(id);
           taskState.reload();
         })
-        .catch((reason: unknown) => console.error("[v2] delete task failed", reason));
+        .catch((reason: unknown) => toast(`删除任务失败：${reason instanceof Error ? reason.message : String(reason)}`));
       return;
     }
     if (patch.pinned !== undefined) {
       void pinTask(id, patch.pinned)
         .then(() => taskState.reload())
-        .catch((reason: unknown) => console.error("[v2] pin failed", reason));
+        .catch((reason: unknown) => toast(`置顶失败：${reason instanceof Error ? reason.message : String(reason)}`));
       return;
     }
     if (patch.label !== undefined) {
       void renameTask(id, patch.label)
         .then(() => taskState.reload())
-        .catch((reason: unknown) => console.error("[v2] rename failed", reason));
+        .catch((reason: unknown) => toast(`重命名失败：${reason instanceof Error ? reason.message : String(reason)}`));
       return;
     }
     if (patch.archived === true) {
@@ -599,7 +630,7 @@ export function Shell(): React.ReactNode {
           if (active === id) selectFallbackTask(id);
           taskState.reload();
         })
-        .catch((reason: unknown) => console.error("[v2] archive failed", reason));
+        .catch((reason: unknown) => toast(`归档失败：${reason instanceof Error ? reason.message : String(reason)}`));
       return;
     }
     taskState.reload();
@@ -619,12 +650,8 @@ export function Shell(): React.ReactNode {
   );
 
   // Collapse staging: width, labels and rail controls switch in that order.
-  const sidebarWidth = columns.drawer
-    ? 280
-    : collapsed && !railSettled
-      ? frozenSidebarWidth.current
-      : columns.sidebar;
-  const activePageEntry = activePage === null ? null : navPages.find((page) => page.id === activePage.id) ?? null;
+  const sidebarWidth = columns.drawer ? 280 : collapsed && !railSettled ? frozenSidebarWidth.current : columns.sidebar;
+  const activePageEntry = activePage === null ? null : (navPages.find((page) => page.id === activePage.id) ?? null);
   // Three render phases for the column: wide (labels), collapsing (labels held at the
   // frozen width while the track eases), rail (36px squares + tooltips). `wide` drives
   // content, `rail` drives geometry, `collapsing` lets CSS fade the labels out first.
@@ -686,33 +713,13 @@ export function Shell(): React.ReactNode {
             className={css.newSessionBtn}
             aria-label="新会话"
             onClick={() => {
-              setPickDirOnOpen(false);
               setNewTaskOpen(true);
             }}
           >
-            <IconNewChatOutlineRegular size={rail ? 18 : 15} />
+            <IconNewChatOutlineRegular size={rail ? 18 : 16} />
             {wide ? <span>新会话</span> : null}
           </button>,
         )}
-        {wide ? (
-          // 「从目录新建」：同一个 A05 弹窗，打开即弹目录选择器。
-          // 旧页面依据：旧:_components/sidebar/new-sidebar.tsx:1062（`api.fsDirs`，api.ts:361）；
-          // 对照表行：P1:A11。
-          <Tooltip label="从目录新建会话" side="bottom" delayMs={300}>
-            <button
-              type="button"
-              className={css.newSessionIconBtn}
-              aria-label="从目录新建会话"
-              data-newtask-from-dir=""
-              onClick={() => {
-                setPickDirOnOpen(true);
-                setNewTaskOpen(true);
-              }}
-            >
-              <IconFolderOpenOutlineRegular size={15} />
-            </button>
-          </Tooltip>
-        ) : null}
       </div>
 
       {/* Launchers. DSH keeps a short pinned list plus one 「更多」 menu
@@ -721,24 +728,6 @@ export function Shell(): React.ReactNode {
           「页面」 menu; the page on screen stays visible as its own row so the user
           always sees where they are. */}
       <nav className={css.nav} aria-label="主导航">
-        {NAV.map((item) =>
-          railTip(
-            item.id,
-            item.label,
-            <button
-              type="button"
-              className={css.navRow}
-              aria-label={item.label}
-              data-nav-row={item.id}
-              onClick={() => openSettings(item.settings)}
-            >
-              <span className={css.navIcon} aria-hidden="true">
-                <item.Icon size={rail ? 18 : 16} />
-              </span>
-              {wide ? <span className={css.navLabel}>{item.label}</span> : null}
-            </button>,
-          ),
-        )}
         <Menu
           open={pagesMenuOpen}
           onClose={() => setPagesMenuOpen(false)}
@@ -827,10 +816,16 @@ export function Shell(): React.ReactNode {
               archived switch stay pinned while the task list scrolls under them. */}
           <div className={css.regionHead}>
             <div className={css.wsRow}>
-              <span className={css.wsTitle}>
-                <IconFolderOpenOutlineRegular size={13} />
-                <span>默认工作区</span>
-              </span>
+              {/* D1: the region caption is the current / archived switch itself
+                  (text tabs), so the list gains a row instead of a pill track. */}
+              <TaskListSwitch
+                value={taskView}
+                onChange={(next) => {
+                  setTaskView(next);
+                  setSearchOpen(false);
+                  setQuery("");
+                }}
+              />
               <span className={css.wsActions}>
                 <Tooltip label="搜索会话" side="bottom" delayMs={300}>
                   <button
@@ -852,7 +847,8 @@ export function Shell(): React.ReactNode {
                   total={visibleTasks.length}
                   selected={taskSelection.ids.size}
                   onSelectAll={() => {
-                    const allSelected = visibleTasks.length > 0 && visibleTasks.every((row) => taskSelection.ids.has(row.id));
+                    const allSelected =
+                      visibleTasks.length > 0 && visibleTasks.every((row) => taskSelection.ids.has(row.id));
                     for (const row of visibleTasks) {
                       if (allSelected ? taskSelection.ids.has(row.id) : !taskSelection.ids.has(row.id)) {
                         taskSelection.toggle(row.id, !allSelected);
@@ -884,26 +880,32 @@ export function Shell(): React.ReactNode {
                     <IconChevronsUpDownOutlineRegular size={14} />
                   </button>
                 </Tooltip>
-                <Tooltip label="新建工作区（未接入后端）" side="bottom" delayMs={300}>
+                <Tooltip label="新建工作区" side="bottom" delayMs={300}>
                   <button
                     type="button"
                     className={css.wsIconBtn}
                     aria-label="新建工作区"
-                    onClick={() => toast("工作区管理未接入后端：当前只有默认工作区")}
+                    onClick={() => setMkdirOpen(true)}
                   >
                     <IconProjectAddOutlineRegular size={14} />
                   </button>
                 </Tooltip>
+                <NativeDirPicker
+                  open={mkdirOpen}
+                  initial=""
+                  onClose={() => setMkdirOpen(false)}
+                  onPick={(path) => {
+                    // DSH WorkspacePicker：选中的目录成为工作区根
+                    // — 后端没有 workspace CRUD，所以这个目录作为下一个
+                    // 新任务的工作目录（workDir）。存下来给 bao 的
+                    // NewTaskPage 创建时用。
+                    setMkdirOpen(false);
+                    setSelectedWorkDir(path);
+                    setNewTaskOpen(true);
+                  }}
+                />
               </span>
             </div>
-            <TaskListSwitch
-              value={taskView}
-              onChange={(next) => {
-                setTaskView(next);
-                setSearchOpen(false);
-                setQuery("");
-              }}
-            />
             {searchOpen && taskView === "current" ? (
               <div className={css.searchField}>
                 <IconSearchOutlineRegular size={13} />
@@ -984,6 +986,12 @@ export function Shell(): React.ReactNode {
                     selectable={taskSelection.active}
                     selectedIds={taskSelection.ids}
                     onSelectionChange={taskSelection.toggle}
+                    onNewSessionInCategory={(categoryId) => {
+                      // DSH ProjectRow 的行内 startSession：在指定分类下新建任务。
+                      // 走同一个 launch page，NewTaskPage 创建后调 setTaskCategory 绑分类。
+                      setPendingCategoryId(categoryId);
+                      setNewTaskOpen(true);
+                    }}
                   />
                 ) : (
                   <TaskList
@@ -1012,7 +1020,6 @@ export function Shell(): React.ReactNode {
                       type="button"
                       className={css.linkBtn}
                       onClick={() => {
-                        setPickDirOnOpen(false);
                         setNewTaskOpen(true);
                       }}
                     >
@@ -1055,7 +1062,11 @@ export function Shell(): React.ReactNode {
             aria-label={dark ? "浅色主题" : "深色主题"}
           >
             <span className={css.navIcon} aria-hidden="true">
-              {dark ? <IconLightOutlineRegular size={rail ? 18 : 16} /> : <IconDarkOutlineRegular size={rail ? 18 : 16} />}
+              {dark ? (
+                <IconLightOutlineRegular size={rail ? 18 : 16} />
+              ) : (
+                <IconDarkOutlineRegular size={rail ? 18 : 16} />
+              )}
             </span>
             {wide ? <span className={css.navLabel}>{dark ? "浅色主题" : "深色主题"}</span> : null}
           </button>,
@@ -1066,12 +1077,7 @@ export function Shell(): React.ReactNode {
           {railTip(
             "settings",
             "设置",
-            <button
-              type="button"
-              className={css.navRow}
-              onClick={() => openSettings("general")}
-              aria-label="设置"
-            >
+            <button type="button" className={css.navRow} onClick={() => openSettings("general")} aria-label="设置">
               <span className={css.navIcon} aria-hidden="true">
                 <IconSettingsOutlineRegular size={rail ? 18 : 16} />
               </span>
@@ -1082,23 +1088,180 @@ export function Shell(): React.ReactNode {
         </div>
       </div>
       {settingsOpen ? (
-        <SettingsDialog
-          open={settingsOpen}
-          initialSection={settingsSection}
-          onClose={() => setSettingsOpen(false)}
-        />
+        <SettingsDialog open={settingsOpen} initialSection={settingsSection} onClose={() => setSettingsOpen(false)} />
       ) : null}
-      <NewTaskDialog
-        open={false}
-        pickDirOnOpen={pickDirOnOpen}
-        onClose={() => setNewTaskOpen(false)}
-        onCreated={(id) => {
-          setActive(id);
-          taskState.reload();
-        }}
-      />
     </aside>
   );
+
+  /**
+   * The main column's body: the new-session launch page, a registry data page,
+   * or the resident Conversation. The launch page is the app's first page: it
+   * shows on an explicit 新会话 and whenever no session exists to chat with;
+   * it has no close button — navigation (select a session, open a page, create
+   * the task) is the only way out.
+   */
+  const launchVisible = newTaskOpen || (active === null && activePage === null);
+  const launchCreated = (id: string): void => {
+    setNewTaskOpen(false);
+    setDrawerOpen(false);
+    selectPage(null);
+    setActive(id);
+    // 分类组头「+」进入的：创建成功后绑定到对应分类（P1:A26 的 PATCH /tasks/{id}/category）。
+    if (pendingCategoryId !== null) {
+      moveTaskToCategory(id, pendingCategoryId)
+        .then(() => {
+          setPendingCategoryId(null);
+          taskState.reload();
+        })
+        .catch((reason: unknown) => toast(`分类设置失败：${reason instanceof Error ? reason.message : String(reason)}`));
+      return;
+    }
+    taskState.reload();
+  };
+  const renderMain = (): React.ReactNode => {
+    if (launchVisible) {
+      return (
+        <>
+          {/* 抽屉模式下启动页没有会话头承载这个开关，给它一个左上角入口
+              （DSH `SidebarRoot` 收起后的固定展开按钮语义）。 */}
+          {columns.drawer ? (
+            <button
+              type="button"
+              className={css.launchDrawerButton}
+              aria-label="打开侧边栏"
+              title="打开侧边栏"
+              onClick={() => setDrawerOpen(true)}
+            >
+              <IconPanelLeftOutlineRegular size={18} />
+            </button>
+          ) : null}
+          <NewTaskPage onCreated={launchCreated} />
+        </>
+      );
+    }
+    if (activePage !== null && ActivePageBody !== null) {
+      return (
+        <>
+          {/* 抽屉模式（<768px）下全局页面同样没有会话头，侧栏只能从这里打开；
+              否则资产库等页面在窄屏里整个侧栏都找不回来。 */}
+          {columns.drawer ? (
+            <button
+              type="button"
+              className={css.launchDrawerButton}
+              aria-label="打开侧边栏"
+              title="打开侧边栏"
+              data-page-drawer-open=""
+              onClick={() => setDrawerOpen(true)}
+            >
+              <IconPanelLeftOutlineRegular size={18} />
+            </button>
+          ) : null}
+          <div
+            className={`${css.mainPage} ${columns.drawer ? css.mainPageDrawer : ""}`}
+            data-shell-page={activePage.id}
+            key={activePage.id}
+          >
+            <ActivePageBody />
+          </div>
+        </>
+      );
+    }
+    // 输入框停止键与用量条共用的任务行：优先 1.5s 实时快照（暂停/恢复的乐观
+    // 更新也落在它上面），缺失时退回列表快照——两个视图永远读同一行。
+    const liveActiveTask =
+      (liveTasks === null ? null : (liveTasks.find((row) => row.id === active) ?? null)) ?? activeTask ?? null;
+    return (
+      <ConversationRoot
+        task={activeTask ?? null}
+        activities={activityState.activities}
+        activityPhase={activityState.phase}
+        chatRunning={chatRun.running}
+        headerSlotData={{
+          runningTasks,
+          planMode: activeTask?.plan_mode === true,
+          teamMode: activeTask?.team_mode === true,
+          rightOpen: rightAsOverlay ? rightOverlayVisible : rightVisible,
+          onTogglePlanMode: togglePlanMode,
+          onToggleTeamMode: toggleTeamMode,
+          onToggleRightPanel: () => {
+            if (rightAsOverlay) setRightOverlayOpen((value) => !value);
+            else setRightOpen((value) => !value);
+          },
+          onPauseTask: pauseTask,
+          taskActions: {
+            setPinned: (id, pinned) => {
+              void pinTask(id, pinned)
+                .then(() => taskState.reload())
+                .catch((reason: unknown) => toast(`置顶失败：${reason instanceof Error ? reason.message : String(reason)}`));
+            },
+            archive: (id) => {
+              void archiveTasks([id])
+                .then(() => {
+                  if (active === id) selectFallbackTask(id);
+                  taskState.reload();
+                })
+                .catch((reason: unknown) => toast(`归档失败：${reason instanceof Error ? reason.message : String(reason)}`));
+            },
+            remove: async (id) => {
+              await deleteTask(id, {
+                delete_assets: false,
+                delete_traffic: false,
+                delete_files: false,
+                delete_findings: false,
+                delete_llm_records: false,
+              });
+              if (active === id) selectFallbackTask(id);
+              taskState.reload();
+            },
+          },
+        }}
+        drawer={columns.drawer}
+        onOpenDrawer={() => setDrawerOpen(true)}
+        onOpenTask={(id) => {
+          setActive(id);
+          selectPage(null);
+        }}
+        composer={
+          <>
+            <Composer
+              goalState={taskGoal.goal}
+              goalActions={taskGoal.actions}
+              goalProgress={
+                activeTask === null || activeTask === undefined
+                  ? null
+                  : { met: activeTask.goals_met ?? 0, total: activeTask.goals_total ?? 0 }
+              }
+              taskId={active}
+              chatRun={chatRun}
+              taskStatus={liveActiveTask?.status ?? null}
+              taskPaused={liveActiveTask?.paused === true}
+              onPauseTask={active === null ? undefined : () => pauseTask(active)}
+              onResumeTask={active === null ? undefined : () => resumeTask(active)}
+              onSent={() => activityState.reload()}
+              permissionLevel={activeTask?.permission_level ?? "auto"}
+              onPermissionChange={(level) => {
+                if (active === null) return;
+                void setTaskPermissionLevel(active, level)
+                  .then(() => taskState.reload())
+                  .catch((reason: unknown) =>
+                    toast(`权限档切换失败：${reason instanceof Error ? reason.message : String(reason)}`),
+                  );
+              }}
+            />
+            {/* 卡下状态条（DSH InputBar `.dock` 语义）：步数/tok/s/token/上下文，
+                数据取实时轮询的任务行与活动流的 usage 行。 */}
+            <ConversationUsageBar
+              activities={activityState.activities}
+              task={
+                (liveTasks === null ? null : (liveTasks.find((row) => row.id === active) ?? null)) ?? activeTask ?? null
+              }
+              running={chatRun.running}
+            />
+          </>
+        }
+      />
+    );
+  };
 
   return (
     <SlotProvider>
@@ -1111,10 +1274,7 @@ export function Shell(): React.ReactNode {
               aria-hidden="true"
               onClick={() => setDrawerOpen(false)}
             />
-            <div
-              className={`${css.drawer} ${drawerOpen ? css.drawerOpen : ""}`}
-              inert={!drawerOpen}
-            >
+            <div className={`${css.drawer} ${drawerOpen ? css.drawerOpen : ""}`} inert={!drawerOpen}>
               {sidebar}
             </div>
           </>
@@ -1122,99 +1282,13 @@ export function Shell(): React.ReactNode {
           sidebar
         )}
 
-        <main className={css.main}>
-          {newTaskOpen ? (
-            <NewTaskPage
-              pickDirOnOpen={pickDirOnOpen}
-              onCancel={() => setNewTaskOpen(false)}
-              onCreated={(id) => {
-                setNewTaskOpen(false);
-                setDrawerOpen(false);
-                selectPage(null);
-                setActive(id);
-                taskState.reload();
-              }}
-            />
-          ) : activePage !== null && ActivePageBody !== null ? (
-            <div className={css.mainPage} data-shell-page={activePage.id} key={activePage.id}>
-              <ActivePageBody />
-            </div>
-          ) : (
-            <ConversationRoot
-            task={activeTask ?? null}
-            activities={activityState.activities}
-            activityPhase={activityState.phase}
-            chatRunning={chatRun.running}
-            headerSlotData={{
-              runningTasks,
-              planMode: activeTask?.plan_mode === true,
-              teamMode: activeTask?.team_mode === true,
-              rightOpen: rightAsOverlay ? rightOverlayVisible : rightVisible,
-              onTogglePlanMode: togglePlanMode,
-              onToggleTeamMode: toggleTeamMode,
-              onToggleRightPanel: () => {
-                if (rightAsOverlay) setRightOverlayOpen((value) => !value);
-                else setRightOpen((value) => !value);
-              },
-              onPauseTask: pauseTask,
-              taskActions: {
-                setPinned: (id, pinned) => {
-                  void pinTask(id, pinned)
-                    .then(() => taskState.reload())
-                    .catch((reason: unknown) => console.error("[v2] pin failed", reason));
-                },
-                archive: (id) => {
-                  void archiveTasks([id])
-                    .then(() => {
-                      if (active === id) selectFallbackTask(id);
-                      taskState.reload();
-                    })
-                    .catch((reason: unknown) => console.error("[v2] archive failed", reason));
-                },
-                remove: async (id) => {
-                  await deleteTask(id, {
-                    delete_assets: false,
-                    delete_traffic: false,
-                    delete_files: false,
-                    delete_findings: false,
-                    delete_llm_records: false,
-                  });
-                  if (active === id) selectFallbackTask(id);
-                  taskState.reload();
-                },
-              },
-            }}
-            drawer={columns.drawer}
-            onOpenDrawer={() => setDrawerOpen(true)}
-            onOpenTask={(id) => {
-              setActive(id);
-              selectPage(null);
-            }}
-            composer={
-              <Composer
-                goalState={taskGoal.goal}
-                goalActions={taskGoal.actions}
-                taskId={active}
-                chatRun={chatRun}
-                onSent={() => activityState.reload()}
-                permissionLevel={activeTask?.permission_level ?? "auto"}
-                onPermissionChange={(level) => {
-                  if (active === null) return;
-                  void setTaskPermissionLevel(active, level)
-                    .then(() => taskState.reload())
-                    .catch((reason: unknown) => console.error("[v2] permission failed", reason));
-                }}
-              />
-            }
-            />
-          )}
-        </main>
+        <main className={css.main}>{renderMain()}</main>
 
         {/* Right column. It stays mounted while closed so its width can animate
             to 0 (DSH eases the grid track, `AppFrame.module.css:17`); the content
             is inert while the track is closed. Below 1024 the same panel opens as
             an overlay sheet instead, because the column would starve the centre. */}
-        {newTaskOpen || rightAsOverlay ? null : (
+        {launchVisible || rightAsOverlay ? null : (
           <div
             className={`${css.rightWrap} ${rightVisible ? "" : css.rightWrapClosed}`}
             style={{ width: rightVisible ? columns.right : 0 }}
@@ -1226,7 +1300,7 @@ export function Shell(): React.ReactNode {
             </div>
           </div>
         )}
-        {rightAsOverlay && activePage === null ? (
+        {rightAsOverlay && activePage === null && !launchVisible ? (
           <>
             <div
               className={`${css.sheetMask} ${rightOverlayVisible ? css.sheetMaskOpen : ""}`}
@@ -1275,12 +1349,21 @@ const RUNNING_TASKS_POLL_MS = 1_500;
 
 /**
  * Read the selected page id from `?page=`.
- * @returns The raw id, or null when the URL names no page (also during server render).
+ *
+ * D6·U4 旧页面深链别名在解析处（`findMainPage` 之前）映射：
+ * `companies` → `assets`（企业页并入资产库的 company tab，tab 值由本组件的
+ * 别名落地 effect 写入地址，页面本体读得到）；`tools` → null（工具页入口已删，
+ * 该深链由别名落地 effect 打开设置弹窗「工具」节）。映射后的地址会被就地规范成
+ * 新写法，但任何带着旧值的入口（书签、外部链接）在首次解析时就落在正确页面。
+ * @returns The page id after aliasing, or null when the URL names no page (also during server render).
  */
 function readShellPageParam(): string | null {
   if (typeof window === "undefined") return null;
   const value = new URLSearchParams(window.location.search).get("page");
-  return value === "" ? null : value;
+  if (value === null || value === "") return null;
+  if (value === "companies") return "assets";
+  if (value === "tools") return null;
+  return value;
 }
 
 /**
@@ -1292,4 +1375,3 @@ function readShellTaskParam(): string | null {
   const value = new URLSearchParams(window.location.search).get("task");
   return value === null || value.trim() === "" ? null : value.trim();
 }
-

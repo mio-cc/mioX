@@ -72,16 +72,17 @@
   background: var(--dsw-alias-bg-base);
 }
 
-/* The strip: 10px of air above the 28px chip band, so chips end flush with the
-   strip's bottom edge and every control centres on the band's centre line. */
+/* The strip: DSH dockkit `.tabStrip`(:239-250) is a bare 28px row（无顶空气）；
+   芯片高 28、4px gap、start inset 10px 同变量化。先前注释误称 38px 行——
+   dockkit 原文就是 28px 高（:244）。 */
 .strip {
   display: flex;
   flex: none;
   align-items: center;
   gap: 4px;
   box-sizing: border-box;
-  height: 38px;
-  padding: 10px 6px 0 10px;
+  height: 28px;
+  padding: 0 6px 0 10px;
 }
 
 /* The chips band takes the strip's free space so its measured width *is* the
@@ -150,6 +151,24 @@
 .chip:focus-visible {
   outline: 2px solid var(--dsw-alias-border-selected);
   outline-offset: 1px;
+}
+
+/* U3: pending-approval count on the 审批 chip (all tasks; the chip title says so). */
+.chipCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: var(--dsw-radius-sm);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);
+  color: var(--dsw-alias-state-warn-label);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The More launcher for the pages the chip budget could not seat: the 22px

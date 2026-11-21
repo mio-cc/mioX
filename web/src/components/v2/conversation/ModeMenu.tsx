@@ -27,6 +27,8 @@ import { useState } from "react";
 
 import clsx from "clsx";
 
+import { toast } from "@/components/v2/settings/Toast";
+import { useForegroundPlanTask, usePlanMode } from "@/v2/data/plan-review";
 import { Menu } from "@/vendor/dsh/primitives/Menu";
 import { IconCheckOutlineRegular, IconChevronDownOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 
@@ -52,11 +54,27 @@ export interface ModeMenuProps {
  */
 export function ModeMenu(props: ModeMenuProps): React.ReactNode {
   const [open, setOpen] = useState(false);
+  // Plan mode reads the composer's store (`v2/data/plan-review.ts`), the one
+  // source the capsule, Shift+Tab and `/plan` write; the shell prop is only the
+  // fallback while no composer is mounted.
+  const foregroundTask = useForegroundPlanTask();
+  const planStore = usePlanMode(foregroundTask);
+  const planMode = foregroundTask !== null && planStore.planMode !== null ? planStore.planMode : props.planMode;
+  const togglePlan = (): void => {
+    if (foregroundTask === null) {
+      props.onTogglePlanMode();
+      return;
+    }
+    const next = !planMode;
+    planStore.set(next).catch((reason: unknown) => {
+      toast(`${next ? "开启" : "关闭"}计划模式失败：${reason instanceof Error ? reason.message : String(reason)}`);
+    });
+  };
   const parts: string[] = [];
-  if (props.planMode) parts.push("计划");
+  if (planMode) parts.push("计划");
   if (props.teamMode) parts.push("团队");
   const label = parts.length === 0 ? "标准模式" : `${parts.join(" + ")}模式`;
-  const on = props.planMode || props.teamMode;
+  const on = planMode || props.teamMode;
 
   return (
     <Menu
@@ -84,16 +102,20 @@ export function ModeMenu(props: ModeMenuProps): React.ReactNode {
       <button
         type="button"
         role="menuitemcheckbox"
-        aria-checked={props.planMode}
+        aria-checked={planMode}
+        aria-keyshortcuts="Shift+Tab"
         data-mode-option="plan"
         className={css.row}
-        onClick={props.onTogglePlanMode}
+        disabled={planStore.busy}
+        onClick={togglePlan}
       >
         <span className={css.glyph} aria-hidden="true">
-          {props.planMode ? <IconCheckOutlineRegular size={14} /> : null}
+          {planMode ? <IconCheckOutlineRegular size={14} /> : null}
         </span>
         <span className={css.label}>计划模式</span>
-        <span className={css.hint}>{props.planMode ? "已开启" : "只侦察，交计划待批准"}</span>
+        <span className={css.hint}>
+          {planMode ? "已开启" : "只侦察，交计划待批准"} · Shift+Tab
+        </span>
       </button>
       <button
         type="button"

@@ -12,9 +12,9 @@
  * action row) and the file rows follow the DSH tree row
  * (`ui-sidebar-files FileTree.module.css` `.row`/`.action`).
  *
- * The 资产 and 证据 bodies are separate files (`AssetsPane.tsx`,
- * `EvidencePane.tsx`, unit C23) because they own their adapters; they are
- * dispatched from this module's page switch so one import names every page.
+ * The 证据 body is a separate file (`EvidencePane.tsx`, unit C23) because it owns
+ * its adapter. U3 retired the 资产 / 任务 / 会话 pages (their content lives in the
+ * conversation Views 资产 / 概览 now).
  */
 import * as React from "react";
 
@@ -22,15 +22,17 @@ import type {
   Finding,
   InterceptPending,
   Task,
-  TaskStatus,
   WorkspaceEntry,
 } from "@/lib/types";
 import { type ApprovalsPhase, decideApproval } from "@/v2/data/approvals";
+import { reloadPlanState, reviewFromPending } from "@/v2/data/plan-review";
+import { setConversationView } from "@/v2/data/conversation-view-url";
+import { PlanReviewDock } from "@/components/v2/composer/PlanReviewDock";
 import { FileTypeIcon } from "@/vendor/dsh/primitives/FileTypeIcon";
 import { fileSizeText } from "@/vendor/dsh/primitives/file-size";
 import { Tag } from "@/vendor/dsh/primitives/Tag";
 import type { TagTone } from "@/vendor/dsh/primitives/Tag";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
+import { FilterBar } from "@/components/v2/design/Kit";
 
 import { ApprovalHistoryPane } from "./ApprovalHistoryPane";
 import {
@@ -39,8 +41,6 @@ import {
   IconChevronUpOutlineRegular,
   IconFolderOpenOutlineRegular,
   IconFolderOpenRegular,
-  IconGoalOutlineRegular,
-  IconNewChatOutlineRegular,
   IconRefreshOutlineRegular,
   IconShieldOutlineRegular,
   IconWarningOutlineRegular,
@@ -51,9 +51,7 @@ import type { WorkspacePhase } from "@/v2/data/workspace-files";
 import { toast } from "../settings/Toast";
 import css from "./Panes.module.css";
 
-// The two C23 pages are re-exported through the pane dispatch module, so the
-// right panel and any future consumer import every page from one place.
-export { AssetsPane, type AssetsPaneProps } from "./AssetsPane";
+// 证据 page (C23) is re-exported through the pane dispatch module.
 export { EvidencePane, type EvidencePaneProps } from "./EvidencePane";
 
 // ---------------------------------------------------------------------------
@@ -152,6 +150,18 @@ export interface FindingsPaneProps {
   readonly findings: Finding[] | null;
   readonly rows: readonly FindingRow[];
   readonly onReload: () => void;
+  /** Task the list is scoped to; null when no task is selected (then every task's findings show). */
+  readonly scopedTaskId?: string | null;
+}
+
+/** Open the global findings library (the left-rail page), optionally at one finding. */
+function openFindingsLibrary(findingId?: string): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set("page", "findings");
+  if (findingId === undefined) url.searchParams.delete("finding");
+  else url.searchParams.set("finding", findingId);
+  window.history.pushState(null, "", url.toString());
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 /**
@@ -159,7 +169,7 @@ export interface FindingsPaneProps {
  * @param props - findings adapter state and the row view model.
  * @returns the page.
  */
-export function FindingsPane({ phase, findings, rows, onReload }: FindingsPaneProps): React.ReactNode {
+export function FindingsPane({ phase, findings, rows, onReload, scopedTaskId = null }: FindingsPaneProps): React.ReactNode {
   const [openId, setOpenId] = React.useState<string | null>(null);
   const counts = React.useMemo(() => {
     const tally = { high: 0, medium: 0, low: 0 };
@@ -179,7 +189,9 @@ export function FindingsPane({ phase, findings, rows, onReload }: FindingsPanePr
           </ToolButton>
         )}
       >
-        <span className={css.count}>{phase === "ready" ? `${rows.length} 条发现` : "发现"}</span>
+        <span className={css.count} data-findings-scope={scopedTaskId ?? "all"}>
+          {phase === "ready" ? `${scopedTaskId === null ? "全部任务" : "本任务"} ${rows.length} 条发现` : "发现"}
+        </span>
         {phase === "ready" && rows.length > 0 ? (
           <span className={css.tally} aria-hidden="true">
             <span className={css.tallyItem}><span className={css.dot} data-tone="high" />{counts.high}</span>
@@ -200,11 +212,18 @@ export function FindingsPane({ phase, findings, rows, onReload }: FindingsPanePr
       ) : null}
 
       {phase === "ready" && rows.length === 0 ? (
-        <EmptyState
-          icon={<IconShieldOutlineRegular size={26} />}
-          title="暂无发现"
-          hint="扫描确认漏洞后会出现在这里：按严重度分档，点开看摘要与证据"
-        />
+        <>
+          <EmptyState
+            icon={<IconShieldOutlineRegular size={26} />}
+            title={scopedTaskId === null ? "暂无发现" : "本任务暂无发现"}
+            hint="扫描确认漏洞后会出现在这里：按严重度分档，点开看摘要与证据"
+          />
+          {scopedTaskId === null ? null : (
+            <button type="button" className={css.libraryLink} data-findings-library="" onClick={() => openFindingsLibrary()}>
+              查看全部任务的发现 →
+            </button>
+          )}
+        </>
       ) : null}
 
       {phase === "ready" && rows.length > 0 ? (
@@ -250,6 +269,30 @@ export function FindingsPane({ phase, findings, rows, onReload }: FindingsPanePr
                       {selected === undefined || selected.evidence === "" ? null : (
                         <pre className={css.detailEvidence}>{selected.evidence}</pre>
                       )}
+                      <button
+                        type="button"
+                        className={css.libraryLink}
+                        data-finding-open-detail={row.id}
+                        onClick={() => openFindingsLibrary(row.id)}
+                      >
+                        打开完整详情 →
+                      </button>
+                      {/* U1（.tmp/d6-ia-inventory.md §4.3「发现」行）：到中间·发现视图定位该行，
+                          `?hl=` 传发现 id，由 TaskFindingsView 滚动 + 短暂高亮。
+                          id 用 findings 表行 id（`finding_id`，探测节点 id 作退路）：中间
+                          发现视图的行钩子 `[data-task-finding]` 用的是 findings 表行 id。 */}
+                      <button
+                        type="button"
+                        className={css.libraryLink}
+                        data-finding-open-view={selected === undefined ? row.id : (selected.finding_id ?? selected.id)}
+                        onClick={() =>
+                          setConversationView("findings", {
+                            hl: selected === undefined ? row.id : (selected.finding_id ?? selected.id),
+                          })
+                        }
+                      >
+                        在发现视图打开 →
+                      </button>
                     </div>
                   ) : null}
                 </li>
@@ -299,7 +342,7 @@ export function ApprovalsPane({ phase, pending, onReload, task = null }: Approva
   };
 
   const viewSwitch = (
-    <SegmentedControl
+    <FilterBar
       id="approvals-view"
       label="审批视图"
       value={view}
@@ -362,6 +405,24 @@ export function ApprovalsPane({ phase, pending, onReload, task = null }: Approva
         <div className={css.scroll}>
           <div className={css.approvalList}>
             {pending.map((item) => {
+              // A submitted plan is not a tool asking for privileges: it gets the
+              // three plan outcomes (approve / keep planning / dismiss) instead of
+              // allow-once / deny, through the same dock the composer shows.
+              const planReview = reviewFromPending(item);
+              if (planReview !== null) {
+                return (
+                  <div key={item.id} data-approval-plan={item.id}>
+                    <PlanReviewDock
+                      review={planReview}
+                      variant="panel"
+                      onSettled={() => {
+                        onReload();
+                        if (planReview.taskId !== "") reloadPlanState(planReview.taskId);
+                      }}
+                    />
+                  </div>
+                );
+              }
               const command = String(item.tool_input?.command ?? item.tool_input?.file_path ?? item.reason ?? "");
               const busy = busyId === item.id;
               return (
@@ -488,167 +549,6 @@ export function FilesPane({ phase, entries, onReload }: FilesPaneProps): React.R
           </ul>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 会话
-// ---------------------------------------------------------------------------
-
-const TASK_STATUS: Record<TaskStatus, { readonly label: string; readonly tone: TagTone }> = {
-  created: { label: "已创建", tone: "outline" },
-  queued: { label: "排队中", tone: "outline" },
-  running: { label: "运行中", tone: "success" },
-  paused: { label: "已暂停", tone: "warning" },
-  done: { label: "已完成", tone: "success" },
-  failed: { label: "失败", tone: "danger" },
-  timeout: { label: "超时", tone: "danger" },
-};
-
-const NUMBER = new Intl.NumberFormat("zh-CN");
-
-/** One label/value row in the session's metadata list. */
-function MetaRow({ label, children }: {
-  readonly label: string;
-  readonly children: React.ReactNode;
-}): React.ReactNode {
-  return (
-    <div className={css.metaRow}>
-      <dt className={css.metaLabel}>{label}</dt>
-      <dd className={css.metaValue}>{children}</dd>
-    </div>
-  );
-}
-
-/** One token counter cell. */
-function TokenCell({ label, value }: { readonly label: string; readonly value: number }): React.ReactNode {
-  return (
-    <div className={css.tokenCell}>
-      <span className={css.tokenLabel}>{label}</span>
-      <span className={css.tokenValue}>{NUMBER.format(value)}</span>
-    </div>
-  );
-}
-
-/**
- * The session page: the shell's currently selected task, section by section.
- * @param props.task - the selected task; absent means the shell has no selection.
- * @returns the page.
- */
-export function SessionPane({ task }: { readonly task?: Task | null }): React.ReactNode {
-  if (task === undefined || task === null) {
-    return (
-      <EmptyState
-        icon={<IconNewChatOutlineRegular size={26} />}
-        title="先选择一个任务"
-        hint="在左侧会话列表选中任务后，这里显示它的状态、目标进度与 token 用量"
-      />
-    );
-  }
-
-  const status = TASK_STATUS[task.status];
-  const goalsMet = task.goals_met ?? 0;
-  const goalsTotal = task.goals_total ?? 0;
-  const percent = goalsTotal > 0 ? Math.min(100, Math.round((goalsMet / goalsTotal) * 100)) : 0;
-  const title = task.name !== undefined && task.name !== "" ? task.name : task.description;
-  const tokens = task.tokens;
-  // The list payload sometimes carries only the unix second; format it the same
-  // way the backend's own RFC3339 timestamps read.
-  const lastActivity = task.last_activity !== undefined && task.last_activity !== ""
-    ? task.last_activity
-    : task.last_activity_unix !== undefined && task.last_activity_unix > 0
-      ? new Date(task.last_activity_unix * 1000).toLocaleString("zh-CN", { hour12: false })
-      : "—";
-
-  return (
-    <div className={css.page}>
-      <PaneHeader>
-        <Tag tone={status.tone}>{status.label}</Tag>
-        <span className={css.sessionId}>#{task.id}</span>
-        {task.plan_mode === true ? <Tag tone="info">计划模式</Tag> : null}
-      </PaneHeader>
-
-      <div className={css.scroll}>
-        <div className={css.session}>
-          <section className={css.section}>
-            <h3 className={css.sectionTitle}>当前会话</h3>
-            <p className={css.sessionTitle}>{title === "" ? "（未命名任务）" : title}</p>
-            {task.description === "" || task.description === title ? null : (
-              <p className={css.sessionDescription}>{task.description}</p>
-            )}
-          </section>
-
-          <section className={css.section}>
-            <h3 className={css.sectionTitle}>
-              <span className={css.sectionIcon} aria-hidden="true"><IconGoalOutlineRegular size={13} /></span>
-              任务目标
-            </h3>
-            <p className={css.sessionDescription}>{task.goal === "" ? "（未填写目标）" : task.goal}</p>
-          </section>
-
-          <section className={css.section}>
-            <h3 className={css.sectionTitle}>目标进度</h3>
-            <div className={css.progressRow}>
-              <span
-                className={css.progressTrack}
-                role="progressbar"
-                aria-label="目标完成进度"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={percent}
-              >
-                <span className={css.progressFill} style={{ width: `${percent}%` }} />
-              </span>
-              <span className={css.progressText}>{goalsMet} / {goalsTotal === 0 ? "—" : goalsTotal}</span>
-            </div>
-          </section>
-
-          <section className={css.section}>
-            <h3 className={css.sectionTitle}>运行信息</h3>
-            <dl className={css.metaList}>
-              <MetaRow label="引擎模式">{task.engine_mode ?? "—"}</MetaRow>
-              <MetaRow label="权限档">{task.permission_level ?? "—"}</MetaRow>
-              <MetaRow label="计划模式">{task.plan_mode === true ? "开启" : "关闭"}</MetaRow>
-              <MetaRow label="团队模式">{task.team_mode === true ? "开启" : "关闭"}</MetaRow>
-              <MetaRow label="创建时间">
-                <span className={css.mono}>{task.created_at}</span>
-              </MetaRow>
-              <MetaRow label="完成时间">
-                <span className={css.mono}>{task.completed_at !== undefined && task.completed_at !== "" ? task.completed_at : "—"}</span>
-              </MetaRow>
-              <MetaRow label="最近活动">
-                <span className={css.mono}>{lastActivity}</span>
-              </MetaRow>
-            </dl>
-          </section>
-
-          {task.findings === undefined ? null : (
-            <section className={css.section}>
-              <h3 className={css.sectionTitle}>
-                <span className={css.sectionIcon} aria-hidden="true"><IconShieldOutlineRegular size={13} /></span>
-                漏洞统计
-              </h3>
-              <div className={css.tagRow}>
-                <Tag tone={task.findings.critical > 0 ? "danger" : "outline"}>严重 {task.findings.critical}</Tag>
-                <Tag tone={task.findings.high > 0 ? "danger" : "outline"}>高危 {task.findings.high}</Tag>
-                <Tag tone={task.findings.medium > 0 ? "warning" : "outline"}>中危 {task.findings.medium}</Tag>
-                <Tag tone="outline">低危 {task.findings.low}</Tag>
-              </div>
-            </section>
-          )}
-
-          <section className={css.section}>
-            <h3 className={css.sectionTitle}>Token 用量</h3>
-            <div className={css.tokenGrid}>
-              <TokenCell label="输入" value={tokens?.input_tokens ?? 0} />
-              <TokenCell label="输出" value={tokens?.output_tokens ?? 0} />
-              <TokenCell label="缓存读取" value={tokens?.cache_read_tokens ?? 0} />
-              <TokenCell label="缓存写入" value={tokens?.cache_write_tokens ?? 0} />
-            </div>
-          </section>
-        </div>
-      </div>
     </div>
   );
 }

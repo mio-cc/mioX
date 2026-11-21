@@ -41,57 +41,35 @@
  * + `/exploration/findings/{id}/traffic`), and the active Task the shell passes
  * in. Each pane scrolls on its own and owns its own page selection.
  *
- * The 资产 / 证据 pages are unit C23 (P1:E8): the old right panel had six tabs
- * (`components/layout/right-panel.tsx:23-31`) and /v2 carried four, so these two
- * close the gap. Their bodies take no data props: each owns its adapter
- * (`v2/data/right-panel-assets.ts`, `v2/data/right-panel-evidence.ts`) and reads
- * the task the pane is handed, so a page switch never re-fetches anything.
+ * U3 (.tmp/d6-ia-inventory.md §4.3) cut the strip from seven pages to four
+ * inspectors: 审批 / 发现 / 证据 / 文件. 任务 and 会话 were truncated copies of the
+ * conversation's 概览 (now 概览 ▸ 状态, which also took 会话's permission / plan /
+ * team fields); 资产 was the first 20 rows of 中·资产. Their old `?rp=` deep links
+ * open the conversation View that now holds them (RETIRED_TABS). The page bodies
+ * (TaskPane.tsx, AssetsPane.tsx, SessionPane) are no longer mounted.
  *
- * 任务 closes P1:E8: the old strip's first page (`right-panel.tsx:15`, `:24`) was
- * the one /v2 still lacked. Its body (`TaskPane.tsx`) reads through
- * `v2/data/task-overview.ts`; the four reads are held here, like the other
- * panel-level adapters, so switching pages or splitting never re-fetches them.
- *
- * The strip budgets its chips by its own measured width (UX7). The seven fixed
- * pages carry two-character labels, far narrower than the kit's 80px chip floor
- * assumes, so a chip that no longer fits moves into a More menu instead of
- * scrolling out of reach; the selected page always keeps a visible seat.
+ * The strip still budgets its chips by its own measured width (UX7), so a chip
+ * that no longer fits moves into a More menu instead of scrolling out of reach.
  */
 import * as React from "react";
 
 import type { Task } from "@/lib/types";
 import { useApprovals } from "@/v2/data/approvals";
+import { setConversationView } from "@/v2/data/conversation-view-url";
 import { useFindings } from "@/v2/data/findings";
 import { findingsToRows } from "@/v2/data/findings-map";
-import {
-  useOverviewSummary,
-  useTaskConstraints,
-  useTaskGoals,
-  useTaskScope,
-} from "@/v2/data/task-overview";
 import { useWorkspaceFiles } from "@/v2/data/workspace-files";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { IconEllipsisOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 import { Menu } from "@/vendor/dsh/primitives/Menu";
 
 import { PanelChrome } from "./PanelChrome";
-import { ApprovalsPane, FilesPane, FindingsPane, SessionPane } from "./Panes";
-import { AssetsPane } from "./AssetsPane";
+import { ApprovalsPane, FilesPane, FindingsPane } from "./Panes";
 import { EvidencePane } from "./EvidencePane";
-import { TaskPane } from "./TaskPane";
 import css from "./RightPanel.module.css";
 
-/**
- * The right panel's pages, in strip order. The first four are the pages the
- * panel started with; 资产 / 证据 are unit C23's additions, placed where the old
- * panel had them (`components/layout/right-panel.tsx:24-30`: 资产 and 证据 sit
- * between 任务 and 审批).
- *
- * 任务 is the last page of the old panel to be ported (P1:E8 close-out): the old
- * strip opens with it (`right-panel.tsx:15` `RightTab` and `:24` `tabs[0]`), so
- * it is inserted first here and the six existing pages keep their order.
- */
-export type RightPanelTab = "task" | "findings" | "assets" | "evidence" | "approvals" | "files" | "session";
+/** The right panel's pages, in strip order (U3: 审批 first). */
+export type RightPanelTab = "approvals" | "findings" | "evidence" | "files";
 
 /** A docked pane's side. The left one is the panel itself until it is split. */
 type PaneId = "left" | "right";
@@ -101,15 +79,24 @@ interface TabDefinition {
   readonly label: string;
 }
 
+/**
+ * U3（.tmp/d6-ia-inventory.md §4.3）：7 → 4。右栏只放「一边聊一边看/点」的检查器：
+ * 审批（第一位）/ 发现 / 证据 / 文件。原「任务」「会话」是概览的截断副本 → 概览 ▸ 状态；
+ * 原「资产」是中·资产的前 20 条 → 中·资产。旧 `?rp=` 深链见 {@link RETIRED_TABS}。
+ */
 const TABS: readonly TabDefinition[] = [
-  { id: "task", label: "任务" },
-  { id: "findings", label: "发现" },
-  { id: "assets", label: "资产" },
-  { id: "evidence", label: "证据" },
   { id: "approvals", label: "审批" },
+  { id: "findings", label: "发现" },
+  { id: "evidence", label: "证据" },
   { id: "files", label: "文件" },
-  { id: "session", label: "会话" },
 ];
+
+/** Retired pages → the conversation View that now owns their content. */
+const RETIRED_TABS: Readonly<Record<string, string>> = {
+  task: "overview.status",
+  session: "overview.status",
+  assets: "assets.tasks",
+};
 
 const TAB_IDS: readonly RightPanelTab[] = TABS.map((tab) => tab.id);
 
@@ -209,6 +196,12 @@ function clampShare(value: number): number {
 function tabFromLocation(): RightPanelTab | undefined {
   if (typeof window === "undefined") return undefined;
   const value = new URLSearchParams(window.location.search).get("rp");
+  // A retired page's deep link opens the conversation View that now holds it.
+  const moved = value === null ? undefined : RETIRED_TABS[value];
+  if (moved !== undefined) {
+    setConversationView(moved);
+    return undefined;
+  }
   return TAB_IDS.find((id) => id === value);
 }
 
@@ -230,6 +223,8 @@ interface PaneViewProps {
   readonly onClose: () => void;
   readonly renderPage: (tab: RightPanelTab) => React.ReactNode;
   readonly chipElements: React.MutableRefObject<Map<string, HTMLButtonElement>>;
+  /** Pending approvals (all tasks), drawn as a count on the 审批 chip. */
+  readonly pendingApprovals: number;
 }
 
 /**
@@ -240,7 +235,7 @@ interface PaneViewProps {
 function PaneView(props: PaneViewProps): React.ReactNode {
   const {
     pane, tab, active, showChrome, split, canSplit, fullscreen,
-    onSelect, onActivate, onToggleSplit, onToggleFullscreen, onClose, renderPage, chipElements,
+    onSelect, onActivate, onToggleSplit, onToggleFullscreen, onClose, renderPage, chipElements, pendingApprovals,
   } = props;
   const chipKey = (id: RightPanelTab): string => `${pane}:${id}`;
 
@@ -370,8 +365,14 @@ function PaneView(props: PaneViewProps): React.ReactNode {
                 onKeyDown={(event) => {
                   onChipKeyDown(event, id);
                 }}
+                title={id === "approvals" ? "全部任务的待审批" : undefined}
               >
                 {label}
+                {id === "approvals" && pendingApprovals > 0 ? (
+                  <span className={css.chipCount} data-rp-approvals-count={pendingApprovals}>
+                    {pendingApprovals > 99 ? "99+" : pendingApprovals}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -544,9 +545,14 @@ function SplitDivider({ share, onChange }: SplitDividerProps): React.ReactNode {
  * @returns the panel.
  */
 export function RightPanel({ onClose, task }: { onClose: () => void; task?: Task | null }): React.ReactNode {
+  // The 任务 page (P1:E8 close-out) reads its four sources here, once, so a page
+  // switch or a split never re-fetches them; page bodies only render.
+  const taskId = task === null || task === undefined ? null : String(task.id);
   // Data is read once here, not per page mount, so switching pages or opening
-  // the second pane keeps the loaded rows.
-  const findingsState = useFindings();
+  // the second pane keeps the loaded rows. Findings are scoped to the selected
+  // task like the assets / evidence pages beside them (D6: the unscoped read
+  // listed every task's findings next to this task's conversation).
+  const findingsState = useFindings(taskId ?? undefined);
   const rows = React.useMemo(
     () => (findingsState.findings === null ? [] : findingsToRows(findingsState.findings)),
     [findingsState.findings],
@@ -554,18 +560,22 @@ export function RightPanel({ onClose, task }: { onClose: () => void; task?: Task
   const findings = findingsState.findings;
   const approvals = useApprovals();
   const files = useWorkspaceFiles();
-  // The 任务 page (P1:E8 close-out) reads its four sources here, once, so a page
-  // switch or a split never re-fetches them; page bodies only render.
-  const taskId = task === null || task === undefined ? null : String(task.id);
-  const taskSummary = useOverviewSummary(taskId);
-  const taskConstraints = useTaskConstraints(taskId);
-  const taskScope = useTaskScope(taskId);
-  const taskGoals = useTaskGoals(taskId);
+  const pendingApprovals = approvals.pending.length;
 
   const [tabByPane, setTabByPane] = React.useState<Record<PaneId, RightPanelTab>>({
     left: "findings",
-    right: "approvals",
+    right: "evidence",
   });
+  // U3 default: open on 审批 while something waits for a decision (once per mount,
+  // so a user who moved away is not dragged back by the next poll).
+  const approvalsDefaulted = React.useRef(false);
+  React.useEffect(() => {
+    if (approvalsDefaulted.current || approvals.phase !== "ready") return;
+    approvalsDefaulted.current = true;
+    if (pendingApprovals > 0 && tabFromLocation() === undefined) {
+      setTabByPane((current) => ({ ...current, left: "approvals" }));
+    }
+  }, [approvals.phase, pendingApprovals]);
   /** Whether the column currently shows two panes. */
   const [split, setSplit] = React.useState(false);
   /** The pane the user last interacted with; the merge target and the split seed read it. */
@@ -650,24 +660,16 @@ export function RightPanel({ onClose, task }: { onClose: () => void; task?: Task
   /** Choose every page body from one place, so both panes share the data wiring. */
   const renderPage = (page: RightPanelTab): React.ReactNode => {
     switch (page) {
-      case "task":
-        // The page body only renders the four adapters' state; the reads live
-        // above so the pane keeps its rows across page switches.
+      case "findings":
         return (
-          <TaskPane
-            task={task}
-            summary={taskSummary}
-            constraints={taskConstraints}
-            scope={taskScope}
-            goals={taskGoals}
+          <FindingsPane
+            phase={findingsState.phase}
+            findings={findings}
+            rows={rows}
+            onReload={findingsState.reload}
+            scopedTaskId={taskId}
           />
         );
-      case "findings":
-        return <FindingsPane phase={findingsState.phase} findings={findings} rows={rows} onReload={findingsState.reload} />;
-      case "assets":
-        // The page owns its adapter (`v2/data/right-panel-assets.ts`, C23), so
-        // switching pages never re-reads the task's asset page.
-        return <AssetsPane task={task} />;
       case "evidence":
         // Same for the bound-traffic evidence (`v2/data/right-panel-evidence.ts`).
         return <EvidencePane task={task} />;
@@ -682,8 +684,6 @@ export function RightPanel({ onClose, task }: { onClose: () => void; task?: Task
         );
       case "files":
         return <FilesPane phase={files.phase} entries={files.entries} onReload={files.reload} />;
-      case "session":
-        return <SessionPane task={task} />;
       default:
         return null;
     }
@@ -730,6 +730,7 @@ export function RightPanel({ onClose, task }: { onClose: () => void; task?: Task
           onClose={onClose}
           renderPage={renderPage}
           chipElements={chipElements}
+          pendingApprovals={pendingApprovals}
         />
         {split ? (
           <>
@@ -751,6 +752,7 @@ export function RightPanel({ onClose, task }: { onClose: () => void; task?: Task
               onClose={onClose}
               renderPage={renderPage}
               chipElements={chipElements}
+              pendingApprovals={pendingApprovals}
             />
           </>
         ) : null}

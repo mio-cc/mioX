@@ -22,7 +22,7 @@ import { Input } from "@/vendor/dsh/primitives/Input";
 
 import { clearToken, hasToken, login, probeAuthMode, saveToken } from "@/v2/data/auth";
 
-import css from "./auth.module.css";
+import css from "@/components/v2/auth/auth.module.css";
 
 /** 登录成功后进入的界面（/v2 的默认外壳）。 */
 const HOME_PATH = "/v2/shell";

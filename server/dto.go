@@ -71,6 +71,9 @@ type TaskDTO struct {
 	// 注意不能复用上面的 Goal 字符串字段:那是建任务时填的静态目标,前端 8+ 处
 	// 按字符串消费(sidebar / 列表 / 概览 / 右栏),改成对象会破坏兼容。
 	GoalState *TaskGoalDTO `json:"goal_state"`
+	// PendingPlanReviewID 是该任务最新一条未决计划审阅(intercept_pending,
+	// tool_name=exit_plan_mode,status=pending)的 id;无则省略。仅 GET /api/tasks/{id} 填。
+	PendingPlanReviewID string `json:"pending_plan_review_id,omitempty"`
 }
 
 // FindingSeverityDTO 是任务列表里按严重度分档的漏洞计数（严重/高/中/低）。
@@ -495,6 +498,7 @@ type ActivityDTO struct {
 	IsError      bool            `json:"is_error"`
 	Summary      string          `json:"summary"`
 	Detail       string          `json:"detail,omitempty"`
+	DetailHead   string          `json:"detail_head,omitempty"` // UTF-8-safe 2000-char detail prefix; lets the transcript render bodies without the lazy round-trip
 	Metadata     json.RawMessage `json:"metadata,omitempty"`
 	SourceTaskID string          `json:"source_task_id,omitempty"`
 	Inherited    bool            `json:"inherited,omitempty"`
@@ -522,6 +526,7 @@ func activityDTO(a db.Activity) ActivityDTO {
 		IsError:          a.IsError,
 		Summary:          a.Summary,
 		Detail:           a.Detail, // list endpoint leaves this empty (lazy)
+		DetailHead:       a.DetailHead,
 		Metadata:         a.Metadata,
 		InputTokens:      a.InputTokens,
 		OutputTokens:     a.OutputTokens,

@@ -20,7 +20,7 @@ import type { FindingTrafficBinding, TrafficEvidenceRole } from "@/lib/types";
 import { toast } from "@/components/v2/settings/Toast";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
+import { FilterBar } from "@/components/v2/design/Kit";
 import {
   boundTrafficIds,
   editFindingTraffic,
@@ -312,7 +312,7 @@ export function FindingTrafficPanel({
       >
         {edit === null ? null : (
           <div className={css.form}>
-            <SegmentedControl
+            <FilterBar
               id="traffic-role"
               label="用途"
               value={edit.role}

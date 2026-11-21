@@ -43,7 +43,7 @@ import { SelectMenu } from "@/components/v2/settings/SelectMenu";
 import { toast } from "@/components/v2/settings/Toast";
 import type { FindingStatus } from "@/lib/types";
 import { Button } from "@/vendor/dsh/primitives/Button";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
+import { FilterBar } from "@/components/v2/design/Kit";
 import {
   IconChevronRightOutlineRegular,
   IconRefreshOutlineRegular,
@@ -83,6 +83,12 @@ import css from "./FindingsDataPage.module.css";
 /** Search param that selects the detail level (absent = the list). */
 const FINDING_PARAM = "finding";
 
+/**
+ * Search param that presets the task filter on a deep link（U1：`?ftask=<id>`，
+ * 中·发现「在发现库查看全部」）。不用 `task`：那是 Shell 的选中任务参数（Shell.tsx:1323）。
+ */
+const FTASK_PARAM = "ftask";
+
 /** Severity filter value: a backend severity, or `all`. */
 type SeverityFilter = "all" | (typeof SEVERITY_FILTER_ORDER)[number];
 
@@ -117,6 +123,18 @@ function readFindingParam(): string | null {
   if (typeof window === "undefined") return null;
   const value = new URLSearchParams(window.location.search).get(FINDING_PARAM);
   return value === "" ? null : value;
+}
+
+/**
+ * 筛选初值（U1）：默认筛选，再读一次 `?ftask=` 预置任务筛选（只在挂载时读，
+ * 之后筛选是页内 state，与旧页一致）。服务端渲染返回默认值。
+ * @returns 初值；地址没有 `ftask` 时任务筛选取默认 `all`。
+ */
+function readInitialFilters(): FindingsFilters {
+  if (typeof window === "undefined") return DEFAULT_FILTERS;
+  const value = new URLSearchParams(window.location.search).get(FTASK_PARAM);
+  if (value === null || value.trim() === "") return DEFAULT_FILTERS;
+  return { ...DEFAULT_FILTERS, task: value.trim() };
 }
 
 /**
@@ -155,7 +173,7 @@ function severityClass(severity: string): string {
  * @returns the list surface, or the detail view when `?finding=` names a row.
  */
 export function FindingsDataPage(): ReactNode {
-  const [filters, setFilters] = useState<FindingsFilters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<FindingsFilters>(readInitialFilters);
   const [openId, setOpenId] = useState<string | null>(null);
 
   // 三视图（C08）：view 默认平铺；assetScope 只在「按资产」视图里生效（旧页 :317）。
@@ -402,7 +420,7 @@ export function FindingsDataPage(): ReactNode {
     <>
       <header className={css.head}>
         <div>
-          <h1 className={css.title}>发现</h1>
+          <h1 className={css.title}>发现库</h1>
           <p className={css.lead}>跨任务漏洞汇总：按严重度、状态、类型与任务筛选。</p>
         </div>
         <div className={css.headActions} role="toolbar" aria-label="发现页头动作">
@@ -519,7 +537,7 @@ export function FindingsDataPage(): ReactNode {
       </div>
 
       <div className={css.viewBar} role="group" aria-label="发现视图切换" data-findings-view={view}>
-        <SegmentedControl<FindingsView>
+        <FilterBar<FindingsView>
           id="findings-view"
           label="发现视图"
           value={view}

@@ -5,23 +5,84 @@
 
 /* ---- 「当前 / 已归档」切换（TaskListSwitch） ---- */
 
-/* Two equal tabs filling the region width: the segmented control stretches so
-   both halves are full-size hit targets (the old fixed-width pill left a dead
-   strip on the right and read as a stray button). */
+/* D1: the switch is the region caption itself — two caption-size text tabs
+   ("任务 · 归档") with a short underline under the selected one. No track, no
+   pill, no extra row: it takes the place of the old "默认工作区" title. */
 .switchBar {
-  display: flex;
+  display: inline-flex;
+  align-items: stretch;
+  gap: 14px;
   min-width: 0;
+  height: 26px;
 }
 
-.switchBar > * {
-  flex: 1 1 auto;
-  width: 100%;
+.switchTab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 1px;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
 }
 
-.switchBar :global([role="tab"]),
-.switchBar :global([role="radio"]),
-.switchBar button {
-  flex: 1 1 0;
+.switchTab::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+@media (hover: hover) {
+  .switchTab:hover:not(:disabled) {
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.switchTabOn {
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .switchTabOn:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.switchTabOn::after {
+  transform: scaleX(1);
+}
+
+.switchTab:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.switchTab:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switchTab::after {
+    transition: none;
+  }
 }
 
 /* ---- 归档箱外壳（TaskArchiveView） ---- */
@@ -101,7 +162,8 @@
 }
 
 .selBar > button {
-  height: 24px;
+  /* DSH sm Button 28px（Button.module.css:28-34）；与多选工具条（TaskBulkBar）同一高度。 */
+  height: 28px;
   font-size: 12px;
   line-height: 18px;
 }

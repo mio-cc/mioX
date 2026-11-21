@@ -11,10 +11,11 @@
   align-items: center;
   gap: 8px;
   min-height: 32px;
-  padding: 0 9px;
+  padding: 0 8px 0 9px;
   border-radius: var(--dsw-radius-md);
   color: var(--dsw-alias-label-secondary);
-  font-size: 13px;
+  /* DSH Rows.sessionRow.title：14/20（检查过 :73）。 */
+  font-size: 14px;
   line-height: 20px;
   cursor: pointer;
   outline: none;
@@ -34,19 +35,19 @@
 }
 
 .row:active {
-  background: var(--dsw-alias-interactive-bg-active);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Persistent selection: a stronger fill than hover so the two never read alike
-   (DSH review case S1: selection beside temporary hover). */
+/* Persistent selection: DSH Rows `.sessionRow.selected` 也用 hover 档填充
+   （`Rows.module.css:24-26`）；选中行与悬停行同档，靠持续出现本身区分。 */
 .rowActive {
-  background: var(--dsw-alias-interactive-bg-active);
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
 
 @media (hover: hover) {
   .rowActive:hover {
-    background: var(--dsw-alias-interactive-bg-active);
+    background: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
@@ -154,14 +155,19 @@
 .time {
   flex: 0 0 auto;
   color: var(--dsw-alias-label-tertiary);
+  /* DSH Rows `.time` is 10/16; mioX's CJK relative times ("9 小时") read too
+     small at 10px on Windows, so one step up. */
   font-size: 11px;
   line-height: 16px;
+  margin-inline-end: -1px;
   font-variant-numeric: tabular-nums;
   transition: opacity var(--ds-transition-duration-fast) var(--ds-ease-in-out);
 }
 
 /* Row menu trigger: floats over the time stamp; shown on hover, keyboard focus,
-   or while its menu is open. */
+   or while its menu is open. DSH WorkspaceBrowser `.iconButton`（:28-41）：
+   透明底、hover 才给 interactive-bg-hover——不是白色浮起 chip。用户 2026-11-21
+   再次点名：行悬停按钮不应有白色底色。 */
 .more {
   position: absolute;
   top: 6px;
@@ -174,9 +180,8 @@
   padding: 0;
   border: 0;
   border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-1);
+  background: transparent;
   color: var(--dsw-alias-label-secondary);
-  box-shadow: var(--dsw-elevation-stroke);
   opacity: 0;
   cursor: pointer;
   transition: opacity var(--ds-transition-duration-fast) var(--ds-ease-in-out);
@@ -231,34 +236,31 @@
   overflow: hidden;
   padding-left: 14px;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 18px;
   white-space: nowrap;
 }
 
+/* D4 colour restraint: the leading dot already carries the state colour, so the
+   status word stays neutral; only states that need attention keep their ink
+   (running = brand, failed = red). Done / paused / idle read as quiet grey. */
 .metaStatus {
   flex: 0 0 auto;
-  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
 }
 
-.ink_success {
-  color: var(--dsw-alias-state-success-primary);
+.ink_success,
+.ink_warning,
+.ink_neutral {
+  color: var(--dsw-alias-label-secondary);
 }
 
 .ink_info {
   color: var(--dsw-alias-state-business-primary);
 }
 
-.ink_warning {
-  color: var(--dsw-alias-state-warn-label);
-}
-
 .ink_danger {
   color: var(--dsw-alias-state-error-primary);
-}
-
-.ink_neutral {
-  color: var(--dsw-alias-label-tertiary);
 }
 
 .metaItem {

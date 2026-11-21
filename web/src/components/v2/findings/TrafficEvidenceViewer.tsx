@@ -12,7 +12,7 @@ import type { EvidenceBodyPreview, FindingTrafficBinding } from "@/lib/types";
 import { toast } from "@/components/v2/settings/Toast";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
+import { FilterBar } from "@/components/v2/design/Kit";
 import {
   downloadFindingTrafficBody,
   findingTrafficDetail,
@@ -149,7 +149,7 @@ export function TrafficEvidenceViewer({
       }
     >
       <div className={css.wrap} data-traffic-evidence={bindingId ?? ""}>
-        <SegmentedControl
+        <FilterBar
           id="traffic-evidence-side"
           label="报文方向"
           value={side}

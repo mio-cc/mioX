@@ -19,7 +19,7 @@ import { ThreadView, type ThreadHistoryState } from "@/components/v2/thread/Thre
 import type { Activity, Task } from "@/lib/types";
 import type { ActivityPhase } from "@/v2/data/activity";
 import { toBlocks } from "@/v2/data/activity-blocks";
-import { findTaskView } from "@/v2/data/conversation-views";
+import { findTaskView, splitViewId } from "@/v2/data/conversation-views";
 import { editAndResend } from "@/v2/data/message-edit";
 import { useOlderHistory } from "@/v2/data/message-history";
 import { isSubLane, laneKeyOf } from "@/v2/data/sessions";
@@ -154,13 +154,15 @@ export function ConversationViews({
   };
 
   // A registered task View (TC0) owns the View area; it only renders with a task.
+  // U2: `explore.graph` = container `explore` + sub-view `graph`.
   const extraView = view !== "chat" && view !== "trajectory" ? findTaskView(view) : null;
   const ExtraView = extraView?.Component ?? null;
+  const subView = splitViewId(view).sub;
 
   return (
     <div className={css.viewArea} data-view={view} data-p1-b7-view-lane={lane ?? ""}>
       {ExtraView !== null && task != null ? (
-        <ExtraView task={task} />
+        <ExtraView task={task} sub={subView} />
       ) : view === "trajectory" ? (
         <TrajectoryView activities={merged} phase={activityPhase} />
       ) : (

@@ -21,7 +21,7 @@ import { Button } from "@/vendor/dsh/primitives/Button";
 import { Checkbox } from "@/vendor/dsh/primitives/Checkbox";
 import { Input } from "@/vendor/dsh/primitives/Input";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
+import { FilterBar } from "@/components/v2/design/Kit";
 import { Tag } from "@/vendor/dsh/primitives/Tag";
 import {
   IconChevronLeftOutlineRegular,
@@ -242,7 +242,7 @@ export function TrafficPickerDialog({
             onChange={(next) => onFilter({ size: Number(next), page: 1 })}
           />
           <span className={css.fieldLabel}>用途</span>
-          <SegmentedControl
+          <FilterBar
             id="traffic-picker-role"
             label="绑定用途"
             value={role}

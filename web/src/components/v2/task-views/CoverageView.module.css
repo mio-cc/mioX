@@ -1,129 +1,74 @@
-/* 覆盖度视图（C17）。只用 --dsw-* 语义变量。 */
+/* 覆盖度视图（D2）：版式来自 design/Kit；这里只放本页特有的小件。只用 --dsw-* 语义变量。 */
 
-.wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 20px 48px;
-  min-width: 0;
-  font-family: var(--dsw-font-family);
+.denominator {
+  color: var(--dsw-alias-label-tertiary);
+  font-weight: 400;
+}
+
+/* ---- By-type distribution rows: thin progress bar + ratio ---- */
+
+.bar {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 80px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.barFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.ratio {
+  flex: 0 0 auto;
+  min-width: 64px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--dsw-alias-label-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
+/* ---- Graph card ---- */
 
-.toolbarRight {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.title {
-  font-size: var(--dsw-font-xs-13, 13px);
-  font-weight: 500;
-}
-
-.muted {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.note {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.stateError {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  padding: 12px 14px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
-}
-
-.sectionHead {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.blockTitle {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  font-weight: 500;
-  color: var(--dsw-alias-label-secondary);
+.graphCard {
+  overflow: hidden;
 }
 
 .legend {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px 16px;
+  min-width: 0;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.legendKinds {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
   margin-left: auto;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
 }
 
-.stats {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 24px;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.statLabel {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.statValue {
-  font-size: var(--dsw-font-l-20-font-size, 20px);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-primary);
-}
-
-.typeChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
+/* The canvas needs a declared height or React Flow renders at zero. */
 .canvas {
-  height: 380px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
-  overflow: hidden;
+  height: 420px;
   background: var(--dsw-alias-bg-layer-2);
 }
+
+/* ---- Node detail (modal) ---- */
 
 .detail {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   min-width: 0;
   font-family: var(--dsw-font-family);
   color: var(--dsw-alias-label-primary);
@@ -137,84 +82,26 @@
 }
 
 .detailLabel {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--ds-font-family-code);
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-secondary);
-}
-
-.props {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.propRow {
-  display: flex;
-  gap: 12px;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  line-height: 20px;
-}
-
-.propLabel {
-  flex: 0 0 64px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.propValue {
-  min-width: 0;
-  flex: 1;
-  word-break: break-all;
-  font-family: var(--ds-font-family-code);
-  color: var(--dsw-alias-label-primary);
 }
 
 .refWrap {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-top: 10px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
-}
-
-.refBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.refList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.refRow {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 4px 6px;
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-2);
-  font-size: var(--dsw-font-xxs-12, 12px);
-}
-
-.refId {
-  flex: 0 0 auto;
-  font-family: var(--ds-font-family-code);
-  color: var(--dsw-alias-label-tertiary);
+  gap: 16px;
 }
 
 .refSummary {
-  min-width: 0;
-  flex: 1;
-  word-break: break-word;
-  color: var(--dsw-alias-label-primary);
+  white-space: normal;
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
 }

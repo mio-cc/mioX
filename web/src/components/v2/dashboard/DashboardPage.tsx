@@ -14,11 +14,12 @@
  * 数据全部来自 `v2/data/dashboard.ts`：三组独立轮询（任务 5s / 快源 5s / 慢源 15s），
  * 失败保留上一次的值；所以一组的失败只会让依赖它的卡片显示该卡失败，整页仍是可用的。
  *
- * 任务入口的说明（红线 3，不画假链接）：旧页 page.tsx:999 的
- * `/function/tasks/detail?id=` 是旧路由，/v2 里任务详情就是会话视图，没有可构造的地址；
- * Shell 也不导出「选中任务」的接口（`Shell.tsx:116` 的 active 是组件内 state）。因此活动流
- * 行与任务表行**不做假跳转**，只显示真实字段，并提供「返回会话」真实 SPA 导航。
- * 漏洞行与「全部」有真实目的地（`?page=findings&finding=<id>` / `?page=findings`）。
+ * 任务入口的说明：旧页 page.tsx:999 的 `/function/tasks/detail?id=` 是旧路由，/v2 里任务详情
+ * 就是会话视图；本说明在 U1 前写的是「Shell 不导出选中任务的接口、行不做假跳转」。U1
+ * （.tmp/d6-ia-inventory.md §4.4「总览」）起这条前提过时：`?task=` 深链由 Shell 的 popstate
+ * 处理重读（Shell.tsx:410-417），所以任务行现在用「写地址 + popstate」真实打开该任务的会话
+ * （`openTaskConversation`），不改 Shell。漏洞行与「全部」有真实目的地
+ * （`?page=findings&finding=<id>` / `?page=findings`）。
  */
 import { type ReactNode, useMemo } from "react";
 
@@ -186,13 +187,41 @@ function StatusRow({ label, children, field }: { label: string; children: ReactN
   );
 }
 
-/** 最近任务表的一行（窄主区靠外层横向滚动，表格不压扁列）。 */
+/**
+ * 打开一个任务的会话（U1）：写 `?task=<id>`、摘掉 `?page=`，再派发 popstate 让 Shell 的
+ * 地址重读跟上（Shell.tsx:410-417 读回 `?task=` / `?page=`）。这是真实 SPA 导航，
+ * 写法与本页 `openFindingsPage` 等 `?page=` 跳转同族，不画假链接。
+ * @param id - 任务 id。
+ */
+function openTaskConversation(id: string): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set("task", id);
+  url.searchParams.delete("page");
+  window.history.pushState(window.history.state, "", url.toString());
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+/** 最近任务表的一行（窄主区靠外层横向滚动，表格不压扁列）；U1：整行可点，打开该任务会话。 */
 function TaskRow({ task }: { task: Task }): ReactNode {
   const pct = task.goals_total !== undefined && task.goals_total > 0
     ? Math.round(((task.goals_met ?? 0) / task.goals_total) * 100)
     : null;
+  const open = (): void => openTaskConversation(task.id);
   return (
-    <tr data-dashboard-task={task.id}>
+    <tr
+      data-dashboard-task={task.id}
+      tabIndex={0}
+      role="link"
+      title={`打开任务 ${task.id} 的会话`}
+      style={{ cursor: "pointer" }}
+      onClick={open}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          open();
+        }
+      }}
+    >
       <td className={css.cellTask}>
         <span className={css.taskDesc}>{task.name !== undefined && task.name !== "" ? task.name : task.description}</span>
         <span className={css.mono}>{task.id}</span>

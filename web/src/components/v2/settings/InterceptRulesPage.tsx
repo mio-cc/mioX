@@ -7,22 +7,42 @@
  * 数据走 @/v2/data/intercept-rules（GET/POST/PUT/DELETE /intercept/rules），
  * 交互文案对齐旧页 app/(main)/system/intercept/page.tsx：优先级越大越先匹配，
  * 首条命中生效。删除需要二次确认。
+ *
+ * 版式（D3 设计重塑）：SettingsPage → PageHead（随子页签换说明与动作）→ FilterBar 子页签 →
+ * Section → Card + Row。规则一行：开关 · 名称 + 动作徽标 · 匹配目标/方式/模式元信息 ·
+ * 行尾优先级格与 ⋯ 菜单（编辑 / 删除）；新建在列表末尾的虚线位；编辑与新建在弹窗里。
  * 旧页面依据：ARTEX/web/src/app/(main)/system/intercept/page.tsx:654-759（拦截规则 / 模型配置两个页签）
- * DSH 依据：DSH 无拦截配置，按设置分节子页签扩展（总表 §4.3）；
- * 子页签样式复用 SettingsDialog.module.css 的 agentTabs / agentTab / agentTabActive。
+ * DSH 依据：DSH 无拦截配置，按设置分节子页签扩展（总表 §4.3）。
  * 对照表行：P3:I1 P3:I2 P3:I3 P3:I4 P3:I5 P3:I6 P3:I7 P3:I8 P3:I9 P3:I10
  */
 import * as React from "react";
 
 import { Button } from "@/vendor/dsh/primitives/Button";
+import { Modal } from "@/vendor/dsh/primitives/Modal";
 import { Switch } from "@/vendor/dsh/primitives/Switch";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
-import {
-  IconPlusOutlineRegular,
-  IconRefreshOutlineRegular,
-  IconTrashOutlineRegular,
-} from "@/vendor/dsh/primitives/icons/index";
+import { IconPlusOutlineRegular, IconShieldOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 
+import {
+  AddSlot,
+  AddSlots,
+  Badge,
+  Card,
+  EditorGroup,
+  Empty,
+  Field,
+  FieldGrid,
+  FilterBar,
+  type KitTone,
+  Meta,
+  Notice,
+  PageHead,
+  Row,
+  Section,
+  SettingsPage,
+  Skeleton,
+  TextInput,
+  UnitInput,
+} from "@/components/v2/design/Kit";
 import type { InterceptRule } from "@/lib/types";
 import {
   createInterceptRule,
@@ -34,44 +54,47 @@ import {
 } from "@/v2/data/intercept-rules";
 import { SelectMenu } from "./SelectMenu";
 import { toast } from "./Toast";
-import { JudgePane, ToolScopePane } from "./InterceptAdvanced";
+import { errorText, type InterceptHead, JudgePane, RefreshButton, RowMenu, ToolScopePane } from "./InterceptAdvanced";
 import { AssetInterceptRules } from "./AssetInterceptRules";
-import css from "./SettingsDialog.module.css";
+import shared from "./SettingsDialog.module.css";
+import own from "./InterceptRulesPage.module.css";
 
 /** 页内子页签：规则列表 / 工具范围（P3:I6）/ 模型审批（P3:I7、P3:I8）/ 资产黑名单（P3:I9、P3:I10）。 */
 const TABS = [
-  { id: "rules", label: "规则" },
-  { id: "tools", label: "工具范围" },
-  { id: "judge", label: "模型审批" },
-  { id: "assets", label: "资产黑名单" },
+  { value: "rules", label: "规则" },
+  { value: "tools", label: "工具范围" },
+  { value: "judge", label: "模型审批" },
+  { value: "assets", label: "资产黑名单" },
 ] as const;
 
-type TabId = (typeof TABS)[number]["id"];
+type TabId = (typeof TABS)[number]["value"];
 
-/** 设置分节「拦截规则」的入口：一个页内页签条 + 当前页签正文。 */
+/** 设置分节「拦截规则」的入口：页头 + 子页签条 + 当前页签正文（页头内容由页签提供）。 */
 export function InterceptPage(): React.ReactNode {
   const [tab, setTab] = React.useState<TabId>("rules");
+
+  const head: InterceptHead = ({ lead, actions }) => (
+    <div className={own.headBlock}>
+      <PageHead title="拦截规则" lead={lead} actions={actions} />
+      <FilterBar
+        id="intercept-tab"
+        label="拦截规则子页"
+        className={own.tabs}
+        options={TABS}
+        value={tab}
+        onChange={setTab}
+        data={{ "data-intercept-tab": tab }}
+      />
+    </div>
+  );
+
   return (
-    <>
-      <div className={css.agentTabs}>
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`${css.agentTab} ${tab === item.id ? css.agentTabActive : ""}`}
-            data-intercept-tab={item.id}
-            aria-pressed={tab === item.id}
-            onClick={() => setTab(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-      {tab === "tools" ? <ToolScopePane /> : null}
-      {tab === "judge" ? <JudgePane /> : null}
-      {tab === "assets" ? <AssetInterceptRules /> : null}
-      {tab === "rules" ? <RulesPane /> : null}
-    </>
+    <SettingsPage data={{ "data-settings-intercept": tab }}>
+      {tab === "rules" ? <RulesPane head={head} /> : null}
+      {tab === "tools" ? <ToolScopePane head={head} /> : null}
+      {tab === "judge" ? <JudgePane head={head} /> : null}
+      {tab === "assets" ? <AssetInterceptRules head={head} /> : null}
+    </SettingsPage>
   );
 }
 
@@ -98,12 +121,9 @@ const TIMEOUT_OPTIONS = [
 
 const ACTION_LABEL: Record<string, string> = { allow: "允许", deny: "禁止", ask: "申请审批" };
 
-/** 一句话摘要：匹配目标/类型/策略/优先级。 */
-function ruleSummary(rule: InterceptRule): string {
-  return `${rule.match_target === "tool_name" ? "工具名" : "输入内容"} · ${
-    rule.match_type === "regex" ? "正则" : "包含"
-  } · ${ACTION_LABEL[rule.action] ?? rule.action} · 优先级 ${rule.priority}`;
-}
+const ACTION_TONE: Record<string, KitTone> = { allow: "success", deny: "danger", ask: "warning" };
+
+const RULES_LEAD = "优先级越大越先匹配，首条命中生效；规则直接决定 Agent 工具能否执行。";
 
 function ruleToInput(rule: InterceptRule): InterceptRuleInput {
   return {
@@ -122,91 +142,108 @@ function ruleToInput(rule: InterceptRule): InterceptRuleInput {
 }
 
 /** 「规则」子页签正文：真实的拦截规则列表 + 新增/编辑/启停/删除。 */
-function RulesPane(): React.ReactNode {
+function RulesPane({ head }: { head: InterceptHead }): React.ReactNode {
   const rules = useInterceptRules();
-  const [editing, setEditing] = React.useState<number | "new" | null>(null);
+  const [editing, setEditing] = React.useState<InterceptRule | "new" | null>(null);
+  const [deleting, setDeleting] = React.useState<InterceptRule | null>(null);
+  const actions = <RefreshButton onClick={rules.reload} spinning={rules.phase === "loading"} />;
 
-  if (rules.phase === "loading") return <p className={css.pageLead}>读取拦截规则…</p>;
+  if (rules.phase === "loading") {
+    return (
+      <>
+        {head({ lead: RULES_LEAD, actions })}
+        <Card>
+          <Skeleton label="读取拦截规则" />
+        </Card>
+      </>
+    );
+  }
   if (rules.phase === "offline") {
     return (
       <>
-        <p className={css.pageLead}>未连接后端（读不到拦截规则）</p>
-        {rules.error === null ? null : <p className={css.errorLine}>{rules.error}</p>}
-        <Button variant="outline" size="sm" onClick={rules.reload}>
-          重新读取
-        </Button>
+        {head({ lead: RULES_LEAD, actions })}
+        <Notice tone="danger" action={<Button variant="ghost" size="sm" onClick={rules.reload}>重新读取</Button>}>
+          未连接后端（读不到拦截规则）{rules.error === null ? "" : `：${rules.error}`}
+        </Notice>
       </>
     );
   }
 
+  const enabledCount = rules.rules.filter((rule) => rule.enabled).length;
+
   return (
     <>
-      <h2 className={css.pageTitle}>拦截规则</h2>
-      <p className={css.pageLead}>
-        来自 GET /intercept/rules，共 {rules.rules.length} 条。优先级越大越先匹配，首条命中规则生效；规则直接决定 Agent
-        工具能否执行。
-      </p>
-      <div className={css.pageToolbar}>
-        <Button variant="outline" size="sm" onClick={() => setEditing(editing === "new" ? null : "new")}>
-          <IconPlusOutlineRegular size={13} /> 新增规则
-        </Button>
-        <Button variant="ghost" size="sm" onClick={rules.reload}>
-          <IconRefreshOutlineRegular size={13} /> 刷新
-        </Button>
-      </div>
+      {head({ lead: RULES_LEAD, actions })}
+      <Section
+        title="规则"
+        count={rules.rules.length === 0 ? undefined : `${enabledCount}/${rules.rules.length} 启用`}
+        hint={rules.rules.length === 0 ? undefined : "按优先级从高到低匹配"}
+      >
+        {rules.rules.length === 0 ? (
+          <Card>
+            <Empty
+              inCard
+              icon={<IconShieldOutlineRegular size={18} />}
+              title="还没有拦截规则"
+              text="新建一条即生效：按工具名或输入内容匹配，命中后允许、禁止或转人工审批。"
+            />
+          </Card>
+        ) : (
+          <Card>
+            {rules.rules.map((rule) => (
+              <RuleRow
+                key={rule.id}
+                rule={rule}
+                onEdit={() => setEditing(rule)}
+                onDelete={() => setDeleting(rule)}
+                onChanged={rules.reload}
+              />
+            ))}
+          </Card>
+        )}
+        <AddSlots>
+          <AddSlot data={{ "data-rule-new": "" }} onClick={() => setEditing("new")}>
+            <IconPlusOutlineRegular size={13} /> 新增规则
+          </AddSlot>
+        </AddSlots>
+      </Section>
 
-      {editing === "new" ? (
+      {editing === null ? null : (
         <RuleEditor
-          rule={null}
+          key={editing === "new" ? "new" : editing.id}
+          rule={editing === "new" ? null : editing}
           onSaved={() => {
             setEditing(null);
             rules.reload();
           }}
           onCancel={() => setEditing(null)}
         />
-      ) : null}
-
-      {rules.rules.length === 0 ? (
-        <p className={css.pageLead}>还没有拦截规则；新建一条即生效。</p>
-      ) : (
-        <div className={css.ruleList}>
-          {rules.rules.map((rule) =>
-            editing === rule.id ? (
-              <RuleEditor
-                key={rule.id}
-                rule={rule}
-                onSaved={() => {
-                  setEditing(null);
-                  rules.reload();
-                }}
-                onCancel={() => setEditing(null)}
-              />
-            ) : (
-              <RuleRow
-                key={rule.id}
-                rule={rule}
-                onEdit={() => setEditing(rule.id)}
-                onChanged={rules.reload}
-              />
-            ),
-          )}
-        </div>
       )}
+
+      <RuleDeleteDialog
+        rule={deleting}
+        onClose={() => setDeleting(null)}
+        onDeleted={() => {
+          setDeleting(null);
+          rules.reload();
+        }}
+      />
     </>
   );
 }
 
-/** 列表行：启用态 + 摘要 + 模式，动作只做真实能力。 */
+/** 列表行：开关 · 名称与动作 · 匹配元信息 · 优先级与 ⋯ 菜单。 */
 function RuleRow({
   rule,
   onEdit,
+  onDelete,
   onChanged,
 }: {
   rule: InterceptRule;
   onEdit: () => void;
+  onDelete: () => void;
   onChanged: () => void;
 }): React.ReactNode {
-  const [confirming, setConfirming] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
 
@@ -218,71 +255,120 @@ function RuleRow({
         toast(next ? "规则已启用" : "规则已停用");
         onChanged();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setBusy(false));
   };
 
-  const remove = (): void => {
+  const message = rule.action !== "allow" && rule.message.trim() !== "" ? rule.message : null;
+
+  return (
+    <Row
+      data={{ "data-rule-id": String(rule.id), "data-rule-enabled": String(rule.enabled) }}
+      lead={<Switch checked={rule.enabled} disabled={busy} label={`启用规则 ${rule.name}`} onChange={toggle} />}
+      label={<span className={rule.enabled ? undefined : own.labelOff}>{rule.name}</span>}
+      labelAdornment={<Badge tone={rule.enabled ? (ACTION_TONE[rule.action] ?? "neutral") : "neutral"}>{ACTION_LABEL[rule.action] ?? rule.action}</Badge>}
+      description={
+        <>
+          <Meta
+            items={[
+              rule.match_target === "tool_name" ? "工具名" : "输入内容",
+              rule.match_type === "regex" ? "正则" : "包含",
+              <span key="pattern" className={own.pattern} title={rule.pattern}>
+                {rule.pattern}
+              </span>,
+              message === null ? null : (
+                <span key="message" className={own.metaClip} title={message}>
+                  消息：{message}
+                </span>
+              ),
+              rule.timeout_enabled ? `超时 ${rule.timeout_seconds}s 自动${rule.timeout_action === "deny" ? "拒绝" : "允许"}` : null,
+            ]}
+          />
+          {failure === null ? null : <span className={own.rowError}>操作失败：{failure}</span>}
+        </>
+      }
+    >
+      <span className={own.prio} title={`优先级 ${rule.priority}`} aria-label={`优先级 ${rule.priority}`}>
+        {rule.priority}
+      </span>
+      <RowMenu
+        label={`规则 ${rule.name} 的更多操作`}
+        disabled={busy}
+        data={{ "data-rule-more": String(rule.id) }}
+        items={[
+          { label: "编辑", onSelect: onEdit, data: { "data-rule-edit": String(rule.id) } },
+          { label: "删除", onSelect: onDelete, danger: true, separatorBefore: true, data: { "data-rule-delete": String(rule.id) } },
+        ]}
+      />
+    </Row>
+  );
+}
+
+/** 删除二次确认：Modal + tone="warning"，忙碌时两个按钮都禁用。 */
+function RuleDeleteDialog({
+  rule,
+  onClose,
+  onDeleted,
+}: {
+  rule: InterceptRule | null;
+  onClose: () => void;
+  onDeleted: () => void;
+}): React.ReactNode {
+  const [busy, setBusy] = React.useState(false);
+  const [failure, setFailure] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (rule === null) setFailure(null);
+  }, [rule]);
+
+  const confirm = (): void => {
+    if (rule === null || busy) return;
     setBusy(true);
     setFailure(null);
     void deleteInterceptRule(rule.id)
       .then(() => {
         toast("规则已删除");
-        onChanged();
+        onDeleted();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
-      .finally(() => {
-        setBusy(false);
-        setConfirming(false);
-      });
+      .catch((reason: unknown) => setFailure(errorText(reason)))
+      .finally(() => setBusy(false));
   };
 
   return (
-    <div className={css.ruleRow} data-rule-id={rule.id} data-rule-enabled={rule.enabled}>
-      <Switch
-        checked={rule.enabled}
-        disabled={busy}
-        label={`启用规则 ${rule.name}`}
-        onChange={toggle}
-      />
-      <div className={css.ruleMain}>
-        <div className={css.ruleMeta}>
-          <span className={css.rowLabel}>{rule.name}</span>
-          <Tag tone={rule.enabled ? "success" : "quiet"}>{rule.enabled ? "已启用" : "已停用"}</Tag>
-          <Tag tone="outline">{ACTION_LABEL[rule.action] ?? rule.action}</Tag>
+    <Modal
+      open={rule !== null}
+      onClose={onClose}
+      title="删除拦截规则"
+      closeLabel="关闭"
+      tone="warning"
+      description={rule === null ? "" : `将永久删除规则「${rule.name}」，此操作不可撤销；命中它的工具调用将交给后续规则处理。`}
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>
+            取消
+          </Button>
+          <Button variant="primary" size="sm" onClick={confirm} disabled={busy} data-rule-delete-confirm="">
+            {busy ? "删除中…" : "确认删除"}
+          </Button>
+        </>
+      }
+    >
+      {rule === null ? null : (
+        <div className={own.dialogStack}>
+          <div className={own.target}>
+            <Badge tone={ACTION_TONE[rule.action] ?? "neutral"}>{ACTION_LABEL[rule.action] ?? rule.action}</Badge>
+            <span className={own.targetText} title={rule.pattern}>
+              {rule.pattern}
+            </span>
+          </div>
+          {failure === null ? null : <Notice tone="danger">删除失败：{failure}</Notice>}
         </div>
-        <div className={css.rulePattern}>{rule.pattern}</div>
-        <div className={css.ruleMeta}>
-          <span>{ruleSummary(rule)}</span>
-          {rule.action !== "allow" && rule.message.trim() !== "" ? <span>· 消息：{rule.message}</span> : null}
-          {rule.timeout_enabled ? <span>· 超时 {rule.timeout_seconds}s 后自动{rule.timeout_action === "deny" ? "拒绝" : "允许"}</span> : null}
-        </div>
-        {failure === null ? null : <p className={css.errorLine}>{failure}</p>}
-      </div>
-      <div className={css.ruleActions}>
-        <Button variant="outline" size="sm" disabled={busy} onClick={onEdit}>
-          编辑
-        </Button>
-        {confirming ? (
-          <>
-            <Button variant="outline" size="sm" disabled={busy} onClick={remove}>
-              <IconTrashOutlineRegular size={13} /> 确认删除
-            </Button>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(false)}>
-              取消
-            </Button>
-          </>
-        ) : (
-          <button type="button" className={css.dangerBtn} disabled={busy} onClick={() => setConfirming(true)}>
-            删除
-          </button>
-        )}
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 }
 
-/** 新建/编辑表单：字段与后端 InterceptRule 一一对应。 */
+/** 新建/编辑弹窗：字段与后端 InterceptRule 一一对应。 */
 function RuleEditor({
   rule,
   onSaved,
@@ -292,6 +378,7 @@ function RuleEditor({
   onSaved: () => void;
   onCancel: () => void;
 }): React.ReactNode {
+  const uid = React.useId();
   const [draft, setDraft] = React.useState<InterceptRuleInput>(() =>
     rule === null
       ? {
@@ -320,7 +407,7 @@ function RuleEditor({
       new RegExp(draft.pattern);
       return null;
     } catch (reason) {
-      return reason instanceof Error ? reason.message : String(reason);
+      return errorText(reason);
     }
   }, [draft.match_type, draft.pattern]);
 
@@ -352,161 +439,181 @@ function RuleEditor({
         toast(rule === null ? "拦截规则已创建" : "拦截规则已保存");
         onSaved();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setSaving(false));
   };
 
   return (
-    <div className={css.formCard}>
-      <div className={css.subTitle}>{rule === null ? "新建拦截规则" : `编辑拦截规则 · ${rule.name}`}</div>
-      <label className={css.fieldLabel}>
-        名称
-        <input
-          className={css.textField}
-          aria-label="规则名称"
-          placeholder="给规则起个名字"
-          value={draft.name}
-          disabled={saving}
-          onChange={(event) => set({ name: event.currentTarget.value })}
-        />
-      </label>
-      <label className={css.fieldLabel}>
-        优先级（数字越大越先匹配）
-        <input
-          className={css.textField}
-          type="number"
-          aria-label="规则优先级"
-          value={String(draft.priority)}
-          disabled={saving}
-          onChange={(event) => set({ priority: Number.parseInt(event.currentTarget.value, 10) || 0 })}
-        />
-      </label>
-
-      <div className={css.formRow}>
-        <div className={css.fieldBlock}>
-          <div className={css.fieldLabel}>匹配目标</div>
-          <SelectMenu
-            value={draft.match_target}
-            options={TARGET_OPTIONS}
-            disabled={saving}
-            onChange={(value) => set({ match_target: value === "tool_input" ? "tool_input" : "tool_name" })}
-          />
-        </div>
-        <div className={css.fieldBlock}>
-          <div className={css.fieldLabel}>匹配类型</div>
-          <SelectMenu
-            value={draft.match_type}
-            options={TYPE_OPTIONS}
-            disabled={saving}
-            onChange={(value) => set({ match_type: value === "regex" ? "regex" : "string" })}
-          />
-        </div>
-      </div>
-
-      <label className={css.fieldLabel}>
-        模式
-        <input
-          className={css.textField}
-          aria-label="规则模式"
-          placeholder={draft.match_type === "regex" ? "^Bash$" : "rm -rf"}
-          value={draft.pattern}
-          disabled={saving}
-          onChange={(event) => set({ pattern: event.currentTarget.value })}
-        />
-      </label>
-      <p className={css.fieldHint}>
-        {draft.match_type === "regex"
-          ? "Go RE2 正则；浏览器只能校验 JS 可编译的部分，服务端为最终校验方。"
-          : "对工具名或工具输入 JSON 做大小写不敏感的子串匹配。"}
-      </p>
-      {regexError === null ? null : <p className={css.warn}>{regexError}</p>}
-      {draft.match_type === "regex" && draft.pattern.includes("(?") ? (
-        <p className={css.warn}>包含 Go RE2 扩展语法（如 (?i)），浏览器无法预览，提交后由服务端验证。</p>
-      ) : null}
-
-      <div className={css.fieldLabel}>拦截策略</div>
-      <SelectMenu
-        value={draft.action}
-        options={ACTION_OPTIONS}
-        disabled={saving}
-        onChange={(value) =>
-          set({ action: value === "allow" ? "allow" : value === "ask" ? "ask" : "deny" })
-        }
-      />
-
-      {draft.action !== "allow" ? (
-        <label className={css.fieldLabel}>
-          {draft.action === "deny" ? "拒绝消息（返回给模型）" : "审批说明（可选）"}
-          <textarea
-            className={css.textArea}
-            aria-label="拒绝消息"
-            rows={2}
-            placeholder={draft.action === "deny" ? "操作被安全策略阻止" : ""}
-            value={draft.message}
-            disabled={saving}
-            onChange={(event) => set({ message: event.currentTarget.value })}
-          />
-        </label>
-      ) : null}
-
-      {draft.action === "ask" ? (
+    <Modal
+      open
+      onClose={onCancel}
+      title={rule === null ? "新建拦截规则" : "编辑拦截规则"}
+      closeLabel="关闭"
+      className={own.modal}
+      contentClassName={own.modalContent}
+      footer={
         <>
-          <div className={css.formRow}>
-            <div className={css.checkInline}>
-              <Switch
-                checked={draft.timeout_enabled}
-                label="启用审批超时"
+          <Button variant="outline" size="sm" disabled={saving} onClick={onCancel}>
+            取消
+          </Button>
+          <Button variant="primary" size="sm" disabled={saving} onClick={save} data-rule-save="">
+            {saving ? "保存中…" : "保存"}
+          </Button>
+        </>
+      }
+    >
+      <div className={own.form} data-rule-editor={rule === null ? "new" : String(rule.id)}>
+        <EditorGroup title="基本">
+          <FieldGrid>
+            <Field label="名称" htmlFor={`${uid}-name`}>
+              <TextInput
+                id={`${uid}-name`}
+                aria-label="规则名称"
+                placeholder="给规则起个名字"
+                value={draft.name}
                 disabled={saving}
-                onChange={(next) => set({ timeout_enabled: next })}
+                data-modal-autofocus=""
+                onChange={(event) => set({ name: event.currentTarget.value })}
               />
-              <span>启用审批超时（超时后自动处置）</span>
-            </div>
+            </Field>
+            <Field label="优先级" htmlFor={`${uid}-priority`} hint="数字越大越先匹配">
+              <TextInput
+                id={`${uid}-priority`}
+                className={shared.numberInputKit}
+                type="number"
+                aria-label="规则优先级"
+                value={String(draft.priority)}
+                disabled={saving}
+                onChange={(event) => set({ priority: Number.parseInt(event.currentTarget.value, 10) || 0 })}
+              />
+            </Field>
+          </FieldGrid>
+        </EditorGroup>
+
+        <EditorGroup title="匹配">
+          <FieldGrid>
+            <Field label="匹配目标" htmlFor={`${uid}-target`}>
+              <SelectMenu
+                id={`${uid}-target`}
+                value={draft.match_target}
+                options={TARGET_OPTIONS}
+                disabled={saving}
+                ariaLabel="匹配目标"
+                onChange={(value) => set({ match_target: value === "tool_input" ? "tool_input" : "tool_name" })}
+              />
+            </Field>
+            <Field label="匹配类型" htmlFor={`${uid}-type`}>
+              <SelectMenu
+                id={`${uid}-type`}
+                value={draft.match_type}
+                options={TYPE_OPTIONS}
+                disabled={saving}
+                ariaLabel="匹配类型"
+                onChange={(value) => set({ match_type: value === "regex" ? "regex" : "string" })}
+              />
+            </Field>
+            <Field
+              label="模式"
+              htmlFor={`${uid}-pattern`}
+              span
+              hint={
+                draft.match_type === "regex"
+                  ? "Go RE2 正则；浏览器只能校验 JS 可编译的部分，服务端为最终校验方。"
+                  : "对工具名或工具输入 JSON 做大小写不敏感的子串匹配。"
+              }
+            >
+              <TextInput
+                id={`${uid}-pattern`}
+                mono
+                aria-label="规则模式"
+                placeholder={draft.match_type === "regex" ? "^Bash$" : "rm -rf"}
+                value={draft.pattern}
+                disabled={saving}
+                onChange={(event) => set({ pattern: event.currentTarget.value })}
+              />
+            </Field>
+          </FieldGrid>
+          {regexError === null ? null : <Notice tone="warning">{regexError}</Notice>}
+          {draft.match_type === "regex" && draft.pattern.includes("(?") ? (
+            <Notice tone="neutral">包含 Go RE2 扩展语法（如 (?i)），浏览器无法预览，提交后由服务端验证。</Notice>
+          ) : null}
+        </EditorGroup>
+
+        <EditorGroup title="处置">
+          <Field label="拦截策略" htmlFor={`${uid}-action`}>
+            <SelectMenu
+              id={`${uid}-action`}
+              value={draft.action}
+              options={ACTION_OPTIONS}
+              disabled={saving}
+              ariaLabel="拦截策略"
+              onChange={(value) => set({ action: value === "allow" ? "allow" : value === "ask" ? "ask" : "deny" })}
+            />
+          </Field>
+          {draft.action !== "allow" ? (
+            <Field
+              label={draft.action === "deny" ? "拒绝消息" : "审批说明"}
+              htmlFor={`${uid}-message`}
+              optional={draft.action === "ask"}
+              hint={draft.action === "deny" ? "返回给模型" : undefined}
+            >
+              <textarea
+                id={`${uid}-message`}
+                className={own.textArea}
+                aria-label="拒绝消息"
+                rows={2}
+                placeholder={draft.action === "deny" ? "操作被安全策略阻止" : ""}
+                value={draft.message}
+                disabled={saving}
+                onChange={(event) => set({ message: event.currentTarget.value })}
+              />
+            </Field>
+          ) : null}
+          <div className={shared.optionCard}>
+            {draft.action === "ask" ? (
+              <Row label="启用审批超时" description="超时后自动处置，避免调用一直挂起。">
+                <Switch checked={draft.timeout_enabled} label="启用审批超时" disabled={saving} onChange={(next) => set({ timeout_enabled: next })} />
+              </Row>
+            ) : null}
+            <Row label="立即启用" description={rule === null ? "保存后生效。" : "关闭则保留规则但不参与匹配。"}>
+              <Switch checked={draft.enabled} label="启用规则" disabled={saving} onChange={(next) => set({ enabled: next })} />
+            </Row>
           </div>
-          {draft.timeout_enabled ? (
-            <div className={css.formRow}>
-              <label className={css.fieldLabel}>
-                超时时间（秒）
-                <input
-                  className={css.textField}
-                  type="number"
-                  min={5}
-                  aria-label="超时时间秒"
-                  value={String(draft.timeout_seconds)}
-                  disabled={saving}
-                  onChange={(event) => {
-                    const next = Number.parseInt(event.currentTarget.value, 10);
-                    set({ timeout_seconds: Number.isFinite(next) && next > 0 ? next : 0 });
-                  }}
-                />
-              </label>
-              <div className={css.fieldBlock}>
-                <div className={css.fieldLabel}>超时动作</div>
+          {draft.action === "ask" && draft.timeout_enabled ? (
+            <FieldGrid>
+              <Field label="超时时间" htmlFor={`${uid}-timeout`}>
+                <UnitInput unit="秒">
+                  <TextInput
+                    id={`${uid}-timeout`}
+                    className={shared.numberInputKit}
+                    type="number"
+                    min={5}
+                    aria-label="超时时间秒"
+                    value={String(draft.timeout_seconds)}
+                    disabled={saving}
+                    onChange={(event) => {
+                      const next = Number.parseInt(event.currentTarget.value, 10);
+                      set({ timeout_seconds: Number.isFinite(next) && next > 0 ? next : 0 });
+                    }}
+                  />
+                </UnitInput>
+              </Field>
+              <Field label="超时动作" htmlFor={`${uid}-timeout-action`}>
                 <SelectMenu
+                  id={`${uid}-timeout-action`}
                   value={draft.timeout_action}
                   options={TIMEOUT_OPTIONS}
                   disabled={saving}
+                  ariaLabel="超时动作"
                   onChange={(value) => set({ timeout_action: value === "allow" ? "allow" : "deny" })}
                 />
-              </div>
-            </div>
+              </Field>
+            </FieldGrid>
           ) : null}
-        </>
-      ) : null}
+        </EditorGroup>
 
-      <div className={css.checkInline} style={{ marginTop: 12 }}>
-        <Switch checked={draft.enabled} label="启用规则" disabled={saving} onChange={(next) => set({ enabled: next })} />
-        <span>立即启用{rule === null ? "（保存后生效）" : ""}</span>
+        {failure === null ? null : <Notice tone="danger">{failure}</Notice>}
       </div>
-
-      {failure === null ? null : <p className={css.errorLine}>{failure}</p>}
-      <div className={css.formActions}>
-        <Button variant="outline" size="sm" disabled={saving} onClick={onCancel}>
-          取消
-        </Button>
-        <Button variant="primary" size="sm" disabled={saving} onClick={save}>
-          {saving ? "保存中…" : "保存"}
-        </Button>
-      </div>
-    </div>
+    </Modal>
   );
 }

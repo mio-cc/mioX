@@ -1,0 +1,26 @@
+/* U2 container views: a thin sub-view band above the sub-view's own scroll column. */
+.hub {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.switchBand {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 12px 28px 0;
+}
+
+/* The sub-view keeps its own <Page> (flex:1; overflow-y:auto). */
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}

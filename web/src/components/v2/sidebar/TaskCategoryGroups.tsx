@@ -19,14 +19,13 @@
  */
 import * as React from "react";
 
-import { Button } from "@/vendor/dsh/primitives/Button";
-import { Menu } from "@/vendor/dsh/primitives/Menu";
-import { IconChevronDownOutlineRegular, IconChevronRightOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
-
 import type { TaskCategory } from "@/lib/types";
-import { moveTaskToCategory, UNCATEGORIZED_LABEL, type TaskCategoryGroup } from "@/v2/data/task-categories";
+import { moveTaskToCategory, type TaskCategoryGroup, UNCATEGORIZED_LABEL } from "@/v2/data/task-categories";
+import { IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconNewChatOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
+import type { MenuEntry } from "@/vendor/dsh/primitives/Menu";
+
 import { toast } from "../settings/Toast";
-import { SessionRow, type Session } from "./SessionRow";
+import { type Session, SessionRow } from "./SessionRow";
 import css from "./TaskCategoryGroups.module.css";
 
 /** 折叠状态的本地键；只影响显示，不影响后端数据。 */
@@ -83,6 +82,8 @@ export interface TaskCategoryGroupsProps {
   selectedIds?: ReadonlySet<string>;
   /** C10：勾选状态变化（id + 新状态）。 */
   onSelectionChange?: (id: string, next: boolean) => void;
+  /** DSH WorkspaceBrowser 的行内新建按钮：在指定分类下新建任务（组头右边的「+」）。 */
+  onNewSessionInCategory?: (categoryId: number) => void;
 }
 
 /**
@@ -100,6 +101,7 @@ export function TaskCategoryGroups({
   selectable = false,
   selectedIds,
   onSelectionChange,
+  onNewSessionInCategory,
 }: TaskCategoryGroupsProps): React.ReactNode {
   const [collapsed, setCollapsed] = React.useState<string[]>([]);
   const [mounted, setMounted] = React.useState(false);
@@ -122,7 +124,7 @@ export function TaskCategoryGroups({
   const move = (taskId: string, categoryId: number | null): void => {
     if (moving !== null) return;
     setMoving(taskId);
-    moveTaskToCategory(taskId, categoryId === null ? undefined : categoryId)
+    moveTaskToCategory(taskId, categoryId ?? undefined)
       .then(() => {
         setMoving(null);
         toast(categoryId === null ? "已移出分类" : "已移入分类");
@@ -161,11 +163,55 @@ export function TaskCategoryGroups({
                 </span>
                 <span className={css.groupCount}>{group.tasks.length}</span>
               </button>
+              {/* DSH WorkspaceBrowser ProjectRow 的行内新建（`startSession`）：hover
+                  在分组头右边浮出一个透底「+」icon button（IconNewChatOutlineRegular），
+                  与 DSH workspace 行的行尾动作同形；click = 在该分类下新建任务。
+                  P1: 需要调用方传入 onNewSessionInCategory。 */}
+              {onNewSessionInCategory ? (
+                <button
+                  type="button"
+                  className={css.groupNewBtn}
+                  aria-label={`在分类 ${group.name} 新建会话`}
+                  title={`在分类 ${group.name} 新建会话`}
+                  data-task-category-new={group.key}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    // 未分类分组只有 categoryId===null，不在此建新任务（启动页无分类可绑）。
+                    if (group.categoryId === null) return;
+                    onNewSessionInCategory(group.categoryId);
+                  }}
+                >
+                  <IconNewChatOutlineRegular size={13} />
+                </button>
+              ) : null}
             </div>
             {isCollapsed
               ? null
               : group.tasks.map((task) => {
                   const session = toSession(task.id);
+                  // 用户 2026-11-20：行上悬停浮起的「分类」文字 chip 不是参考的
+                  // 形态（DSH 行动作只在右键菜单里，`Rows.tsx:7`）。移入分类收进
+                  // 会话「⋯」菜单的子菜单，走 SessionRow 的 menuExtras 注入。
+                  const disabledItem = moving === task.id;
+                  const categorySubmenu: readonly MenuEntry[] = [
+                    {
+                      id: `extra:cat:none:${task.id}`,
+                      label: UNCATEGORIZED_LABEL,
+                      disabled: group.categoryId === null || disabledItem,
+                    },
+                    ...categories.map((category) => ({
+                      id: `extra:cat:${category.id}:${task.id}`,
+                      label: category.name,
+                      disabled: group.categoryId === category.id || disabledItem,
+                    })),
+                  ];
+                  const menuExtras: readonly MenuEntry[] = [
+                    {
+                      id: `extra:category:${task.id}`,
+                      label: disabledItem ? "移入分类（移动中…）" : "移入分类",
+                      submenu: categorySubmenu,
+                    },
+                  ];
                   return (
                     <div className={css.rowWrap} key={task.id}>
                       <SessionRow
@@ -176,13 +222,12 @@ export function TaskCategoryGroups({
                         selectable={selectable}
                         selected={selectedIds?.has(task.id) === true}
                         onSelectedChange={(next) => onSelectionChange?.(task.id, next)}
-                      />
-                      <MoveCategoryMenu
-                        taskId={task.id}
-                        currentCategoryId={group.categoryId}
-                        categories={categories}
-                        busy={moving === task.id}
-                        onMove={(categoryId) => move(task.id, categoryId)}
+                        menuExtras={menuExtras}
+                        onMenuExtra={(id) => {
+                          const match = /^cat:(none|\d+):(.+)$/.exec(id);
+                          if (match === null) return;
+                          move(match[2], match[1] === "none" ? null : Number(match[1]));
+                        }}
                       />
                     </div>
                   );
@@ -191,75 +236,5 @@ export function TaskCategoryGroups({
         );
       })}
     </div>
-  );
-}
-
-/**
- * 行内「移入分类」按钮：展开一个真实分类菜单，点选后立刻 PATCH 该任务的分类。
- * 后端没有「批量移分类」以外的额外字段，菜单项就是 `GET /task-categories` 的原样列表 + 未分类。
- * @returns 小按钮 + 菜单。
- */
-function MoveCategoryMenu({
-  taskId,
-  currentCategoryId,
-  categories,
-  busy,
-  onMove,
-}: {
-  taskId: string;
-  currentCategoryId: number | null;
-  categories: readonly TaskCategory[];
-  busy: boolean;
-  onMove: (categoryId: number | null) => void;
-}): React.ReactNode {
-  const [open, setOpen] = React.useState(false);
-  const items = [
-    {
-      id: "none",
-      label: UNCATEGORIZED_LABEL,
-      disabled: currentCategoryId === null,
-    },
-    ...categories.map((category) => ({
-      id: String(category.id),
-      label: category.name,
-      disabled: currentCategoryId === category.id,
-    })),
-  ];
-
-  return (
-    <span className={css.moveSeat}>
-      <Menu
-        open={open}
-        anchor={
-          <Button
-            variant="ghost"
-            size="sm"
-            className={css.moveBtn}
-            disabled={busy}
-            aria-label={`移动任务 ${taskId} 到分类`}
-            title="移入分类"
-            data-task-category-move={taskId}
-            onMouseDown={(event) => {
-              event.stopPropagation();
-              event.preventDefault();
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-              setOpen((value) => !value);
-            }}
-          >
-            分类
-          </Button>
-        }
-        items={items}
-        selectedId={currentCategoryId === null ? "none" : String(currentCategoryId)}
-        selection="check"
-        onSelect={(id) => {
-          setOpen(false);
-          onMove(id === "none" ? null : Number(id));
-        }}
-        onClose={() => setOpen(false)}
-      />
-    </span>
   );
 }

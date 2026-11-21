@@ -38,18 +38,35 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 20px 24px 12px;
+  /* DSH ChatView .scroll：侧边 = composer clearance + 16（窄视口下正文比输入卡
+     两侧各窄 16px，同一条宽度轴）。底部 = 48px：
+     mioX 的 thread 与 composer 是贴合的 flex 双件（DSH 是 sticky 挨着的 scrollBody），
+     24px 不够——用户再度报"被输入框挡住"。48px 的 breathing 保证最后一条消息的
+     底框与 input card 顶缘之间有一条明确的视觉缝隙。 */
+  padding: 16px calc(var(--dsh-composer-side-clearance, 16px) + 16px) 48px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  /* DSH --dsh-chat-flow-gap 4px：流程行 4px 相邻（响应块由回合结构拉开 12-16px，
+     mioX 无 turn 结构前，块间距与 DSH 流行距一致）。 */
+  gap: 4px;
 }
 
 .userRow {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
-  margin-bottom: 6px;
+  /* DSH MessageItem .userRow：gap 6px；无 bottom margin（流距归 .messages gap）。 */
+  gap: 6px;
+}
+
+/* DSH MessageItem .userStack：气泡上限 = 内容宽的 70.2%（figma 525/748）。
+ * 右对齐栈内的气泡从右缘起排。 */
+.userStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: min(calc(var(--dsh-chat-content-width, 748px) * 0.702), 82%);
 }
 
 /* Message actions row mirroring the reference chrome: 28px hit target, 15px
@@ -166,7 +183,9 @@
   line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
 }
-.cardSlot { display: block; }
+.cardSlot {
+  display: block;
+}
 
 /* ---- Older history pager (top edge) ------------------------------------ */
 
@@ -302,33 +321,38 @@
 }
 
 /* ---- Tool-call detail disclosure --------------------------------------- */
+/* 展开行本体是 vendored DSH DisclosureRow（24px 行、左 chevron），只保留正文样式。 */
 
-.detailWrap {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 4px;
+/* DSH ReasoningRow / GenericCommandCard 的折叠行摘录：
+   分隔点（2px 圆点）+ 12/20 secondary 的单行 ellipsis 摘要。 */
+.flowSeparator {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  margin: 0 8px;
+  border-radius: 1px;
+  background: var(--dsw-alias-label-caption);
 }
 
-.detailToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  align-self: flex-start;
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  color: var(--dsw-alias-label-tertiary);
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 18px;
-  cursor: pointer;
+.flowSummary {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  white-space: nowrap;
 }
 
-@media (hover: hover) {
-  .detailToggle:hover {
-    color: var(--dsw-alias-label-primary);
-  }
+.flowSummaryText {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* DSH ReasoningRow .thinkBody：正文在标题起点下缩进（leading 16 + gap 6）。 */
+.thinkBody {
+  padding: 4px 0 4px calc(22px + var(--dsh-content-font-delta, 0px));
+  min-width: 0;
 }
 
 .detailBody {
@@ -501,4 +525,299 @@
   font-family: inherit;
   font-size: 12px;
   resize: vertical;
+}
+
+/* ---- Plan card (exit_plan_mode) ----------------------------------------- */
+
+.planCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 8px 0 4px;
+  padding: 16px 16px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-card-fill, var(--dsw-alias-bg-layer-1));
+  scroll-margin: 16px;
+}
+
+/* "查看计划" from the review dock lands here: a short brand ring, then rest. */
+.planCard[data-plan-flash] {
+  animation: plan-flash 1400ms ease-out 1;
+}
+
+@keyframes plan-flash {
+  0% {
+    box-shadow: 0 0 0 2px var(--dsw-alias-state-business-primary);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+
+.planHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.planTile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-card-tile-fill, var(--dsw-alias-bg-module-platform));
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.planHeading {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.planTitle {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planSub {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.planBadges {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.planBody {
+  position: relative;
+  padding: 0 4px;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+
+/* Clipped preview: the last lines fade into the card fill. */
+.planBody[data-clipped] {
+  max-height: 200px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+}
+
+.planNote {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.planFeedback {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-interactive-bg-hover));
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.planFeedbackLabel {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.planToggle {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .planToggle:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.planToggle:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planCard[data-plan-flash] {
+    animation: none;
+  }
+}
+
+/* ---- Automation-delivered user badge (S-4) -------------------------------- */
+
+/* 气泡上方的小徽标行：右对齐（同 userStack 轴），Badge 由 kit 定形。 */
+.userBadge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+}
+
+/* ---- Planner decompose fold (DX-S3) -------------------------------------- */
+/* 目标拆解折叠卡：结构对齐 planCard（卡、tile、标题行），正文是验收项列表，
+   说明收进 DisclosureRow。 */
+
+.decomposeCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 8px 0 4px;
+  padding: 16px 16px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-card-fill, var(--dsw-alias-bg-layer-1));
+}
+
+.decomposeHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.decomposeTile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-card-tile-fill, var(--dsw-alias-bg-module-platform));
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.decomposeHeading {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.decomposeTitle {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decomposeSub {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.decomposeNote {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.decomposeList,
+.decomposeExtras {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0 4px 0 6px;
+  list-style: none;
+}
+
+.decomposeItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.decomposeIndex {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.decomposeText {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.decomposeExtras {
+  padding: 8px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-module-platform, var(--dsw-alias-interactive-bg-hover));
+}
+
+.decomposeExtra {
+  position: relative;
+  padding-left: 12px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.decomposeExtra::before {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--dsw-alias-label-caption);
+  content: "";
 }

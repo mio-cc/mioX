@@ -132,11 +132,70 @@ func (p *planTurn) submittedPlan() (bool, string) {
 type planGateHooks struct {
 	inner harness.HookRunner
 	turn  *planTurn
+	// tools 是本轮实际挂载的工具（按名字），用来读每个工具的 ReadOnly 元数据（P-1 硬边界）。
+	tools map[string]actool.CoreTool
+	// strict 读设置 plan_mode_strict：true = 计划批准前拒绝非只读工具；false/nil = 只记录警告。
+	strict func() bool
+	// warn 在非严格模式下记录一次"计划模式调用了非只读工具"（日志，不进模型）。
+	warn func(name string)
+}
+
+type forcePlanStrictKey struct{}
+
+// WithForcePlanStrict 标记本轮计划模式按严格硬边界执行（不看 plan_mode_strict 设置），
+// 用于 safety=readonly 的自动化轮次：无人值守时绝不放行非只读工具。
+func WithForcePlanStrict(ctx context.Context) context.Context {
+	return context.WithValue(ctx, forcePlanStrictKey{}, true)
+}
+
+func forcedPlanStrict(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(forcePlanStrictKey{}).(bool)
+	return v
+}
+
+// planModeBlockedMsg 是严格计划模式下拒绝非只读工具时回给模型的话（P-1）。
+const planModeBlockedMsg = "计划模式：此操作需在计划批准后执行"
+
+// planAlwaysAllowed 是计划模式下永远放行的非只读工具：只改本会话内存状态、不触碰目标系统。
+var planAlwaysAllowed = map[string]bool{
+	"TodoWrite":       true,
+	"AskUserQuestion": true,
+	exitPlanModeName:  true,
+	// 由 agentcore 自行挂载（不在本轮 tools 列表里）但元数据为只读的工具。
+	"web_search":       true,
+	"SearchExtraTools": true,
+}
+
+// planToolReadOnly 判定某次工具调用在计划模式下是否算只读：工具未知（如未披露的 MCP）
+// 一律按非只读处理（fail closed）。
+func (h *planGateHooks) planToolReadOnly(name string, input []byte) bool {
+	if planAlwaysAllowed[name] {
+		return true
+	}
+	tool, ok := h.tools[name]
+	if !ok || tool == nil {
+		return false
+	}
+	return tool.IsReadOnly(json.RawMessage(input))
 }
 
 func (h *planGateHooks) PreToolUse(ctx context.Context, name string, input []byte) (bool, string, []byte) {
-	if state, _ := h.turn.status(); state == planConcluded {
+	state, _ := h.turn.status()
+	if state == planConcluded {
 		return true, "本轮计划审阅已结束（用户关闭了审阅或计划已提交未批准）：不要再调用任何工具，用一句话收尾。", nil
+	}
+	// P-1 计划模式硬边界：计划尚未批准（state=planOpen）时，非只读工具按设置拦截或告警。
+	// 只读自动化（safety=readonly）的轮次无论设置如何都按严格模式拦截（ForcePlanStrict）。
+	if state == planOpen && !h.planToolReadOnly(name, input) {
+		if forcedPlanStrict(ctx) || (h.strict != nil && h.strict()) {
+			return true, planModeBlockedMsg, nil
+		}
+		if h.warn != nil {
+			h.warn(name)
+		}
 	}
 	if h.inner == nil {
 		return false, "", nil

@@ -1,0 +1,68 @@
+/* 统计条照抄 DSH `StatsPills.module.css`（.anchor/.pill/.label/.sep）+
+   `InputBar.module.css` .dock（gap 12px / padding-top 4px / 22px 最小高 reserve，
+   让统计到达不跳动）。上下文不再是 ContextMeter 的独立环，而是 UsagePill 里的
+   第三个中点段（有窗口给百分比，没窗口给绝对值）。
+   字号 = 13px secondary − 1px = 12px。 */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: calc(22px + var(--dsh-content-font-delta-secondary, 0px));
+  padding-top: 4px;
+  margin: 0 auto;
+  /* DSH .anchor 的字号：secondary 内容号 -1px。 */
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+}
+
+/* DSH .pill：静态读数形式（无 dialog，不响应 hover 填充，保持三级文本）。 */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 1px 8px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: inherit;
+}
+
+.pill svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+/* DSH .sep：分隔点。 */
+.sep {
+  color: var(--dsw-alias-separator-primary);
+  margin: 0 6px;
+}
+
+/* 上下文段：UsagePill 内的第三个中点段（「上下文 37%」/「上下文 43.2K」）；
+   title 给出「43.2K / 128K」口径。 */
+.contextText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 599px) {
+  .row {
+    flex-wrap: wrap;
+  }
+}

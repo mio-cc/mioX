@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Agent 编辑器第 5 个页签「触发器」：一个自定义 Agent 的 P3 调度触发器列表、
+ * Agent 编辑器「触发器」分区：一个自定义 Agent 的 P3 调度触发器列表、
  * 列表行的启用开关、新建 / 编辑表单（6 种条件 + 每种条件各自的消息 + 工具调用
  * 触发的工具多选）和删除二次确认。内置 Agent 不支持触发器，只显示提示不渲染表单。
  *
@@ -11,6 +11,10 @@
  * DSH 依据：DSH 无触发器（近似 schedule_create 定时任务），按设置分节扩展；
  * 删除确认照 components/v2/data-pages/AssetDeleteDialog.tsx（Modal tone="warning"）。
  * 对照表行：P3:A12
+ *
+ * 版式（D3 设计重塑）：嵌在 AgentEditor 的填充模块里——触发器列表是 layer-1 小卡里的 kit Row
+ * （启用开关 + 条件摘要 + 最后触发时间 + ⋯ 菜单），新建/编辑是一张 layer-1 子编辑器：六种条件各一行
+ * 开关，打开后在下方展开该条件的字段；列表末尾用 AddSlot 新增。
  */
 import * as React from "react";
 
@@ -18,13 +22,23 @@ import { Button } from "@/vendor/dsh/primitives/Button";
 import { Checkbox } from "@/vendor/dsh/primitives/Checkbox";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
 import { Switch } from "@/vendor/dsh/primitives/Switch";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
-import {
-  IconPlusOutlineRegular,
-  IconRefreshOutlineRegular,
-  IconTrashOutlineRegular,
-} from "@/vendor/dsh/primitives/icons/index";
+import { IconPlusOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 
+import {
+  AddSlot,
+  Badge,
+  Dot,
+  EditorActions,
+  Field,
+  Meta,
+  Notice,
+  Row,
+  RowMenu,
+  Skeleton,
+  TextArea,
+  TextInput,
+  UnitInput,
+} from "@/components/v2/design/Kit";
 import type { AgentTrigger } from "@/lib/types";
 import {
   createAgentTrigger,
@@ -37,8 +51,14 @@ import {
   useTriggerToolCatalog,
   type AgentTriggerInput,
 } from "@/v2/data/agent-triggers";
+import { RefreshButton } from "./InterceptAdvanced";
 import { toast } from "./Toast";
-import css from "./SettingsDialog.module.css";
+import shared from "./SettingsDialog.module.css";
+import own from "./AgentPresetsPage.module.css";
+
+function errorText(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}
 
 /** 表单草稿：定时秒数用字符串保存，编辑时才好清空重填。 */
 interface TriggerDraft {
@@ -119,6 +139,59 @@ function draftToInput(draft: TriggerDraft, enabled: boolean): AgentTriggerInput 
   };
 }
 
+/** 一种触发条件：一行开关 + 打开后的字段。 */
+function Condition({
+  label,
+  description,
+  on,
+  disabled,
+  onToggle,
+  children,
+}: {
+  label: string;
+  description: string;
+  on: boolean;
+  disabled: boolean;
+  onToggle: (next: boolean) => void;
+  children: React.ReactNode;
+}): React.ReactNode {
+  return (
+    <div className={own.cond}>
+      <Row label={label} description={description}>
+        <Switch checked={on} label={label} disabled={disabled} onChange={onToggle} />
+      </Row>
+      {on ? <div className={own.condBody}>{children}</div> : null}
+    </div>
+  );
+}
+
+/** 某个条件下发给 Agent 的消息框。 */
+function MessageField({
+  label,
+  placeholder,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  disabled: boolean;
+  onChange: (next: string) => void;
+}): React.ReactNode {
+  return (
+    <TextArea
+      className={own.short}
+      aria-label={label}
+      rows={2}
+      placeholder={placeholder}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.currentTarget.value)}
+    />
+  );
+}
+
 /** 新建 / 编辑表单：字段与 AgentTrigger 一一对应。 */
 function TriggerForm({
   agentKey,
@@ -132,10 +205,9 @@ function TriggerForm({
   onSaved: () => void;
   onCancel: () => void;
 }): React.ReactNode {
+  const uid = React.useId();
   const tools = useTriggerToolCatalog();
-  const [draft, setDraft] = React.useState<TriggerDraft>(() =>
-    trigger === null ? emptyDraft() : draftFrom(trigger),
-  );
+  const [draft, setDraft] = React.useState<TriggerDraft>(() => (trigger === null ? emptyDraft() : draftFrom(trigger)));
   const [saving, setSaving] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
 
@@ -144,9 +216,7 @@ function TriggerForm({
   const toggleTool = (key: string): void =>
     setDraft((prev) => ({
       ...prev,
-      toolNames: prev.toolNames.includes(key)
-        ? prev.toolNames.filter((item) => item !== key)
-        : [...prev.toolNames, key],
+      toolNames: prev.toolNames.includes(key) ? prev.toolNames.filter((item) => item !== key) : [...prev.toolNames, key],
     }));
 
   const save = (): void => {
@@ -175,227 +245,179 @@ function TriggerForm({
         toast(trigger === null ? "已添加触发器（默认停用，不会自动运行）" : "触发器已保存");
         onSaved();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setSaving(false));
   };
 
   return (
-    <div className={css.formCard} data-trigger-form={trigger === null ? "new" : String(trigger.id)}>
-      <div className={css.subTitle}>
-        {trigger === null ? "新增触发器" : `编辑触发器 #${trigger.id}（改完点「保存修改」）`}
-      </div>
-      <p className={css.fieldHint}>
-        触发后系统会新建一个会话运行该 Agent（在「Agent 对话」页可见），并把「本次为何触发 + 相关任务 / finding /
-        目标」附在你写的消息后面。新建的触发器默认停用，需要用列表上的开关手动启用。
+    <div className={own.subEditor} data-trigger-form={trigger === null ? "new" : String(trigger.id)}>
+      <div className={own.subEditorTitle}>{trigger === null ? "新增触发器" : `编辑触发器 #${trigger.id}`}</div>
+      <p className={own.hint}>
+        触发后系统会新建一个会话运行该 Agent，并把「本次为何触发 + 相关任务 / finding / 目标」附在你写的消息后面。
+        {trigger === null ? "新建的触发器默认停用，需要在列表上手动启用。" : ""}
       </p>
 
-      <div className={css.checkInline} style={{ marginTop: 10 }}>
-        <Checkbox
-          checked={Number(draft.intervalSec) > 0}
+      <div className={own.conds}>
+        <Condition
           label="定时触发"
+          description="每隔 N 秒运行一次。"
+          on={Number(draft.intervalSec) > 0}
           disabled={saving}
-          onChange={(next) => set({ intervalSec: next ? "60" : "0" })}
-        />
-        <span>定时触发（每 N 秒）</span>
-      </div>
-      {Number(draft.intervalSec) > 0 ? (
-        <>
-          <label className={css.fieldLabel}>
-            间隔（秒）
-            <input
-              className={css.textField}
-              type="number"
-              min={1}
-              aria-label="定时间隔秒"
-              value={draft.intervalSec}
-              disabled={saving}
-              onChange={(event) => set({ intervalSec: event.currentTarget.value })}
-            />
-          </label>
-          <label className={css.fieldLabel}>
-            定时触发的消息
-            <textarea
-              className={css.textArea}
-              aria-label="定时触发消息"
-              rows={2}
-              placeholder="定时触发时发给 agent 的话，如：巡检所有任务"
-              value={draft.intervalMessage}
-              disabled={saving}
-              onChange={(event) => set({ intervalMessage: event.currentTarget.value })}
-            />
-          </label>
-        </>
-      ) : null}
+          onToggle={(next) => set({ intervalSec: next ? "60" : "0" })}
+        >
+          <Field label="间隔" htmlFor={`${uid}-interval`}>
+            <div className={own.narrow}>
+              <UnitInput unit="秒">
+                <TextInput
+                  id={`${uid}-interval`}
+                  className={shared.numberInputKit}
+                  type="number"
+                  min={1}
+                  aria-label="定时间隔秒"
+                  value={draft.intervalSec}
+                  disabled={saving}
+                  onChange={(event) => set({ intervalSec: event.currentTarget.value })}
+                />
+              </UnitInput>
+            </div>
+          </Field>
+          <MessageField
+            label="定时触发消息"
+            placeholder="定时触发时发给 agent 的话，如：巡检所有任务"
+            value={draft.intervalMessage}
+            disabled={saving}
+            onChange={(next) => set({ intervalMessage: next })}
+          />
+        </Condition>
 
-      <div className={css.checkInline} style={{ marginTop: 10 }}>
-        <Checkbox
-          checked={draft.onFinding}
+        <Condition
           label="发现 finding 时触发"
+          description="系统会附带任务与 finding 详情。"
+          on={draft.onFinding}
           disabled={saving}
-          onChange={(next) => set({ onFinding: next })}
-        />
-        <span>发现 finding 时触发</span>
-      </div>
-      {draft.onFinding ? (
-        <label className={css.fieldLabel}>
-          finding 触发的消息
-          <textarea
-            className={css.textArea}
-            aria-label="finding 触发消息"
-            rows={2}
-            placeholder="发现 finding 时发给 agent 的话（系统会附带任务与 finding 详情）"
+          onToggle={(next) => set({ onFinding: next })}
+        >
+          <MessageField
+            label="finding 触发消息"
+            placeholder="发现 finding 时发给 agent 的话"
             value={draft.findingMessage}
             disabled={saving}
-            onChange={(event) => set({ findingMessage: event.currentTarget.value })}
+            onChange={(next) => set({ findingMessage: next })}
           />
-        </label>
-      ) : null}
+        </Condition>
 
-      <div className={css.checkInline} style={{ marginTop: 10 }}>
-        <Checkbox
-          checked={draft.onGoalMet}
+        <Condition
           label="目标达成时触发"
+          description="系统会附带任务与达成的目标。"
+          on={draft.onGoalMet}
           disabled={saving}
-          onChange={(next) => set({ onGoalMet: next })}
-        />
-        <span>目标达成时触发</span>
-      </div>
-      {draft.onGoalMet ? (
-        <label className={css.fieldLabel}>
-          目标达成触发的消息
-          <textarea
-            className={css.textArea}
-            aria-label="目标达成触发消息"
-            rows={2}
-            placeholder="目标达成时发给 agent 的话（系统会附带任务与达成的目标）"
+          onToggle={(next) => set({ onGoalMet: next })}
+        >
+          <MessageField
+            label="目标达成触发消息"
+            placeholder="目标达成时发给 agent 的话"
             value={draft.goalMessage}
             disabled={saving}
-            onChange={(event) => set({ goalMessage: event.currentTarget.value })}
+            onChange={(next) => set({ goalMessage: next })}
           />
-        </label>
-      ) : null}
+        </Condition>
 
-      <div className={css.checkInline} style={{ marginTop: 10 }}>
-        <Checkbox
-          checked={draft.onTaskTimeout}
+        <Condition
           label="任务超时时触发"
+          description="系统会附带任务编号与目标。"
+          on={draft.onTaskTimeout}
           disabled={saving}
-          onChange={(next) => set({ onTaskTimeout: next })}
-        />
-        <span>任务超时时触发</span>
-      </div>
-      {draft.onTaskTimeout ? (
-        <label className={css.fieldLabel}>
-          任务超时触发的消息
-          <textarea
-            className={css.textArea}
-            aria-label="任务超时触发消息"
-            rows={2}
-            placeholder="任务超时时发给 agent 的话（系统会附带任务编号与目标）"
+          onToggle={(next) => set({ onTaskTimeout: next })}
+        >
+          <MessageField
+            label="任务超时触发消息"
+            placeholder="任务超时时发给 agent 的话"
             value={draft.taskTimeoutMessage}
             disabled={saving}
-            onChange={(event) => set({ taskTimeoutMessage: event.currentTarget.value })}
+            onChange={(next) => set({ taskTimeoutMessage: next })}
           />
-        </label>
-      ) : null}
+        </Condition>
 
-      <div className={css.checkInline} style={{ marginTop: 10 }}>
-        <Checkbox
-          checked={draft.onToolCall}
+        <Condition
           label="工具调用时触发"
+          description="所选工具每次调用完成都会触发，附带入参与返回内容。"
+          on={draft.onToolCall}
           disabled={saving}
-          onChange={(next) => set({ onToolCall: next })}
-        />
-        <span>工具调用时触发</span>
-      </div>
-      {draft.onToolCall ? (
-        <>
-          <p className={css.fieldHint}>
-            选择要监听的工具（至少一个）；任务执行中这些工具每次调用完成都会触发。已选 {draft.toolNames.length} 个。
-          </p>
-          {tools.phase === "loading" ? <p className={css.fieldHint}>读取工具目录…</p> : null}
-          {tools.phase === "offline" ? (
-            <>
-              <p className={css.errorLine}>读不到工具目录，无法选择监听工具{tools.error === null ? "" : `：${tools.error}`}</p>
-              <Button variant="outline" size="sm" disabled={saving} onClick={tools.reload}>
-                重新读取工具目录
-              </Button>
-            </>
-          ) : null}
-          {tools.phase === "ready" && tools.tools.length === 0 ? (
-            <p className={css.fieldHint}>（后端没有工具，无法选择监听工具）</p>
-          ) : null}
-          {tools.phase === "ready" && tools.tools.length > 0 ? (
-            <div className={css.ruleList} style={{ maxHeight: 200, overflowY: "auto" }}>
-              {tools.tools.map((tool) => (
-                <div key={tool.key} className={css.checkRow}>
-                  <Checkbox
-                    checked={draft.toolNames.includes(tool.key)}
-                    label={`监听工具 ${tool.key}`}
-                    disabled={saving}
-                    onChange={() => toggleTool(tool.key)}
-                  />
-                  <span>
-                    {tool.key}
-                    {tool.description === "" ? null : <span className={css.fieldHint}>{tool.description}</span>}
+          onToggle={(next) => set({ onToolCall: next })}
+        >
+          <Field label={`监听工具（已选 ${draft.toolNames.length}）`} hint="至少选择一个。">
+            {tools.phase === "loading" ? <Skeleton label="读取工具目录" /> : null}
+            {tools.phase === "offline" ? (
+              <Notice
+                tone="danger"
+                action={
+                  <Button variant="ghost" size="sm" disabled={saving} onClick={tools.reload}>
+                    重新读取
+                  </Button>
+                }
+              >
+                读不到工具目录，无法选择监听工具{tools.error === null ? "" : `：${tools.error}`}
+              </Notice>
+            ) : null}
+            {tools.phase === "ready" && tools.tools.length === 0 ? (
+              <p className={own.hint}>后端没有工具，无法选择监听工具。</p>
+            ) : null}
+            {tools.phase === "ready" && tools.tools.length > 0 ? (
+              <div className={own.pick}>
+                {tools.tools.map((tool) => (
+                  <span key={tool.key} className={own.pickItem} title={tool.description}>
+                    <Checkbox
+                      checked={draft.toolNames.includes(tool.key)}
+                      label={tool.key}
+                      disabled={saving}
+                      onChange={() => toggleTool(tool.key)}
+                    />
+                    {tool.description === "" ? null : <span className={own.pickDesc}>{tool.description}</span>}
                   </span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          <label className={css.fieldLabel}>
-            工具调用触发的消息
-            <textarea
-              className={css.textArea}
-              aria-label="工具调用触发消息"
-              rows={2}
-              placeholder="工具被调用时发给 agent 的话（系统会附带任务信息、工具入参与返回内容）"
-              value={draft.toolCallMessage}
-              disabled={saving}
-              onChange={(event) => set({ toolCallMessage: event.currentTarget.value })}
-            />
-          </label>
-        </>
-      ) : null}
+                ))}
+              </div>
+            ) : null}
+          </Field>
+          <MessageField
+            label="工具调用触发消息"
+            placeholder="工具被调用时发给 agent 的话"
+            value={draft.toolCallMessage}
+            disabled={saving}
+            onChange={(next) => set({ toolCallMessage: next })}
+          />
+        </Condition>
 
-      <div className={css.checkInline} style={{ marginTop: 10 }}>
-        <Checkbox
-          checked={draft.onTaskCreate}
+        <Condition
           label="任务创建时触发"
+          description="系统会附带任务编号与目标。"
+          on={draft.onTaskCreate}
           disabled={saving}
-          onChange={(next) => set({ onTaskCreate: next })}
-        />
-        <span>任务创建时触发</span>
-      </div>
-      {draft.onTaskCreate ? (
-        <label className={css.fieldLabel}>
-          任务创建触发的消息
-          <textarea
-            className={css.textArea}
-            aria-label="任务创建触发消息"
-            rows={2}
-            placeholder="任务被创建时发给 agent 的话（系统会附带任务编号与目标）"
+          onToggle={(next) => set({ onTaskCreate: next })}
+        >
+          <MessageField
+            label="任务创建触发消息"
+            placeholder="任务被创建时发给 agent 的话"
             value={draft.taskCreateMessage}
             disabled={saving}
-            onChange={(event) => set({ taskCreateMessage: event.currentTarget.value })}
+            onChange={(next) => set({ taskCreateMessage: next })}
           />
-        </label>
-      ) : null}
+        </Condition>
+      </div>
 
-      {failure === null ? null : <p className={css.errorLine}>{failure}</p>}
-      <div className={css.formActions}>
-        <Button variant="outline" size="sm" disabled={saving} onClick={onCancel}>
+      {failure === null ? null : <Notice tone="danger">{failure}</Notice>}
+      <EditorActions>
+        <Button variant="ghost" size="sm" disabled={saving} onClick={onCancel}>
           取消
         </Button>
         <Button variant="primary" size="sm" disabled={saving} onClick={save}>
           {saving ? "保存中…" : trigger === null ? "添加触发器（停用）" : "保存修改"}
         </Button>
-      </div>
+      </EditorActions>
     </div>
   );
 }
 
-/** 列表行：启用 Switch + 条件摘要 + 最后触发时间 + 编辑 / 删除。 */
+/** 列表行：启用 Switch + 条件摘要 + 最后触发时间 + ⋯（编辑 / 删除）。 */
 function TriggerRow({
   trigger,
   onEdit,
@@ -418,40 +440,47 @@ function TriggerRow({
         toast(next ? "触发器已启用" : "触发器已停用");
         onReload();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setBusy(false));
   };
 
   return (
-    <div className={css.ruleRow} data-trigger-id={trigger.id} data-trigger-enabled={trigger.enabled}>
-      <Switch
-        checked={trigger.enabled}
+    <Row
+      top
+      muted={!trigger.enabled}
+      data={{ "data-trigger-id": String(trigger.id), "data-trigger-enabled": String(trigger.enabled) }}
+      label={triggerConditionSummary(trigger)}
+      labelAdornment={
+        <Badge tone={trigger.enabled ? "success" : "neutral"}>
+          {trigger.enabled ? <Dot tone="success" /> : null}
+          {trigger.enabled ? "已启用" : "已停用"}
+        </Badge>
+      }
+      description={
+        <>
+          <Meta
+            items={[
+              `#${trigger.id}`,
+              `最后触发：${formatLastFire(trigger.last_fire)}`,
+              trigger.on_tool_call
+                ? `监听：${trigger.tool_names.length === 0 ? "（未选）" : trigger.tool_names.join("、")}`
+                : null,
+            ]}
+          />
+          {failure === null ? null : <span className={shared.errorLine}>{failure}</span>}
+        </>
+      }
+    >
+      <Switch checked={trigger.enabled} disabled={busy} label={`启用触发器 #${trigger.id}`} onChange={toggle} />
+      <RowMenu
+        label={`触发器 #${trigger.id} 的更多操作`}
         disabled={busy}
-        label={`启用触发器 #${trigger.id}`}
-        onChange={toggle}
+        items={[
+          { label: "编辑", onSelect: onEdit, data: { "data-trigger-action": "edit" } },
+          { label: "删除", danger: true, separatorBefore: true, onSelect: onDeleted, data: { "data-trigger-action": "delete" } },
+        ]}
       />
-      <div className={css.ruleMain}>
-        <div className={css.ruleMeta}>
-          <span className={css.rowLabel}>{triggerConditionSummary(trigger)}</span>
-          <Tag tone={trigger.enabled ? "success" : "quiet"}>{trigger.enabled ? "已启用" : "已停用"}</Tag>
-        </div>
-        <div className={css.ruleMeta}>
-          <span>{`最后触发：${formatLastFire(trigger.last_fire)}`}</span>
-          {trigger.on_tool_call ? (
-            <span>{`· 监听工具：${trigger.tool_names.length === 0 ? "（未选）" : trigger.tool_names.join("、")}`}</span>
-          ) : null}
-        </div>
-        {failure === null ? null : <p className={css.errorLine}>{failure}</p>}
-      </div>
-      <div className={css.ruleActions}>
-        <Button variant="outline" size="sm" disabled={busy} onClick={onEdit}>
-          编辑
-        </Button>
-        <button type="button" className={css.dangerBtn} disabled={busy} onClick={onDeleted}>
-          <IconTrashOutlineRegular size={13} /> 删除
-        </button>
-      </div>
-    </div>
+    </Row>
   );
 }
 
@@ -478,7 +507,7 @@ function TriggerDeleteDialog({
         toast("触发器已删除");
         onDeleted();
       })
-      .catch((reason: unknown) => setFailure(reason instanceof Error ? reason.message : String(reason)))
+      .catch((reason: unknown) => setFailure(errorText(reason)))
       .finally(() => setBusy(false));
   };
 
@@ -501,29 +530,23 @@ function TriggerDeleteDialog({
         </>
       }
     >
-      <div className={css.dialogBodyText}>
-        <p style={{ margin: 0 }}>
+      <div className={own.dialogStack}>
+        <div className={own.targetBox}>
           {trigger === null ? "" : `触发器 #${trigger.id} · ${triggerConditionSummary(trigger)}`}
-        </p>
-        {failure === null ? null : <p className={css.errorLine}>删除失败：{failure}</p>}
+        </div>
+        {failure === null ? null : <Notice tone="danger">删除失败：{failure}</Notice>}
       </div>
     </Modal>
   );
 }
 
 /**
- * 触发器页签。
+ * 触发器分区。
  * @param props.agentKey - 正在编辑的 Agent。
  * @param props.builtin - 是否内置 Agent（内置不支持触发器，后端 POST 也返回 400）。
  * @returns 内置提示，或「列表 + 新建 / 编辑表单」。
  */
-export function AgentTriggersTab({
-  agentKey,
-  builtin,
-}: {
-  agentKey: string;
-  builtin: boolean;
-}): React.ReactNode {
+export function AgentTriggersTab({ agentKey, builtin }: { agentKey: string; builtin: boolean }): React.ReactNode {
   const state = useAgentTriggers(builtin ? null : agentKey);
   /** undefined = 不显示表单；"new" = 新建；number = 编辑该条。 */
   const [editing, setEditing] = React.useState<"new" | number | undefined>(undefined);
@@ -536,81 +559,64 @@ export function AgentTriggersTab({
 
   if (builtin) {
     return (
-      <div className={css.subForm} data-agent-tab-panel="triggers">
-        <p className={css.fieldHint}>内置 Agent 不支持触发器（后端创建接口对内置 Agent 返回 400「触发器仅支持自定义 agent」）。</p>
+      <div className={own.panel} data-agent-tab-panel="triggers">
+        <Notice>内置 Agent 不支持触发器（后端创建接口对内置 Agent 返回 400「触发器仅支持自定义 agent」）。</Notice>
       </div>
     );
   }
 
   if (state.phase === "loading" || state.phase === "idle") {
     return (
-      <div className={css.subForm} data-agent-tab-panel="triggers">
-        <p className={css.fieldHint}>读取 GET /agents/{agentKey}/triggers …</p>
+      <div className={own.panel} data-agent-tab-panel="triggers">
+        <Skeleton label="读取触发器" />
       </div>
     );
   }
 
   if (state.phase === "offline") {
     return (
-      <div className={css.subForm} data-agent-tab-panel="triggers">
-        <p className={css.fieldHint}>读不到这个 Agent 的触发器。</p>
-        {state.error === null ? null : <p className={css.errorLine}>{state.error}</p>}
-        <Button variant="outline" size="sm" aria-label="重新读取触发器" onClick={state.reload}>
-          <IconRefreshOutlineRegular size={13} /> 重新读取
-        </Button>
+      <div className={own.panel} data-agent-tab-panel="triggers">
+        <Notice
+          tone="danger"
+          action={
+            <Button variant="ghost" size="sm" aria-label="重新读取触发器" onClick={state.reload}>
+              重新读取
+            </Button>
+          }
+        >
+          读不到这个 Agent 的触发器{state.error === null ? "" : `：${state.error}`}
+        </Notice>
       </div>
     );
   }
 
-  const editingTrigger = editing === undefined || editing === "new"
-    ? null
-    : state.triggers.find((item) => item.id === editing) ?? null;
+  const editingTrigger =
+    editing === undefined || editing === "new" ? null : (state.triggers.find((item) => item.id === editing) ?? null);
 
   const closeForm = (): void => setEditing(undefined);
   const afterWrite = (): void => {
     setEditing(undefined);
     state.reload();
   };
+  const enabledCount = state.triggers.filter((item) => item.enabled).length;
 
   return (
-    <div className={css.subForm} data-agent-tab-panel="triggers">
-      <p className={css.fieldHint}>
-        触发器让这个自定义 Agent 自动运行：每次触发都新建一个会话运行（在「Agent 对话」页可见）。可多选触发条件；系统会把「本次为何触发 +
-        相关任务 / finding / 目标」附在你写的消息后面。新建的触发器默认停用。
+    <div className={own.panel} data-agent-tab-panel="triggers">
+      <div className={own.subHead}>
+        <span>触发器</span>
+        <span className={own.groupCount}>{`${enabledCount} 启用 / 共 ${state.triggers.length}`}</span>
+        <span className={own.groupHeadEnd}>
+          <RefreshButton label="刷新触发器" onClick={state.reload} />
+        </span>
+      </div>
+      <p className={own.hint}>
+        触发器让这个自定义 Agent 自动运行：每次触发都新建一个会话（在「Agent 对话」页可见）。可多选触发条件；新建的触发器默认停用。
       </p>
 
-      <div className={css.filterBar}>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={editing === "new"}
-          onClick={() => setEditing(editing === "new" ? undefined : "new")}
-        >
-          <IconPlusOutlineRegular size={13} /> 新增触发器
-        </Button>
-        <Button variant="ghost" size="sm" onClick={state.reload}>
-          <IconRefreshOutlineRegular size={13} /> 刷新
-        </Button>
-      </div>
-
-      {editing === "new" ? (
-        <TriggerForm key="new" agentKey={agentKey} trigger={null} onSaved={afterWrite} onCancel={closeForm} />
-      ) : null}
-
-      {state.triggers.length === 0 ? (
-        <p className={css.fieldHint}>该 Agent 还没有触发器。</p>
-      ) : (
-        <div className={css.ruleList}>
+      {state.triggers.length === 0 ? null : (
+        <div className={`${shared.optionCard} ${own.optionRows}`}>
           {state.triggers.map((item) =>
-            editing === item.id ? (
-              <TriggerForm
-                key={item.id}
-                agentKey={agentKey}
-                trigger={editingTrigger ?? item}
-                onSaved={afterWrite}
-                onCancel={closeForm}
-              />
-            ) : (
+            editing === item.id ? null : (
               <TriggerRow
                 key={item.id}
                 trigger={item}
@@ -621,6 +627,24 @@ export function AgentTriggersTab({
             ),
           )}
         </div>
+      )}
+
+      {editingTrigger === null ? null : (
+        <TriggerForm
+          key={editingTrigger.id}
+          agentKey={agentKey}
+          trigger={editingTrigger}
+          onSaved={afterWrite}
+          onCancel={closeForm}
+        />
+      )}
+
+      {editing === "new" ? (
+        <TriggerForm key="new" agentKey={agentKey} trigger={null} onSaved={afterWrite} onCancel={closeForm} />
+      ) : (
+        <AddSlot data={{ "data-trigger-new": "" }} onClick={() => setEditing("new")}>
+          <IconPlusOutlineRegular size={13} /> {state.triggers.length === 0 ? "添加第一个触发器" : "新增触发器"}
+        </AddSlot>
       )}
 
       <TriggerDeleteDialog

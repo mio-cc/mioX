@@ -12,7 +12,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import type { TrafficExchange } from "@/lib/types";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
+import { FilterBar } from "@/components/v2/design/Kit";
 import { trafficBlobUrl, trafficExchange } from "@/v2/data/traffic";
 
 import css from "./traffic.module.css";
@@ -102,7 +102,7 @@ export function TrafficDetail({ row, onClose }: { row: TrafficExchange | null; o
       }
     >
       <div className={css.detailWrap} data-traffic-detail={row?.id ?? ""}>
-        <SegmentedControl
+        <FilterBar
           id="traffic-detail-side"
           label="请求或响应"
           value={side}

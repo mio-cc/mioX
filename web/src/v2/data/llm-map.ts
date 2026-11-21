@@ -37,3 +37,23 @@ export function profilesToOptions(profiles: readonly LLMProfile[]): ModelOption[
   if (defaultId === undefined) return rows;
   return [...rows.filter((row) => row.id === defaultId), ...rows.filter((row) => row.id !== defaultId)];
 }
+
+/**
+ * 存储的思考强度字段（`LLMProfile.reasoning_effort`，"" = 不发送）→ 触发器文案。
+ * 映射复用旧页 Composer 的 effortText（`app/(main)/function/tasks/detail/_composer/model-picker.tsx:48-62`）：
+ * 空串读作「默认」（提供方默认档），未收录的值原样显示，不编造假档位。
+ * @param value - profile 的 reasoning_effort 存储值。
+ * @returns 中文强度文案。
+ */
+export function reasoningEffortLabel(value: string): string {
+  const LABELS: Record<string, string> = {
+    off: "关闭",
+    low: "低",
+    medium: "中",
+    high: "高",
+    xhigh: "极高",
+    max: "最大",
+  };
+  if (value === "") return "默认";
+  return LABELS[value] ?? value;
+}

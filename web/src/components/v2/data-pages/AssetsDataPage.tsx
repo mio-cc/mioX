@@ -10,10 +10,16 @@
  * (`app/(main)/function/assets/page.tsx`): tab counts `:299-300` + `:342-350`,
  * server-side paging `:249-289` + `:882-927`, row columns `:447-730`, selection
  * and the delete alert `:327-331` + `:739-762`, company attribution — the 归属企业
- * cell of the 根域名 table `:291-297` + `:424-436`, and the 企业 view with its
- * 资产数 column `:299` + `:353-387`. Import / create / sync write paths are out of
- * scope (W7 delivery notes), and so is the company CRUD of D3–D7 (P2-5): the 企业
- * view added here is read-only.
+ * cell of the 根域名 table `:291-297` + `:424-436`. Import / create / sync write
+ * paths are out of scope (W7 delivery notes). D6·U4：本页的「企业」tab 不再是
+ * 只读归属表，而是 `CompaniesPage` 的全功能体（`components/v2/companies/CompaniesPage.tsx`，
+ * 企业 CRUD + 资产范围 DSL，同一组件也挂在独立路由 `app/v2/companies`），原「企业」
+ * 一级页由此并入。
+ *
+ * 企业 tab 深链用 `?tab=company`。旧 `?page=companies` 深链由 Shell 承接
+ * （`readShellPageParam` 别名映射 + 落地 effect 把地址规范化成
+ * `?page=assets&tab=company`）；本组件首次渲染早于该 effect 的地址重写，
+ * 所以初始 tab 同时认 `tab=company` 与旧 `page=companies`。
  *
  * The body is surface-agnostic and takes no props, because two surfaces render
  * it: the standalone `/v2/assets` route, which owns the full-viewport frame, and
@@ -22,6 +28,7 @@
  */
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
+import { CompaniesPage } from "@/components/v2/companies/CompaniesPage";
 import { AssetDeleteDialog, type AssetDeleteTarget } from "@/components/v2/data-pages/AssetDeleteDialog";
 import { AssetPager } from "@/components/v2/data-pages/AssetPager";
 import { AssetTable, assetColumnsFor, assetLabel } from "@/components/v2/data-pages/AssetTable";
@@ -29,7 +36,7 @@ import { AssetTypeTabs, type AssetTypeTab } from "@/components/v2/data-pages/Ass
 import { buildCsv, csvFileName, downloadCsv } from "@/components/v2/data-pages/csv";
 import { DataPageToolbar } from "@/components/v2/data-pages/DataPageToolbar";
 import { useDebouncedValue } from "@/components/v2/data-pages/use-debounced-value";
-import type { Asset, Company, NewAssetType } from "@/lib/types";
+import type { Asset, NewAssetType } from "@/lib/types";
 import { useAssets } from "@/v2/data/assets";
 import {
   ASSET_DEFAULT_PAGE_SIZE,
@@ -58,84 +65,26 @@ const TABS: readonly AssetTypeTab[] = [
 ];
 
 /**
- * The 企业 view of the inventory (D13): every company the asset rows can be
- * attributed to, with its 资产数.
- *
- * Rows and the 资产数 figure come from `GET /companies` (`api.ts:608`,
- * `Company.asset_count` at `types.ts:414`), the same source the old page's 企业
- * tab renders (`app/(main)/function/assets/page.tsx:299` for the tab counter,
- * `:359` for the 资产数 header, `:374` for the count cell). 资产范围 is left out
- * on purpose: `app/(main)/function/assets/page.tsx:376-386` renders it but scope
- * editing is the company CRUD of P2-5, so this view stays read-only.
- * @param props.companies - company rows from the directory.
- * @param props.phase - directory read phase.
- * @param props.error - directory read failure reason.
- * @returns the read-only company table with its four states.
+ * The 企业 view is the `CompaniesPage` body（D6·U4）: the full company CRUD with
+ * its four write dialogs（新建 / 覆盖保存 / 追加 / 删除，P2:D3–D2:D7）replaces
+ * the read-only attribution table the D13 first cut shipped, because the old
+ * top-level 企业 page merged into this tab keeps every `data-companies-*` hook
+ * untouched for the audit scripts.
  */
-function CompanyAttributionTable({
-  companies,
-  phase,
-  error,
-}: {
-  companies: Company[];
-  phase: "loading" | "ready" | "offline";
-  error: string | null;
-}): ReactNode {
-  if (phase === "loading") {
-    return (
-      <p className={css.stateText} data-asset-company-state="loading">
-        读取企业…
-      </p>
-    );
-  }
-  if (phase === "offline") {
-    return (
-      <p className={css.stateError} data-asset-company-state="offline">
-        企业归属读取失败（{error}）
-      </p>
-    );
-  }
-  if (companies.length === 0) {
-    return (
-      <p className={css.stateText} data-asset-company-state="empty">
-        暂无企业。
-      </p>
-    );
-  }
-  return (
-    <div className={css.companyWrap} data-asset-company-table="">
-      <table className={css.companyTable}>
-        <thead>
-          <tr>
-            <th className={css.companyTh}>企业</th>
-            <th className={css.companyTh}>资产范围</th>
-            <th className={`${css.companyTh} ${css.companyThRight}`}>资产数</th>
-          </tr>
-        </thead>
-        <tbody>
-          {companies.map((company) => (
-            <tr key={company.id} data-data-page-row="" data-company-id={company.id}>
-              <td className={css.companyTd} title={company.name}>
-                {company.name || `企业 #${company.id}`}
-              </td>
-              {/* P2:D13：资产范围列，数据来自公司自带的 scope（ScopeRow.raw 是原始输入），
-                  与旧页 assets/page.tsx:376-386 同口径：多条用「、」连接，为空显示「—」。 */}
-              <td className={css.companyTd} data-company-scope={company.id}>
-                {company.scope === undefined || company.scope.length === 0 ? (
-                  <span className={css.companyEmpty}>—</span>
-                ) : (
-                  company.scope.map((rule) => rule.raw).join("、")
-                )}
-              </td>
-              <td className={`${css.companyTd} ${css.companyTdRight}`} data-company-asset-count={company.id}>
-                {String(company.asset_count)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+
+/**
+ * Read the initial tab from the address（D6·U4）: `?tab=company` deep-links the
+ * 企业 view, and the retired `?page=companies` value still lands there because
+ * this first render can happen before Shell's alias effect rewrites the address.
+ * Server render owns no window, so the default 全部 tab applies there.
+ * @returns the initial tab id.
+ */
+function readAssetTabParam(): string {
+  if (typeof window === "undefined") return ALL_TAB;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("tab") === COMPANY_TAB) return COMPANY_TAB;
+  if (params.get("page") === "companies") return COMPANY_TAB;
+  return ALL_TAB;
 }
 
 /**
@@ -143,7 +92,7 @@ function CompanyAttributionTable({
  * @returns the whole asset page body.
  */
 export function AssetsDataPage(): ReactNode {
-  const [tab, setTab] = useState<string>(ALL_TAB);
+  const [tab, setTab] = useState<string>(readAssetTabParam);
   const [query, setQuery] = useState("");
   const applied = useDebouncedValue(query.trim(), 250);
   const [page, setPage] = useState(0);
@@ -272,7 +221,7 @@ export function AssetsDataPage(): ReactNode {
     <>
       <DataPageToolbar
         page="assets"
-        title="资产"
+        title="资产库"
         lead="资产图：站点、接口、主机与指纹。"
         query={query}
         onQueryChange={setQuery}
@@ -293,9 +242,7 @@ export function AssetsDataPage(): ReactNode {
         onDeleteSelected={requestDeleteSelected}
       />
 
-      {companyTab ? (
-        <CompanyAttributionTable companies={companies.rows} phase={companies.phase} error={companies.error} />
-      ) : null}
+      {companyTab ? <CompaniesPage /> : null}
 
       {!companyTab && (rows.length > 0 || phase === "ready") ? (
         <AssetTable

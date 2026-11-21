@@ -10,6 +10,10 @@
  *   （旧页用的 @antv/g6 不照搬，本文件不 import 旧组件）。
  * 接口：`api.taskCoverage`（api.ts:421）、`api.taskCoverageGraph`（api.ts:431 → types.ts:325）、
  *   `api.taskAssetRefs`（api.ts:527 → types.ts:339）；全部经 `@/v2/data/coverage` 取数。
+ *
+ * D2 版式：PageHead（粗估说明 + 刷新）→ 「概览」指标格 + 按类型分布卡（每类一行：名称 / 进度条 / 已测/总数）
+ * → 「覆盖图」卡（顶部图例条，画布定高）→ 节点详情弹窗：属性用 Facts，关联引用分组成行。
+ * 数据与交互不变。
  */
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
@@ -24,10 +28,30 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import type { CoverageAssetRef, CoverageGraphNode, Task } from "@/lib/types";
+import {
+  Badge,
+  Card,
+  Empty,
+  Facts,
+  IconButton,
+  kit,
+  Meta,
+  Metrics,
+  Notice,
+  Page,
+  PageHead,
+  Row,
+  Section,
+  Skeleton,
+  type Fact,
+} from "@/components/v2/design/Kit";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
-import { IconRefreshOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
+import {
+  IconBranchOutlineRegular,
+  IconRefreshOutlineRegular,
+  IconShieldOutlineRegular,
+} from "@/vendor/dsh/primitives/icons/index";
 import {
   COVERAGE_KINDS,
   coverageKindLabel,
@@ -95,105 +119,109 @@ function layeredPositions(
 }
 
 /**
- * 覆盖度概览的数字块。
- * @param props.label - 指标名。
- * @param props.value - 指标值（已格式化）。
- * @returns 一小块统计。
- */
-function StatBlock({ label, value }: { label: string; value: string }): ReactNode {
-  return (
-    <div className={css.stat}>
-      <span className={css.statLabel}>{label}</span>
-      <span className={css.statValue}>{value}</span>
-    </div>
-  );
-}
-
-/**
- * 资产侧栏的一个引用分组。
+ * 资产详情里的一个引用分组（卡内行）。
  * @param props.title - 区块标题。
  * @param props.items - 该组引用。
- * @returns 引用列表；该组为空时不渲染。
+ * @returns 引用卡；该组为空时不渲染。
  */
 function RefBlock({ title, items }: { title: string; items: CoverageAssetRef[] }): ReactNode {
   if (items.length === 0) return null;
   return (
-    <div className={css.refBlock}>
-      <span className={css.blockTitle}>
-        {title}（{items.length}）
-      </span>
-      <ul className={css.refList}>
+    <Section title={title} count={items.length}>
+      <Card>
         {items.map((ref) => (
-          <li key={`${ref.kind}-${ref.id}`} className={css.refRow} data-coverage-ref={`${ref.kind}-${ref.id}`}>
-            <span className={css.refId}>#{ref.id}</span>
-            {ref.state === "" ? null : <Tag tone="quiet">{ref.state}</Tag>}
-            <span className={css.refSummary}>{ref.summary === "" ? "—" : ref.summary}</span>
-            {ref.inherited === true && ref.source_task_id !== undefined ? (
-              <Tag tone="outline">来源 #{ref.source_task_id} · 只读</Tag>
-            ) : null}
-          </li>
+          <Row
+            key={`${ref.kind}-${ref.id}`}
+            data={{ "data-coverage-ref": `${ref.kind}-${ref.id}` }}
+            top
+            label={<span className={css.refSummary}>{ref.summary === "" ? "—" : ref.summary}</span>}
+            description={
+              <Meta
+                items={[
+                  <span key="id" className={kit.mono}>
+                    #{ref.id}
+                  </span>,
+                  ref.inherited === true && ref.source_task_id !== undefined ? `来源 #${ref.source_task_id} · 只读` : null,
+                ]}
+              />
+            }
+          >
+            {ref.state === "" ? null : <Badge>{ref.state}</Badge>}
+          </Row>
         ))}
-      </ul>
-    </div>
+      </Card>
+    </Section>
   );
 }
 
 /**
- * 选中资产的侧栏区块：属性与关联意图 / 事实 / 发现。
+ * 选中资产的详情：属性与关联意图 / 事实 / 发现。
  * @param props.taskId - 任务 id。
  * @param props.node - 选中的节点。
- * @returns 侧栏内容（含加载 / 失败 / 空四态）。
+ * @returns 详情内容（含加载 / 失败 / 空四态）。
  */
 function AssetDetail({ taskId, node }: { taskId: string; node: CoverageGraphNode }): ReactNode {
   const refs = useCoverageAssetRefs(taskId, node.asset_id ?? null);
   const groups = refs.data === null ? [] : coverageRefGroups(refs.data);
   const hasRefs = groups.some((group) => group.items.length > 0);
 
-  const meta: { label: string; value: string | number | undefined }[] = [
+  const meta: { label: string; value: string | number | undefined; mono?: boolean; wrap?: boolean }[] = [
     { label: "类型", value: coverageKindLabel(node.kind) },
     { label: "测试状态", value: coverageTestStateLabel(node) },
-    { label: "域名", value: node.domain },
-    { label: "根域名", value: node.root_domain },
-    { label: "IP", value: node.ip },
-    { label: "端口", value: node.port },
-    { label: "URL", value: node.url },
-    { label: "标题", value: node.page_title },
-    { label: "状态码", value: node.status_code },
+    { label: "域名", value: node.domain, mono: true },
+    { label: "根域名", value: node.root_domain, mono: true },
+    { label: "IP", value: node.ip, mono: true },
+    { label: "端口", value: node.port, mono: true },
+    { label: "URL", value: node.url, mono: true, wrap: true },
+    { label: "标题", value: node.page_title, wrap: true },
+    { label: "状态码", value: node.status_code, mono: true },
     { label: "App", value: node.app_name },
-    { label: "资产ID", value: node.asset_id },
+    { label: "资产ID", value: node.asset_id, mono: true },
   ];
+  const facts: Fact[] = meta
+    .filter((row) => row.value !== undefined && row.value !== "" && row.value !== 0)
+    .map((row) => ({
+      key: row.label,
+      label: row.label,
+      value: String(row.value),
+      mono: row.mono === true,
+      wrap: row.wrap === true,
+      title: String(row.value),
+    }));
+
+  const testTone = !node.in_scope ? "neutral" : node.tested ? "success" : "warning";
 
   return (
     <div className={css.detail} data-coverage-detail={node.key}>
       <div className={css.detailHead}>
-        <Tag tone="outline">{coverageKindLabel(node.kind)}</Tag>
+        <Badge tone="info">{coverageKindLabel(node.kind)}</Badge>
         <span className={css.detailLabel} title={node.label}>
           {node.label}
         </span>
+        <Badge tone={testTone}>{coverageTestStateLabel(node)}</Badge>
       </div>
 
-      <div className={css.props}>
-        {meta
-          .filter((row) => row.value !== undefined && row.value !== "" && row.value !== 0)
-          .map((row) => (
-            <div key={row.label} className={css.propRow}>
-              <span className={css.propLabel}>{row.label}</span>
-              <span className={css.propValue}>{row.value}</span>
-            </div>
-          ))}
-      </div>
+      <Card quiet>
+        <Facts items={facts} columns={2} />
+      </Card>
 
       {node.asset_id === undefined ? (
-        <span className={css.note}>这个节点不是资产，没有可查询的引用。</span>
+        <Notice>这个节点不是资产，没有可查询的引用。</Notice>
       ) : refs.phase === "loading" ? (
-        <span className={css.note}>读取引用…</span>
+        <Card quiet>
+          <Skeleton label="读取引用" />
+        </Card>
       ) : refs.phase === "offline" ? (
-        <div className={css.stateError} role="alert">
-          <span>引用读取失败：{refs.error}</span>
-          <Button variant="outline" size="sm" onClick={refs.reload}>
-            重试
-          </Button>
-        </div>
+        <Notice
+          tone="danger"
+          action={
+            <Button variant="ghost" size="sm" onClick={refs.reload}>
+              重试
+            </Button>
+          }
+        >
+          引用读取失败：{refs.error}
+        </Notice>
       ) : hasRefs ? (
         <div className={css.refWrap}>
           {groups.map((group) => (
@@ -201,7 +229,7 @@ function AssetDetail({ taskId, node }: { taskId: string; node: CoverageGraphNode
           ))}
         </div>
       ) : (
-        <span className={css.note}>这个资产在本任务还没有关联的意图、事实或发现。</span>
+        <Notice>这个资产在本任务还没有关联的意图、事实或发现。</Notice>
       )}
     </div>
   );
@@ -252,94 +280,173 @@ export function CoverageView({ task }: { task: Task }): ReactNode {
 
   const inScope = nodes.filter((node) => node.in_scope).length;
   const testedNodes = nodes.filter((node) => node.in_scope && node.tested).length;
+  const kindsPresent = COVERAGE_KINDS.filter((kind) => nodes.some((node) => node.kind === kind));
+
+  const data = summary.phase === "ready" ? summary.data : null;
+  const noScope = data !== null && data.enabled !== false && data.scope_rows === 0;
+  const disabled = data !== null && data.enabled === false;
 
   return (
-    <div className={css.wrap} data-coverage-view="">
-      <div className={css.toolbar}>
-        <span className={css.title}>资产测试覆盖度</span>
-        <span className={css.muted}>粗估，仅供参考</span>
-        <span className={css.toolbarRight}>
-          <Button
-            variant="outline"
-            size="sm"
-            icon={<IconRefreshOutlineRegular size={13} />}
+    <Page data={{ "data-coverage-view": "" }}>
+      <PageHead
+        title="资产测试覆盖度"
+        adornment={<Badge>粗估，仅供参考</Badge>}
+        lead="范围内资产中有多少已被 Agent 测试过；按资产关系画成覆盖图，点节点看它关联的意图、事实与发现。"
+        actions={
+          <IconButton
+            label="刷新"
+            spinning={summary.phase === "loading" || graph.phase === "loading"}
             data-coverage-refresh=""
             onClick={reloadAll}
           >
-            刷新
-          </Button>
-        </span>
-      </div>
+            <IconRefreshOutlineRegular size={14} />
+          </IconButton>
+        }
+      />
 
-      <section className={css.section} data-coverage-summary="">
-        <span className={css.blockTitle}>覆盖度概览</span>
-        {summary.phase === "loading" ? <span className={css.note}>读取覆盖度…</span> : null}
+      <Section title="概览" data={{ "data-coverage-summary": "" }}>
+        {summary.phase === "loading" ? (
+          <Card>
+            <Skeleton label="读取覆盖度" />
+          </Card>
+        ) : null}
         {summary.phase === "offline" ? (
-          <div className={css.stateError} role="alert">
-            <span>覆盖度读取失败：{summary.error}</span>
-            <Button variant="outline" size="sm" onClick={summary.reload}>
-              重试
-            </Button>
-          </div>
+          <Notice
+            tone="danger"
+            action={
+              <Button variant="ghost" size="sm" onClick={summary.reload}>
+                重试
+              </Button>
+            }
+          >
+            覆盖度读取失败：{summary.error}
+          </Notice>
         ) : null}
-        {summary.phase === "ready" && summary.data !== null ? (
-          summary.data.enabled === false ? (
-            <span className={css.note}>资产覆盖度功能未开启（设置里打开后才有统计）。</span>
-          ) : summary.data.scope_rows === 0 ? (
-            <span className={css.note}>这个任务还没有测试范围（先锚定任务范围，才会有覆盖度统计）。</span>
-          ) : (
-            <>
-              <div className={css.stats}>
-                <StatBlock label="已测 / 范围内" value={`${summary.data.tested} / ${summary.data.denominator}`} />
-                <StatBlock label="覆盖率" value={coveragePercentText(summary.data.pct)} />
-                <StatBlock label="范围条目" value={String(summary.data.scope_rows)} />
-              </div>
-              {summary.data.by_type.length === 0 ? null : (
-                <div className={css.typeChips}>
-                  {summary.data.by_type.map((bucket) => (
-                    <Tag key={bucket.type} tone="neutral">
-                      {`${bucket.type} ${bucket.tested}/${bucket.total}`}
-                    </Tag>
-                  ))}
-                </div>
-              )}
-            </>
-          )
+        {disabled ? (
+          <Card>
+            <Empty
+              inCard
+              icon={<IconShieldOutlineRegular size={18} />}
+              title="资产覆盖度未开启"
+              text="在设置里打开资产覆盖度后，这里才会有统计与覆盖图。"
+            />
+          </Card>
         ) : null}
-      </section>
+        {noScope ? (
+          <Card>
+            <Empty
+              inCard
+              icon={<IconShieldOutlineRegular size={18} />}
+              title="还没有测试范围"
+              text="先在「资产」里登记任务的测试范围，覆盖度才有分母可算。"
+            />
+          </Card>
+        ) : null}
+        {data !== null && !disabled && !noScope ? (
+          <>
+            <Metrics
+              items={[
+                data.pct === null
+                  ? { key: "pct", label: "覆盖率", value: coveragePercentText(data.pct), muted: true }
+                  : {
+                      key: "pct",
+                      label: "覆盖率",
+                      value: coveragePercentText(data.pct),
+                      tone: data.pct >= 0.8 ? "success" : data.pct >= 0.3 ? "info" : "warning",
+                    },
+                {
+                  key: "tested",
+                  label: "已测 / 范围内",
+                  value: (
+                    <span>
+                      {data.tested}
+                      <span className={css.denominator}> / {data.denominator}</span>
+                    </span>
+                  ),
+                },
+                { key: "rows", label: "范围条目", value: data.scope_rows },
+              ]}
+            />
+            {data.by_type.length === 0 ? null : (
+              <Card>
+                {data.by_type.map((bucket) => {
+                  const ratio = bucket.total === 0 ? 0 : bucket.tested / bucket.total;
+                  return (
+                    <Row key={bucket.type} label={coverageKindLabel(bucket.type)} wideControl>
+                      <span className={css.bar} aria-hidden="true">
+                        <span className={css.barFill} style={{ width: `${Math.round(ratio * 100)}%` }} />
+                      </span>
+                      <span className={css.ratio}>
+                        {bucket.tested}
+                        <span className={css.denominator}> / {bucket.total}</span>
+                      </span>
+                    </Row>
+                  );
+                })}
+              </Card>
+            )}
+          </>
+        ) : null}
+      </Section>
 
-      <section className={css.section} data-coverage-graph="">
-        <div className={css.sectionHead}>
-          <span className={css.blockTitle}>覆盖图</span>
-          {graph.phase === "ready" && nodes.length > 0 ? (
-            <span className={css.legend}>
-              <span>范围内 {inScope}</span>
-              {coverageEnabled ? <span>已测 {testedNodes}</span> : null}
-              <span>连线 {edges.length}</span>
-              {COVERAGE_KINDS.map((kind) => (
-                <Tag key={kind} tone="quiet">
-                  {coverageKindLabel(kind)}
-                </Tag>
-              ))}
-            </span>
-          ) : null}
-        </div>
-
-        {graph.phase === "loading" ? <span className={css.note}>读取覆盖图…</span> : null}
+      <Section
+        title="覆盖图"
+        count={graph.phase === "ready" && nodes.length > 0 ? `${nodes.length} 个节点` : undefined}
+        hint={
+          disabled || noScope
+            ? "有测试范围后显示"
+            : graph.phase === "ready" && flow.nodes.length > 0
+              ? "拖动平移 · 滚轮缩放 · 点节点看详情"
+              : undefined
+        }
+        data={{ "data-coverage-graph": "" }}
+      >
+        {/* 没开启 / 没范围时概览已给出诚实空态，这里只留眉题提示，不叠第二张空卡。 */}
+        {disabled || noScope ? null : (
+          <>
+        {graph.phase === "loading" ? (
+          <Card>
+            <Skeleton label="读取覆盖图" />
+          </Card>
+        ) : null}
         {graph.phase === "offline" ? (
-          <div className={css.stateError} role="alert">
-            <span>覆盖图读取失败：{graph.error}</span>
-            <Button variant="outline" size="sm" onClick={graph.reload}>
-              重试
-            </Button>
-          </div>
+          <Notice
+            tone="danger"
+            action={
+              <Button variant="ghost" size="sm" onClick={graph.reload}>
+                重试
+              </Button>
+            }
+          >
+            覆盖图读取失败：{graph.error}
+          </Notice>
         ) : null}
         {graph.phase === "ready" && flow.nodes.length === 0 ? (
-          <span className={css.note}>暂无范围内资产（先锚定任务范围）。</span>
+          <Card>
+            <Empty
+              inCard
+              icon={<IconBranchOutlineRegular size={18} />}
+              title="暂无范围内资产"
+              text="锚定任务范围后，资产及其关系会画在这里。"
+            />
+          </Card>
         ) : null}
         {graph.phase === "ready" && flow.nodes.length > 0 ? (
-          <>
-            <span className={css.muted}>点节点看它在本任务里关联的意图 / 事实 / 发现；拖动可平移，滚轮缩放。</span>
+          <Card className={css.graphCard}>
+            <div className={css.legend}>
+              <Meta
+                items={[
+                  `范围内 ${inScope}`,
+                  coverageEnabled ? `已测 ${testedNodes}` : null,
+                  `连线 ${edges.length}`,
+                ]}
+              />
+              <span className={css.legendKinds}>
+                {kindsPresent.map((kind) => (
+                  <Badge key={kind}>{coverageKindLabel(kind)}</Badge>
+                ))}
+              </span>
+            </div>
             <div className={css.canvas} data-coverage-canvas="">
               <ReactFlow
                 nodes={flow.nodes}
@@ -352,18 +459,15 @@ export function CoverageView({ task }: { task: Task }): ReactNode {
                 <Controls />
               </ReactFlow>
             </div>
-          </>
+          </Card>
         ) : null}
-      </section>
+          </>
+        )}
+      </Section>
 
-      <Modal
-        open={selected !== null}
-        onClose={() => setSelectedKey(null)}
-        title="资产覆盖详情"
-        closeLabel="关闭"
-      >
+      <Modal open={selected !== null} onClose={() => setSelectedKey(null)} title="资产覆盖详情" closeLabel="关闭">
         {selected === null ? null : <AssetDetail taskId={task.id} node={selected} />}
       </Modal>
-    </div>
+    </Page>
   );
 }

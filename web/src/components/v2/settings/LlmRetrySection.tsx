@@ -4,11 +4,15 @@
  * Global LLM retry policy editor: one row per backend layer, each with an
  * attempt count and a fixed retry interval. The draft only leaves this
  * component when the user presses 保存重试策略.
+ *
+ * D3 layout: a kit Section whose card is a three-column grid table
+ * (layer · attempts · interval) with the save bar under it.
  */
 import * as React from "react";
 
 import type { LLMRetryPolicy } from "@/lib/types";
 import { Button } from "@/vendor/dsh/primitives/Button";
+import { Card, kit, Notice, Section, Skeleton, UnitInput } from "@/components/v2/design/Kit";
 import { RETRY_LAYERS, useLlmRetryPolicy } from "@/v2/data/llm-retry";
 
 import css from "./SettingsDialog.module.css";
@@ -39,83 +43,103 @@ export function LlmRetrySection(): React.ReactNode {
     });
   };
 
-  if (state.phase === "loading") return <p className={css.pageLead}>读取重试策略…</p>;
-  if (state.phase === "offline" || draft === null) {
-    return <p className={css.pageLead}>未连接后端（读不到重试策略）</p>;
-  }
+  const dirty = draft !== null && state.policy !== null && JSON.stringify(draft) !== JSON.stringify(state.policy);
 
   return (
-    <>
-      <h3 className={css.subTitle}>重试与退避</h3>
-      <p className={css.pageLead}>
-        来自 GET /llm/retry-policy。每层独立配置：次数 0 = 用内置默认、-1 = 关闭该层；间隔 0 = 用默认间隔，&gt;0 = 固定毫秒。
-      </p>
-      {RETRY_LAYERS.map((layer) => (
-        <div key={layer.key} className={css.row}>
-          <div className={css.rowText}>
-            <div className={css.rowLabel}>{layer.label}</div>
-            <div className={css.rowHint}>{layer.hint}</div>
+    <Section
+      title="重试与退避"
+      hint="次数 0 = 内置默认、-1 = 关闭该层；间隔 0 = 默认，>0 = 固定毫秒"
+      data={{ "data-settings-retry": "" }}
+    >
+      {state.phase === "loading" ? (
+        <Card>
+          <Skeleton label="读取重试策略" />
+        </Card>
+      ) : null}
+      {state.phase === "offline" || (state.phase !== "loading" && draft === null) ? (
+        <Notice tone="danger">未连接后端（读不到重试策略）</Notice>
+      ) : null}
+      {draft === null ? null : (
+        <>
+          <Card>
+            <div className={css.retryTable} role="table" aria-label="全局重试策略" data-flat="">
+              <div className={css.retryHead} role="row">
+                <span role="columnheader">层</span>
+                <span role="columnheader">次数</span>
+                <span role="columnheader">间隔</span>
+              </div>
+              {RETRY_LAYERS.map((layer) => (
+                <div key={layer.key} className={css.retryRow} role="row" data-retry-layer={layer.key}>
+                  <span className={css.retryLayer} role="cell">
+                    <span className={css.retryLayerName}>{layer.label}</span>
+                    <span className={css.retryLayerHint} title={layer.hint}>
+                      {layer.hint}
+                    </span>
+                  </span>
+                  <span role="cell">
+                    <UnitInput unit="次">
+                      <input
+                        className={`${kit.input} ${css.numberInputKit}`}
+                        type="number"
+                        min={-1}
+                        step={1}
+                        aria-label={`${layer.label}次数`}
+                        value={draft[layer.key].attempts}
+                        disabled={saving}
+                        onChange={(event) => patch(layer.key, "attempts", event.currentTarget.value)}
+                      />
+                    </UnitInput>
+                  </span>
+                  <span role="cell">
+                    <UnitInput unit="ms">
+                      <input
+                        className={`${kit.input} ${css.numberInputKit}`}
+                        type="number"
+                        min={0}
+                        step={100}
+                        aria-label={`${layer.label}间隔（毫秒）`}
+                        value={draft[layer.key].interval_ms}
+                        disabled={saving}
+                        onChange={(event) => patch(layer.key, "interval_ms", event.currentTarget.value)}
+                      />
+                    </UnitInput>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+          {failure === null ? null : <Notice tone="danger">保存失败：{failure}</Notice>}
+          <div className={kit.editorActions}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={saving || state.policy === null || !dirty}
+              onClick={() => {
+                if (state.policy === null) return;
+                setDraft(state.policy);
+                setFailure(null);
+              }}
+            >
+              放弃修改
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={saving || !dirty}
+              onClick={() => {
+                setSaving(true);
+                setFailure(null);
+                void state
+                  .save(draft)
+                  .then((error) => setFailure(error))
+                  .finally(() => setSaving(false));
+              }}
+            >
+              {saving ? "保存中…" : "保存重试策略"}
+            </Button>
           </div>
-          <div className={css.rowControl}>
-            <span className={css.inlineRow}>
-              <input
-                className={css.numberInput}
-                type="number"
-                min={-1}
-                step={1}
-                aria-label={`${layer.label}次数`}
-                value={draft[layer.key].attempts}
-                disabled={saving}
-                onChange={(event) => patch(layer.key, "attempts", event.currentTarget.value)}
-              />
-              <span className={css.rowHint}>次</span>
-            </span>
-            <span className={css.inlineRow}>
-              <input
-                className={css.numberInput}
-                type="number"
-                min={0}
-                step={100}
-                aria-label={`${layer.label}间隔（毫秒）`}
-                value={draft[layer.key].interval_ms}
-                disabled={saving}
-                onChange={(event) => patch(layer.key, "interval_ms", event.currentTarget.value)}
-              />
-              <span className={css.rowHint}>ms</span>
-            </span>
-          </div>
-        </div>
-      ))}
-      {failure === null ? null : <div className={css.serverError}>保存失败：{failure}</div>}
-      <div className={css.cardActions}>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={saving || state.policy === null}
-          onClick={() => {
-            if (state.policy === null) return;
-            setDraft(state.policy);
-            setFailure(null);
-          }}
-        >
-          放弃修改
-        </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={saving}
-          onClick={() => {
-            setSaving(true);
-            setFailure(null);
-            void state
-              .save(draft)
-              .then((error) => setFailure(error))
-              .finally(() => setSaving(false));
-          }}
-        >
-          保存重试策略
-        </Button>
-      </div>
-    </>
+        </>
+      )}
+    </Section>
   );
 }

@@ -106,7 +106,10 @@ function ScopeEditor({
 }
 
 /**
- * 渲染企业管理页。
+ * 渲染企业管理页（D6·U4 起双挂点，同一无 props body）：
+ * 1) Shell 主区经 `AssetsDataPage` 的「企业」tab（企业一级页已并入资产库）；
+ * 2) 独立路由 `app/v2/companies`。主区容器与 tab 外壳由两个挂点各自提供，
+ * 本组件只带「企业」页头与内容体，所有写操作与 `data-companies-*` 钩子不变。
  * @returns 页头（刷新 / 新增企业）、企业表格四态、新建 / 编辑范围 / 追加范围 / 删除四个弹窗。
  */
 export function CompaniesPage(): ReactNode {

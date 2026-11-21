@@ -101,7 +101,8 @@
   border: 0;
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-panel);
-  background: var(--dsw-alias-bg-layer-1);
+  /* DSH InputBar .card：输入面专用 token（暗色下 elevated），不是 bg-layer-1。 */
+  background: var(--dsw-specific-input-major);
   box-shadow: var(--dsw-elevation-soft);
   /* The draft follows the content font-size preference, as the source card does;
      with the default preference this is 14px/24px, so the 336px cap is 14 lines. */
@@ -171,7 +172,13 @@
 }
 
 .notice {
-  padding: 0 12px 8px;
+  /* DSH InputBar .notice：消息条是卡内气泡（涉及宽度 + hover 背景），不是裸字。 */
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto 6px;
+  padding: 4px 8px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
@@ -186,6 +193,18 @@
   gap: 12px;
   padding: 2px 8px 6px;
   min-width: 0;
+  /* DSH：container 让窄卡时 chip 组收缩；匿名 container-name 跨模块隔离。 */
+  container-type: inline-size;
+}
+
+/* DSH 同名紧凑模式：窄卡控制组 gap 收到 8px。 */
+@container (max-width: 560px) {
+  .tools,
+  .modes,
+  .trailing,
+  .standardControls {
+    gap: 8px;
+  }
 }
 
 .tools,
@@ -262,9 +281,10 @@
   }
 }
 
-/* Primary send (source `.primary`): 34px circle, info fill, disabled 0.4. The
-   source lifts it 2px so it keeps its seat above the row's downward-shifted
-   chips; the same circle is the Stop control while a turn runs. */
+/* Primary send (source `.primary`, InputBar.module.css:398-417): 34px circle, info fill, disabled 0.4.
+   The circle is expressed as width=height + radius 50% (the source's 999px clamps to the same
+   half-width arc; 50% keeps it a true circle at any future size change). The
+   same circle is the Stop control while a turn runs. */
 .primary {
   display: grid;
   place-items: center;
@@ -272,7 +292,8 @@
   width: 34px;
   height: 34px;
   border: none;
-  border-radius: 999px;
+  border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-button-info-fill);
   color: var(--dsw-alias-label-on-color);
   cursor: pointer;
@@ -303,6 +324,120 @@
 .primary[data-stopping]:disabled {
   opacity: 1;
   cursor: progress;
+}
+
+/* ---- Plan mode ------------------------------------------------------------ */
+
+/* Plan mode on: a 2px brand edge along the card's top arc (inset shadow follows
+   the radius), layered under the card's own elevation. */
+/* A pending plan review takes the card's seat; the card stays mounted. */
+.composer[hidden] {
+  display: none;
+}
+
+.composer[data-plan-mode] {
+  box-shadow:
+    inset 0 2px 0 var(--dsw-alias-state-business-primary),
+    var(--dsw-elevation-soft);
+}
+
+.planWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Off: a quiet text control with the permission chip's metrics. */
+.planChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+@media (hover: hover) {
+  .planChip:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.planChip:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.planChip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* On: the brand capsule (DSH PlanModeControl: business tertiary fill, primary ink). */
+.planChipOn {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+@media (hover: hover) {
+  .planChipOn:hover:not(:disabled) {
+    background: color-mix(
+      in srgb,
+      var(--dsw-alias-state-business-tertiary),
+      var(--dsw-alias-state-business-primary) 8%
+    );
+    color: var(--dsw-alias-state-business-primary);
+  }
+}
+
+.planGlyph {
+  display: inline-flex;
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.planHover,
+.planChipOn:focus-visible .planRest {
+  display: none;
+}
+
+.planChipOn:focus-visible .planHover {
+  display: block;
+}
+
+@media (hover: hover) {
+  .planChipOn:hover:not(:disabled) .planRest {
+    display: none;
+  }
+
+  .planChipOn:hover:not(:disabled) .planHover {
+    display: block;
+  }
+}
+
+.planPending {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+/* `/` menu: the command token keeps a fixed column so descriptions align. */
+.triggerLabel[data-wide] {
+  min-width: 92px;
 }
 
 .sendingSpinner {

@@ -33,6 +33,9 @@
 /* ---- toolbar (TrajectoryToolbar.module.css:1-230) ---- */
 
 .toolbar {
+  /* DSH `.root`/:1-11 + `.inner`/:13-22：面固定在主骨架（无 sticky 需求：
+     mioX 的 ledger 是 .root 内唯一滚动盒，工具条本来恒在顶）；内距为
+     inner 的 4px 6px。 */
   position: relative;
   z-index: 3;
   display: flex;
@@ -40,7 +43,7 @@
   align-items: center;
   box-sizing: border-box;
   min-height: 32px;
-  padding: 4px 8px;
+  padding: 4px 6px;
   gap: 4px 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-1);
@@ -194,6 +197,8 @@
   position: relative;
   min-width: 0;
   overflow: hidden;
+  /* DSH TrajectoryTimeline `.track`(:53-58)：crosshair——时间轴是可拖/可框选的面。 */
+  cursor: crosshair;
   touch-action: none;
 }
 

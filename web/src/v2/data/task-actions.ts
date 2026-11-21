@@ -9,8 +9,8 @@
 import { api } from "@/lib/api";
 import type {
   ArchiveBatchItem,
-  BatchControlItem,
   BatchCategoryItem,
+  BatchControlItem,
   DeleteTaskOptions,
   DeleteTaskResult,
   Task,
@@ -107,6 +107,25 @@ export function setTaskPermissionLevel(id: string, level: string): Promise<{ id:
  */
 export function createTask(input: CreateTaskInput): Promise<Task> {
   return api.createTask(input);
+}
+
+/**
+ * Send the launch draft as the task's first chat message.
+ *
+ * The new-session flow references the chat surface: the first thing you typed should
+ * be the first row of the body (user message), and the model's response comes after it.
+ * The old approach of directly writing goal + description to start the task leaves the body without user records.
+ * @param taskId - newly created task id.
+ * @param message - launch draft content.
+ * @param reasoningEffort - effort chosen in the launch page's model menu ("" / omitted = profile default).
+ * @returns the backend's 202 response (`reply` / `mode`).
+ */
+export function sendTaskChatMessage(
+  taskId: string,
+  message: string,
+  reasoningEffort?: string,
+): Promise<{ reply: string; mode: string }> {
+  return api.chat(message, taskId, undefined, undefined, reasoningEffort || undefined);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

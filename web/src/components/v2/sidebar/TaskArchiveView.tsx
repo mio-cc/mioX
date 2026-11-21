@@ -26,7 +26,6 @@ import { Button } from "@/vendor/dsh/primitives/Button";
 import { Checkbox } from "@/vendor/dsh/primitives/Checkbox";
 import { Input } from "@/vendor/dsh/primitives/Input";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
 import { SelectMenu } from "@/components/v2/settings/SelectMenu";
 import { Tag } from "@/vendor/dsh/primitives/Tag";
 import {
@@ -74,10 +73,10 @@ import css from "./ArchiveBin.module.css";
 /** 侧栏的两个视图：当前任务 / 已归档（旧页 page.tsx:783-788 的两个页签）。 */
 export type TaskListView = "current" | "archived";
 
-/** 「当前 / 已归档」切换的分段选项。 */
+/** 「当前 / 已归档」切换的页签（侧栏区块标题本身）。 */
 const VIEW_OPTIONS: readonly { value: TaskListView; label: string }[] = [
-  { value: "current", label: "当前" },
-  { value: "archived", label: "已归档" },
+  { value: "current", label: "任务" },
+  { value: "archived", label: "归档" },
 ];
 
 /** 失败明细压成一行（最多列 3 条，其余只给条数）。 */
@@ -101,24 +100,48 @@ export interface TaskListSwitchProps {
 /**
  * 「当前 / 已归档」视图切换（P1:A2）。
  *
- * 独立导出是因为 `/v2/shell` 的接线由主脑统一做：Shell 只需持有 `TaskListView` 并在
- * `archived` 时渲染 `TaskArchiveView`（两者都在本文件里）。
+ * D1 重设计：不再是整宽的分段胶囊（DSH 侧栏根本没有这个切换，它把归档会话放在设置里）。
+ * 这里改成侧栏区块标题本身——两个 12px caption 文本页签「任务 · 归档」，选中项为主色、
+ * 未选为三级灰，下方 1.5px 短指示线；它直接替代「默认工作区」标题行左侧，零额外高度。
+ * 仍是 tablist：左右方向键切换，只有选中项在 Tab 序列里。
  * @param props.value - 当前视图。
  * @param props.onChange - 切换回调。
  * @param props.disabled - 是否锁住。
- * @returns 分段控件。
+ * @returns 文本页签组。
  */
 export function TaskListSwitch({ value, onChange, disabled = false }: TaskListSwitchProps): React.ReactNode {
+  const refs = React.useRef<Array<HTMLButtonElement | null>>([]);
   return (
-    <div className={css.switchBar} data-task-list-view={value}>
-      <SegmentedControl<TaskListView>
-        id="task-list-view"
-        label="任务列表视图"
-        value={value}
-        options={VIEW_OPTIONS}
-        disabled={disabled}
-        onChange={onChange}
-      />
+    <div className={css.switchBar} role="tablist" aria-label="任务列表视图" data-task-list-view={value}>
+      {VIEW_OPTIONS.map((option, index) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            ref={(el) => {
+              refs.current[index] = el;
+            }}
+            type="button"
+            role="tab"
+            id={`task-list-view-${option.value}`}
+            aria-selected={selected}
+            tabIndex={selected ? 0 : -1}
+            disabled={disabled}
+            className={selected ? `${css.switchTab} ${css.switchTabOn}` : css.switchTab}
+            data-task-list-tab={option.value}
+            onClick={() => onChange(option.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+              event.preventDefault();
+              const next = (index + (event.key === "ArrowRight" ? 1 : -1) + VIEW_OPTIONS.length) % VIEW_OPTIONS.length;
+              refs.current[next]?.focus();
+              onChange(VIEW_OPTIONS[next].value);
+            }}
+          >
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -479,7 +502,7 @@ export function TaskArchiveView({ onChanged }: TaskArchiveViewProps): React.Reac
           </span>
           <span className={css.emptyText}>
             {search === "" && appliedState === null
-              ? "在「当前」列表里，暂停或已结束的任务可通过行菜单「归档会话」放到这里。"
+              ? "在「任务」列表里，暂停或已结束的任务可通过行菜单「归档会话」放到这里。"
               : "换个关键词或把处理状态改回「全部状态」再看。"}
           </span>
         </div>

@@ -9,32 +9,56 @@
  *   :539-565（MCP 关联回滚、可见性切换）、:622-697（文件树递归渲染）、
  *   :846-960（详情面板：名称 / 描述 / license / compatibility、调用统计、MCP 关联、可见性）、
  *   :962-982（文件编辑区：面包屑 + 保存 + textarea）、:986-1013（删除二次确认）。
- * DSH 依据：DSH 无技能库管理页；按 设置分节 扩展（总表 §4.3），行/卡片素材复用
- *   SettingsDialog.module.css（ruleList / ruleRow / formCard / textArea …）。
+ * DSH 依据：DSH 无技能库管理页；按 设置分节 扩展（总表 §4.3）。
+ *
+ * 版式（D3 设计重塑）：面包屑「技能 / name」→ PageHead（名称 + 调用 Badge + 描述 + 刷新文件）→
+ * Metrics 三格（调用 / 覆盖任务 / 最近调用）→ Section「文件」：左文件树 Card、右编辑器 Card（头部
+ * 路径 + 同步状态 + 动作，正文等宽大文本框）→ Section「元数据」：Card + kit Editor → 「调用记录」
+ * Card 行列表 →「Agent 可见性」Card 开关行 → 页底「危险区」Card（红色说明 + 删除整个技能）。
  * 对照表行：P3:K5 P3:K6 P3:K7 P3:K8 P3:K9 P3:K10 P3:K11 P3:K12
  */
 import * as React from "react";
 
 import { Button } from "@/vendor/dsh/primitives/Button";
-import { Checkbox } from "@/vendor/dsh/primitives/Checkbox";
-import { Input } from "@/vendor/dsh/primitives/Input";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
+import { Switch } from "@/vendor/dsh/primitives/Switch";
 import {
   IconChevronDownOutlineRegular,
+  IconChevronLeftOutlineRegular,
   IconChevronRightOutlineRegular,
-  IconChevronUpOutlineRegular,
+  IconCodeOutlineRegular,
   IconFolderCloseRegular,
   IconFolderOpenRegular,
   IconPlusOutlineRegular,
   IconRefreshOutlineRegular,
-  IconSaveOutlineRegular,
   IconTrashOutlineRegular,
 } from "@/vendor/dsh/primitives/icons/index";
 
-import type { MCPServer, SkillCall, SkillItem } from "@/lib/types";
+import {
+  Badge,
+  Card,
+  Dot,
+  Editor,
+  EditorActions,
+  EditorGroup,
+  Empty,
+  Field,
+  FieldGrid,
+  IconButton,
+  Meta,
+  Metrics,
+  Notice,
+  PageHead,
+  Row,
+  Section,
+  SettingsPage,
+  Skeleton,
+  TextArea,
+  TextInput,
+  Tile,
+} from "@/components/v2/design/Kit";
+import type { SkillCall, SkillItem } from "@/lib/types";
 import { useAgents } from "@/v2/data/agents";
-import { useMcpServers } from "@/v2/data/mcp";
 import {
   createSkillDir,
   createSkillFile,
@@ -53,10 +77,9 @@ import {
   type SkillTreeEntry,
 } from "@/v2/data/skills";
 import { toast } from "./Toast";
-import css from "./SettingsDialog.module.css";
-
-/** 左树与右编辑区共用的两栏宽度。 */
-const TREE_WIDTH = 220;
+import { SkillMcpPicker } from "./SkillsPage";
+import shared from "./SettingsDialog.module.css";
+import own from "./SkillsPage.module.css";
 
 /** 把异常转成可展示文案。 */
 function reasonText(reason: unknown): string {
@@ -88,9 +111,9 @@ interface CreatingState {
   kind: "file" | "dir";
 }
 
-/** 行内错误提示（保持与页面一致的间距）。 */
-function ErrorLine({ text }: { text: string }): React.ReactNode {
-  return <p className={css.errorLine}>{text}</p>;
+/** 树行的左缩进（px）。 */
+function indentOf(depth: number): number {
+  return 6 + depth * 14;
 }
 
 /**
@@ -130,14 +153,16 @@ function CreateEntryRow({
   };
 
   return (
-    <div className={css.treeCreateRow} style={{ paddingLeft: indent }}>
-      <span className={css.treeCreateKind}>{kind === "dir" ? "目录" : "文件"}</span>
-      <Input
+    <div className={own.treeCreate} style={{ paddingLeft: indent }}>
+      <span className={own.treeIcon}>{kind === "dir" ? <IconFolderCloseRegular size={13} /> : <IconCodeOutlineRegular size={13} />}</span>
+      <TextInput
         ref={inputRef}
+        mono
+        className={own.treeCreateInput}
         aria-label={kind === "dir" ? "新文件夹名称" : "新文件名称"}
+        placeholder={kind === "dir" ? "文件夹名" : "文件名"}
         disabled={busy}
         value={name}
-        style={{ minWidth: 0, flex: "1 1 auto" }}
         onChange={(event) => setName(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -153,6 +178,24 @@ function CreateEntryRow({
         onBlur={commit}
       />
     </div>
+  );
+}
+
+/** 树行尾的小图标动作（悬停 / 聚焦 / 选中时可见）。 */
+function TreeAction({ label, danger = false, onClick, children }: { label: string; danger?: boolean; onClick: () => void; children: React.ReactNode }): React.ReactNode {
+  return (
+    <button
+      type="button"
+      className={`${own.treeAction} ${danger ? own.treeActionDanger : ""}`}
+      title={label}
+      aria-label={label}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -186,7 +229,7 @@ function TreeNodes({
   onSubmitCreate: (inDir: string, kind: "file" | "dir", name: string) => Promise<void>;
   onRequestDelete: (path: string, isDir: boolean) => void;
 }): React.ReactNode {
-  const indent = 8 + depth * 14;
+  const indent = indentOf(depth);
   return (
     <>
       {nodes.map((node) => {
@@ -194,29 +237,35 @@ function TreeNodes({
           const open = expanded.has(node.path);
           return (
             <div key={`dir:${node.path}`} data-skill-dir={node.path}>
-              <div className={css.treeDirRow} style={{ paddingLeft: indent }} role="button" tabIndex={0} aria-expanded={open} onClick={() => onToggleDir(node.path)} onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onToggleDir(node.path);
-                }
-              }}>
-                {open ? <IconChevronDownOutlineRegular size={12} /> : <IconChevronRightOutlineRegular size={12} />}
-                <span className={css.treeIcon}>
-                  {open ? <IconFolderOpenRegular size={13} /> : <IconFolderCloseRegular size={13} />}
-                </span>
-                <span title={node.path} className={css.treeName}>
-                  {node.name}
-                </span>
-                <span style={{ display: "flex", alignItems: "center", gap: 2, flex: "0 0 auto" }} onClick={(event) => event.stopPropagation()}>
-                  <Button variant="ghost" size="sm" title="新建文件" aria-label={`在 ${node.path} 下新建文件`} onClick={() => onStartCreate(node.path, "file")}>
-                    <IconPlusOutlineRegular size={11} />
-                  </Button>
-                  <Button variant="ghost" size="sm" title="新建文件夹" aria-label={`在 ${node.path} 下新建文件夹`} onClick={() => onStartCreate(node.path, "dir")}>
-                    <IconFolderCloseRegular size={11} />
-                  </Button>
-                  <Button variant="ghost" size="sm" title="删除文件夹" aria-label={`删除文件夹 ${node.path}`} onClick={() => onRequestDelete(node.path, true)}>
-                    <IconTrashOutlineRegular size={11} />
-                  </Button>
+              <div
+                className={own.treeRow}
+                style={{ paddingLeft: indent }}
+                role="button"
+                tabIndex={0}
+                aria-expanded={open}
+                title={node.path}
+                onClick={() => onToggleDir(node.path)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onToggleDir(node.path);
+                  }
+                }}
+              >
+                <span className={own.treeChevron}>{open ? <IconChevronDownOutlineRegular size={12} /> : <IconChevronRightOutlineRegular size={12} />}</span>
+                <span className={own.treeIcon}>{open ? <IconFolderOpenRegular size={14} /> : <IconFolderCloseRegular size={14} />}</span>
+                <span className={own.treeDirName}>{node.name}</span>
+                <span className={own.treeActions}>
+                  <TreeAction label={`在 ${node.path} 下新建文件`} onClick={() => onStartCreate(node.path, "file")}>
+                    <IconPlusOutlineRegular size={12} />
+                  </TreeAction>
+                  <TreeAction label={`在 ${node.path} 下新建文件夹`} onClick={() => onStartCreate(node.path, "dir")}>
+                    <IconFolderCloseRegular size={12} />
+                  </TreeAction>
+                  <TreeAction label={`删除文件夹 ${node.path}`} danger onClick={() => onRequestDelete(node.path, true)}>
+                    <IconTrashOutlineRegular size={12} />
+                  </TreeAction>
                 </span>
               </div>
               {open ? (
@@ -236,7 +285,7 @@ function TreeNodes({
                   />
                   {creating !== null && creating.inDir === node.path ? (
                     <CreateEntryRow
-                      indent={indent + 14}
+                      indent={indentOf(depth + 1) + 18}
                       kind={creating.kind}
                       onCancel={onCancelCreate}
                       onSubmit={(name) => onSubmitCreate(node.path, creating.kind, name)}
@@ -255,27 +304,27 @@ function TreeNodes({
               role="button"
               tabIndex={0}
               title={node.path}
+              aria-current={isSelected ? "true" : undefined}
               data-skill-file-row={node.path}
               onClick={() => onSelectFile(node.path)}
               onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   onSelectFile(node.path);
                 }
               }}
-              className={isSelected ? `${css.treeFileRow} ${css.treeFileRowSelected}` : css.treeFileRow}
-              style={{ marginLeft: indent }}
+              className={isSelected ? `${own.treeRow} ${own.treeRowSelected}` : own.treeRow}
+              style={{ paddingLeft: indent + 18 }}
             >
-              <span aria-hidden="true" className={css.treeFileBullet}>
-                ·
+              <span className={own.treeIcon}>
+                <IconCodeOutlineRegular size={13} />
               </span>
-              <span className={isSelected ? `${css.treeFileName} ${css.treeFileNameSelected}` : css.treeFileName}>
-                {node.name}
-              </span>
-              <span style={{ flex: "0 0 auto" }} onClick={(event) => event.stopPropagation()}>
-                <Button variant="ghost" size="sm" title="删除文件" aria-label={`删除文件 ${node.path}`} onClick={() => onRequestDelete(node.path, false)}>
-                  <IconTrashOutlineRegular size={11} />
-                </Button>
+              <span className={own.treeName}>{node.name}</span>
+              <span className={own.treeActions}>
+                <TreeAction label={`删除文件 ${node.path}`} danger onClick={() => onRequestDelete(node.path, false)}>
+                  <IconTrashOutlineRegular size={12} />
+                </TreeAction>
               </span>
             </div>
           </div>
@@ -286,11 +335,11 @@ function TreeNodes({
 }
 
 /**
- * 元数据编辑表单：描述 / license / compatibility / MCP 关联（`PUT /skills/{name}/meta`）。
- * 四个字段一次提交；MCP 列表来自真实 `GET /mcp`，四种状态齐全。
+ * 元数据编辑：描述 / license / compatibility / MCP 关联（`PUT /skills/{name}/meta`）。
+ * 四个字段一次提交；未改动时保存禁用。
  */
 function MetaForm({ skill, onSaved }: { skill: SkillItem; onSaved: () => void }): React.ReactNode {
-  const servers = useMcpServers();
+  const uid = React.useId();
   const [description, setDescription] = React.useState(skill.description ?? "");
   const [license, setLicense] = React.useState(skill.license ?? "");
   const [compatibility, setCompatibility] = React.useState(skill.compatibility ?? "");
@@ -309,6 +358,21 @@ function MetaForm({ skill, onSaved }: { skill: SkillItem; onSaved: () => void })
     setCompatibility(skill.compatibility ?? "");
     setMcps(skill.mcps ?? []);
   }, [skill.name, skill.description, skill.license, skill.compatibility, mcpsKey]);
+
+  const dirty =
+    description !== (skill.description ?? "") ||
+    license !== (skill.license ?? "") ||
+    compatibility !== (skill.compatibility ?? "") ||
+    [...mcps].sort().join("\n") !== [...(skill.mcps ?? [])].sort().join("\n");
+
+  const revert = (): void => {
+    setDescription(skill.description ?? "");
+    setLicense(skill.license ?? "");
+    setCompatibility(skill.compatibility ?? "");
+    setMcps(skill.mcps ?? []);
+    setFailure(null);
+    setDone(null);
+  };
 
   const save = (): void => {
     const meta: SkillMetaInput = {
@@ -330,182 +394,138 @@ function MetaForm({ skill, onSaved }: { skill: SkillItem; onSaved: () => void })
       .finally(() => setSaving(false));
   };
 
-  /** MCP 勾选区：只显示传输成功读到的服务器。 */
-  const mcpPicker = (): React.ReactNode => {
-    if (servers.phase === "loading") return <p className={css.fieldHint}>读取 MCP 服务器…</p>;
-    if (servers.phase === "offline") {
-      return (
-        <>
-          <p className={css.fieldHint}>未连接后端（读不到 MCP 服务器；不影响其它三个字段的保存）</p>
-          {servers.error === null ? null : <ErrorLine text={servers.error} />}
-          <Button variant="outline" size="sm" onClick={servers.reload}>
-            重新读取
-          </Button>
-        </>
-      );
-    }
-    if (servers.servers.length === 0) {
-      return <p className={css.fieldHint}>暂无 MCP 服务器（可在设置「MCP」里添加后再关联）。</p>;
-    }
-    return (
-      <div className={css.ruleMeta} style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-        {servers.servers.map((server: MCPServer) => (
-          <Checkbox
-            key={server.id}
-            checked={mcps.includes(server.name)}
-            disabled={saving}
-            label={server.name}
-            onChange={(next) => {
-              setMcps((prev) => (next ? [...prev, server.name] : prev.filter((item) => item !== server.name)));
-              setDone(null);
-            }}
-          />
-        ))}
-      </div>
-    );
-  };
-
   return (
-    <div className={css.formCard} data-skill-meta-form>
-      <div className={css.subSectionTitle} style={{ marginTop: 0 }}>
-        元数据
-      </div>
-      <p className={css.fieldHint}>保存走 PUT /skills/{skill.name}/meta；名称是目录名，不在这里改。</p>
+    <Editor inCard data={{ "data-skill-meta-form": "" }}>
+      <EditorGroup title="说明">
+        <FieldGrid>
+          <Field label="描述" htmlFor={`${uid}-desc`} span hint="Agent 靠这段话判断何时加载该技能。">
+            <TextArea
+              id={`${uid}-desc`}
+              aria-label="技能描述"
+              rows={3}
+              disabled={saving}
+              value={description}
+              onChange={(event) => {
+                setDescription(event.currentTarget.value);
+                setDone(null);
+              }}
+            />
+          </Field>
+          <Field label="license" htmlFor={`${uid}-license`} optional>
+            <TextInput
+              id={`${uid}-license`}
+              aria-label="license"
+              disabled={saving}
+              value={license}
+              onChange={(event) => {
+                setLicense(event.currentTarget.value);
+                setDone(null);
+              }}
+            />
+          </Field>
+          <Field label="compatibility" htmlFor={`${uid}-compat`} optional>
+            <TextInput
+              id={`${uid}-compat`}
+              aria-label="compatibility"
+              disabled={saving}
+              value={compatibility}
+              onChange={(event) => {
+                setCompatibility(event.currentTarget.value);
+                setDone(null);
+              }}
+            />
+          </Field>
+        </FieldGrid>
+      </EditorGroup>
 
-      <label className={css.fieldLabel}>
-        描述
-        <textarea
-          className={css.textArea}
-          aria-label="技能描述"
-          rows={2}
+      <EditorGroup title="关联 MCP">
+        <SkillMcpPicker
+          value={mcps}
           disabled={saving}
-          value={description}
-          onChange={(event) => {
-            setDescription(event.currentTarget.value);
+          offlineHint="未连接后端（读不到 MCP 服务器；不影响其它三个字段的保存）"
+          onToggle={(serverName, next) => {
+            setMcps((prev) => (next ? [...prev, serverName] : prev.filter((item) => item !== serverName)));
             setDone(null);
           }}
         />
-      </label>
+      </EditorGroup>
 
-      <div className={css.formRow}>
-        <div className={css.fieldBlock} style={{ flex: "1 1 180px" }}>
-          <div className={css.fieldLabel}>license</div>
-          <input
-            className={css.textField}
-            aria-label="license"
-            disabled={saving}
-            value={license}
-            onChange={(event) => {
-              setLicense(event.currentTarget.value);
-              setDone(null);
-            }}
-          />
-        </div>
-        <div className={css.fieldBlock} style={{ flex: "1 1 180px" }}>
-          <div className={css.fieldLabel}>compatibility</div>
-          <input
-            className={css.textField}
-            aria-label="compatibility"
-            disabled={saving}
-            value={compatibility}
-            onChange={(event) => {
-              setCompatibility(event.currentTarget.value);
-              setDone(null);
-            }}
-          />
-        </div>
-      </div>
-
-      <div className={css.fieldLabel} style={{ marginTop: 10 }}>
-        关联 MCP（加载该技能时才解锁所选 MCP 的工具）
-      </div>
-      {mcpPicker()}
-
-      {failure === null ? null : <ErrorLine text={`保存失败：${failure}`} />}
-      <div className={css.formActions}>
-        {done === null ? null : (
-          <span className={css.formDoneText}>{done}</span>
-        )}
-        <Button variant="primary" size="sm" disabled={saving} onClick={save}>
+      {failure === null ? null : <Notice tone="danger">保存失败：{failure}</Notice>}
+      <EditorActions start={done === null ? undefined : <span className={own.time}>{done}</span>}>
+        <Button variant="ghost" size="sm" disabled={saving || !dirty} onClick={revert}>
+          撤销改动
+        </Button>
+        <Button variant="primary" size="sm" disabled={saving || !dirty} onClick={save}>
           {saving ? "保存中…" : "保存元数据"}
         </Button>
-      </div>
-    </div>
+      </EditorActions>
+    </Editor>
   );
 }
 
-/** 调用统计：次数 / 覆盖任务 / 最近调用的明细列表（`GET /skills/{name}/usage?limit=20`）。 */
+/** 调用记录：调用方 + 最近调用明细（`GET /skills/{name}/usage?limit=20`）。 */
 function UsageBlock({ skill }: { skill: SkillItem }): React.ReactNode {
   const usage = useSkillUsage(skill.name, 20);
 
+  const body = (): React.ReactNode => {
+    if (usage.phase === "loading") return <Skeleton label="读取调用明细" />;
+    if (usage.phase === "offline") return null;
+    if (usage.calls.length === 0) {
+      return <Empty inCard title="还没有调用记录" text="Agent 加载过这个技能后，每次调用都会记在这里。" />;
+    }
+    return usage.calls.map((call: SkillCall, index) => (
+      <Row
+        key={`${call.ts}-${index}`}
+        label={call.task_id > 0 ? `任务 #${call.task_id}` : call.session_id === "" ? "—" : "对话会话"}
+        labelAdornment={<Badge>{call.agent_key === "" ? "—" : call.agent_key}</Badge>}
+        description={call.args_len > 0 ? `参数 ${call.args_len} 字符` : undefined}
+        data={{ "data-skill-usage-call": String(index) }}
+      >
+        <span className={own.time}>{formatSkillTime(call.ts)}</span>
+      </Row>
+    ));
+  };
+
   return (
-    <div className={css.subSection} data-skill-usage>
-      <div className={css.subSectionTitle}>调用统计</div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <div data-skill-usage-cell="calls" className={css.skillUsageCell}>
-          <span className={css.skillUsageValue}>{skill.calls}</span>
-          <span className={css.skillUsageLabel}>总调用次数</span>
-        </div>
-        <div data-skill-usage-cell="tasks" className={css.skillUsageCell}>
-          <span className={css.skillUsageValue}>{skill.tasks}</span>
-          <span className={css.skillUsageLabel}>覆盖任务数</span>
-        </div>
-        <div data-skill-usage-cell="last" className={css.skillUsageCell}>
-          <span className={css.skillUsageTime}>{formatSkillTime(skill.last_used)}</span>
-          <span className={css.skillUsageLabel}>最近调用</span>
-        </div>
-      </div>
-
-      {skill.usage_agents.length === 0 ? null : (
-        <div className={css.ruleMeta} style={{ marginTop: 8 }}>
-          <span>调用方：</span>
-          {skill.usage_agents.map((key) => (
-            <Tag key={key} tone="neutral">
-              {key}
-            </Tag>
-          ))}
-        </div>
-      )}
-
-      <div className={css.ruleMeta} style={{ marginTop: 10, justifyContent: "space-between" }}>
-        <span>最近调用明细（最多 20 条）</span>
-        <Button variant="ghost" size="sm" onClick={usage.reload}>
-          <IconRefreshOutlineRegular size={12} /> 重新读取
-        </Button>
-      </div>
-
-      {usage.phase === "loading" ? <p className={css.fieldHint}>读取调用明细…</p> : null}
+    <Section
+      title="调用记录"
+      count={usage.phase === "ready" ? usage.calls.length : undefined}
+      hint="最近 20 条"
+      actions={
+        <IconButton label="重新读取调用明细" spinning={usage.phase === "loading"} onClick={usage.reload}>
+          <IconRefreshOutlineRegular size={14} />
+        </IconButton>
+      }
+    >
       {usage.phase === "offline" ? (
-        <>
-          <div role="alert">
-            <ErrorLine text={`读取调用明细失败：${usage.error ?? ""}`} />
-          </div>
-          <Button variant="outline" size="sm" onClick={usage.reload}>
-            重试
-          </Button>
-        </>
+        <Notice
+          tone="danger"
+          action={
+            <Button variant="ghost" size="sm" onClick={usage.reload}>
+              重试
+            </Button>
+          }
+        >
+          读取调用明细失败：{usage.error ?? ""}
+        </Notice>
       ) : null}
-      {usage.phase === "ready" && usage.calls.length === 0 ? (
-        <p className={css.fieldHint}>还没有调用记录。</p>
-      ) : null}
-      {usage.phase === "ready" && usage.calls.length > 0 ? (
-        <div className={css.ruleList}>
-          {usage.calls.map((call: SkillCall, index) => (
-            <div key={`${call.ts}-${index}`} className={css.deliveryRow} data-skill-usage-call={index}>
-              <span className={css.deliveryTime}>{formatSkillTime(call.ts)}</span>
-              <Tag tone="outline">{call.agent_key === "" ? "—" : call.agent_key}</Tag>
-              <span className={css.usageCallMeta}>
-                {call.task_id > 0 ? `任务 #${call.task_id}` : call.session_id === "" ? "—" : "对话会话"}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
+      {usage.phase === "offline" ? null : (
+        <Card>
+          {skill.usage_agents.length === 0 ? null : (
+            <Row label="调用方" description="加载过这个技能的 Agent">
+              {skill.usage_agents.map((key) => (
+                <Badge key={key}>{key}</Badge>
+              ))}
+            </Row>
+          )}
+          {body()}
+        </Card>
+      )}
+    </Section>
   );
 }
 
-/** 可见性：按 Agent 勾选（`GET/POST /visibility/skill/...`）。 */
+/** 可见性：按 Agent 开关（`GET/POST /visibility/skill/...`）。 */
 function VisibilityBlock({ skill }: { skill: SkillItem }): React.ReactNode {
   const agents = useAgents();
   const visibility = useSkillVisibility(skill.name);
@@ -524,55 +544,64 @@ function VisibilityBlock({ skill }: { skill: SkillItem }): React.ReactNode {
       .finally(() => setBusyAgent(null));
   };
 
-  const body = (): React.ReactNode => {
-    if (agents.phase === "loading" || visibility.phase === "loading") {
-      return <p className={css.fieldHint}>读取 Agent 与可见性…</p>;
-    }
-    if (agents.phase === "offline" || visibility.phase === "offline") {
-      return (
-        <>
-          <div role="alert">
-            <ErrorLine text={`读取失败：${(agents.phase === "offline" ? agents.error : visibility.error) ?? ""}`} />
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              agents.reload();
-              visibility.reload();
-            }}
-          >
-            重新读取
-          </Button>
-        </>
-      );
-    }
-    if (agents.agents.length === 0) return <p className={css.fieldHint}>暂无 Agent。</p>;
-    return (
-      <div className={css.ruleMeta} style={{ flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-        {agents.agents.map((agent) => (
-          <Checkbox
-            key={agent.id}
-            checked={visibility.agentIds.includes(agent.id)}
-            disabled={busyAgent !== null}
-            label={agent.name}
-            onChange={(next) => toggle(agent.id, next)}
-          />
-        ))}
-      </div>
-    );
-  };
+  const loading = agents.phase === "loading" || visibility.phase === "loading";
+  const offline = agents.phase === "offline" || visibility.phase === "offline";
+  const ready = !loading && !offline;
 
   return (
-    <div className={css.subSection} data-skill-visibility>
-      <div className={css.subSectionTitle}>可见性（按 Agent 授权）</div>
-      {body()}
-      {failure === null ? null : <ErrorLine text={`操作失败：${failure}`} />}
-    </div>
+    <Section
+      title="Agent 可见性"
+      count={ready && agents.agents.length > 0 ? `${agents.agents.filter((agent) => visibility.agentIds.includes(agent.id)).length}/${agents.agents.length}` : undefined}
+      hint="只有被授权的 Agent 能加载这个技能"
+      data={{ "data-skill-visibility": "" }}
+    >
+      {offline ? (
+        <Notice
+          tone="danger"
+          action={
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                agents.reload();
+                visibility.reload();
+              }}
+            >
+              重新读取
+            </Button>
+          }
+        >
+          读取失败：{(agents.phase === "offline" ? agents.error : visibility.error) ?? ""}
+        </Notice>
+      ) : (
+        <Card>
+          {loading ? <Skeleton label="读取 Agent 与可见性" /> : null}
+          {ready && agents.agents.length === 0 ? <Empty inCard title="暂无 Agent" text="先在「Agent 预设」里创建 Agent，再回来授权。" /> : null}
+          {ready
+            ? agents.agents.map((agent) => {
+                const checked = visibility.agentIds.includes(agent.id);
+                return (
+                  <Row
+                    key={agent.id}
+                    lead={<Tile small>{(agent.name.trim()[0] ?? "?").toUpperCase()}</Tile>}
+                    label={agent.name}
+                    muted={!checked}
+                    description={checked ? "可加载" : "不可见"}
+                    data={{ "data-skill-visibility-agent": agent.id }}
+                  >
+                    <Switch checked={checked} disabled={busyAgent !== null} label={`${agent.name} 可见技能 ${skill.name}`} onChange={(next) => toggle(agent.id, next)} />
+                  </Row>
+                );
+              })
+            : null}
+        </Card>
+      )}
+      {failure === null ? null : <Notice tone="danger">操作失败：{failure}</Notice>}
+    </Section>
   );
 }
 
-/** 右侧编辑区：面包屑 + 未保存标记 + 保存 + textarea / 不可编辑提示。 */
+/** 右侧编辑卡：头部路径 + 同步状态 + 动作，正文等宽大文本框 / 不可编辑提示。 */
 function FileEditor({
   skillName,
   path,
@@ -615,66 +644,76 @@ function FileEditor({
       .finally(() => setSaving(false));
   };
 
+  const slash = path.lastIndexOf("/");
+  const dir = slash < 0 ? "" : path.slice(0, slash + 1);
+  const base = slash < 0 ? path : path.slice(slash + 1);
+
   return (
-    <div data-skill-editor={path} style={{ flex: "1 1 auto", minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <span className={css.skillCrumbName}>{skillName}</span>
-        <span className={css.skillCrumbSep}>/</span>
-        <span className={css.skillCrumbPath}>
-          {path}
+    <Card className={own.editorCard} data={{ "data-skill-editor": path }}>
+      <div className={own.editorHead}>
+        <span className={own.editorPath} title={`${skillName}/${path}`}>
+          {dir === "" ? null : <span>{dir}</span>}
+          <span className={own.editorPathFile}>{base}</span>
         </span>
-        <Tag tone={dirty ? "warning" : "quiet"}>{dirty ? "未保存" : "已同步"}</Tag>
-        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-          <Button variant="ghost" size="sm" disabled={saving} onClick={file.reload}>
-            <IconRefreshOutlineRegular size={12} /> 重新读取
-          </Button>
+        <Badge tone={dirty ? "warning" : "neutral"}>
+          <Dot tone={dirty ? "warning" : "success"} />
+          {dirty ? "未保存" : !editable && file.phase === "ready" ? "只读" : "已同步"}
+        </Badge>
+        <span className={own.editorHeadActions}>
+          <IconButton label="重新读取文件" disabled={saving} onClick={file.reload}>
+            <IconRefreshOutlineRegular size={14} />
+          </IconButton>
+          <IconButton label={`删除文件 ${path}`} onClick={() => onRequestDelete(path, false)}>
+            <IconTrashOutlineRegular size={14} />
+          </IconButton>
           <Button variant="primary" size="sm" disabled={!dirty || saving || !editable} onClick={save}>
-            <IconSaveOutlineRegular size={12} /> {saving ? "保存中…" : "保存"}
+            {saving ? "保存中…" : "保存"}
           </Button>
-          <button type="button" className={css.dangerBtn} onClick={() => onRequestDelete(path, false)}>
-            <IconTrashOutlineRegular size={12} /> 删除
-          </button>
         </span>
       </div>
 
-      {file.phase === "loading" ? <p className={css.fieldHint}>读取文件…</p> : null}
-      {file.phase === "offline" ? (
-        <>
-          <div role="alert">
-            <ErrorLine text={`读取文件失败：${file.error ?? ""}`} />
-          </div>
-          <Button variant="outline" size="sm" onClick={file.reload}>
-            重试
-          </Button>
-        </>
-      ) : null}
-      {file.phase === "idle" ? <p className={css.fieldHint}>未选择文件。</p> : null}
-      {file.phase === "ready" && binary ? (
-        <p className={css.fieldHint} style={{ margin: 0 }}>
-          这个文件按二进制处理，不能在这里编辑（{file.content.length} 字符）。需要改它请直接改技能目录里的文件。
-        </p>
-      ) : null}
-      {file.phase === "ready" && tooLarge ? (
-        <p className={css.fieldHint} style={{ margin: 0 }}>
-          文件过大（{file.content.length} 字符，上限 {SKILL_FILE_EDIT_LIMIT}），为避免把整份内容塞进编辑框，这里只禁用编辑。
-        </p>
-      ) : null}
-      {file.phase === "ready" ? (
-        <textarea
-          className={`${css.textArea} ${css.skillEditorTextarea}`}
-          aria-label={`编辑 ${path}`}
-          data-skill-editor-textarea
-          readOnly={!editable}
-          value={editable ? draft : file.content}
-          onChange={(event) => {
-            if (!editable) return;
-            setDraft(event.currentTarget.value);
-            setDirty(event.currentTarget.value !== file.content);
-          }}
-        />
-      ) : null}
-      {failure === null ? null : <ErrorLine text={`保存失败：${failure}`} />}
-    </div>
+      <div className={own.editorBody}>
+        {file.phase === "loading" ? <Skeleton label="读取文件" /> : null}
+        {file.phase === "offline" ? (
+          <Notice
+            tone="danger"
+            action={
+              <Button variant="ghost" size="sm" onClick={file.reload}>
+                重试
+              </Button>
+            }
+          >
+            读取文件失败：{file.error ?? ""}
+          </Notice>
+        ) : null}
+        {file.phase === "idle" ? <p className={own.treeState}>未选择文件。</p> : null}
+        {file.phase === "ready" && binary ? (
+          <Notice tone="warning">这个文件按二进制处理，不能在这里编辑（{file.content.length} 字符）。需要改它请直接改技能目录里的文件。</Notice>
+        ) : null}
+        {file.phase === "ready" && tooLarge ? (
+          <Notice tone="warning">
+            文件过大（{file.content.length} 字符，上限 {SKILL_FILE_EDIT_LIMIT}），为避免把整份内容塞进编辑框，这里只禁用编辑。
+          </Notice>
+        ) : null}
+        {file.phase === "ready" ? (
+          <TextArea
+            mono
+            spellCheck={false}
+            className={own.editorArea}
+            aria-label={`编辑 ${path}`}
+            data-skill-editor-textarea=""
+            readOnly={!editable}
+            value={editable ? draft : file.content}
+            onChange={(event) => {
+              if (!editable) return;
+              setDraft(event.currentTarget.value);
+              setDirty(event.currentTarget.value !== file.content);
+            }}
+          />
+        ) : null}
+        {failure === null ? null : <Notice tone="danger">保存失败：{failure}</Notice>}
+      </div>
+    </Card>
   );
 }
 
@@ -753,8 +792,7 @@ export function SkillDetail({
     if (target === null) return;
     setDeleting(true);
     setDeleteFailure(null);
-    const request =
-      target.kind === "skill" ? Promise.resolve() : deleteSkillPath(name, target.path);
+    const request = target.kind === "skill" ? Promise.resolve() : deleteSkillPath(name, target.path);
     void request
       .then(() => {
         if (target.kind === "path") {
@@ -769,26 +807,39 @@ export function SkillDetail({
       .finally(() => setDeleting(false));
   };
 
+  const requestDelete = (path: string, isDir: boolean): void => {
+    setDeleteFailure(null);
+    setPendingDelete({ kind: "path", path, isDir });
+  };
+
+  const fileCount = files.phase === "ready" ? files.entries.filter((entry) => !entry.endsWith("/")).length : null;
+
   const treeBody = (): React.ReactNode => {
-    if (files.phase === "loading") return <p className={css.fieldHint}>读取文件列表…</p>;
+    if (files.phase === "loading") return <p className={own.treeState}>读取文件列表…</p>;
     if (files.phase === "offline") {
       return (
-        <>
-          <div role="alert">
-            <ErrorLine text={`读取文件列表失败：${files.error ?? ""}`} />
-          </div>
-          <Button variant="outline" size="sm" onClick={files.reload}>
-            重试
-          </Button>
-        </>
+        <Notice
+          tone="danger"
+          action={
+            <Button variant="ghost" size="sm" onClick={files.reload}>
+              重试
+            </Button>
+          }
+        >
+          读取文件列表失败：{files.error ?? ""}
+        </Notice>
       );
     }
-    if (files.entries.length === 0) {
-      return <p className={css.fieldHint}>这个技能目录里还没有文件；用下面的按钮新建一个。</p>;
+    if (files.entries.length === 0 && creating === null) {
+      return <p className={own.treeState}>这个技能目录里还没有文件；用上方的 + 新建一个。</p>;
     }
+    // buildSkillTree 把根目录下的文件挂在 path 为 "" 的无名目录节点下：展示时把它展平到根层。
+    const rootNodes = files.tree
+      .flatMap((node) => (node.type === "dir" && node.path === "" ? node.children : [node]))
+      .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) : a.type === "dir" ? -1 : 1));
     return (
       <TreeNodes
-        nodes={files.tree}
+        nodes={rootNodes}
         depth={0}
         selectedPath={selectedPath}
         expanded={expanded}
@@ -798,72 +849,93 @@ export function SkillDetail({
         onStartCreate={startCreate}
         onCancelCreate={() => setCreating(null)}
         onSubmitCreate={submitCreate}
-        onRequestDelete={(path, isDir) => {
-          setDeleteFailure(null);
-          setPendingDelete({ kind: "path", path, isDir });
-        }}
+        onRequestDelete={requestDelete}
       />
     );
   };
 
   return (
-    <div data-skill-detail={name}>
-      <div className={css.pageToolbar} style={{ marginTop: 0 }}>
-        <Button variant="outline" size="sm" onClick={onBack}>
-          <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}>
-            <IconChevronRightOutlineRegular size={12} />
-          </span>{" "}
-          返回列表
-        </Button>
-        <span className={css.skillDetailTitle}>{name}</span>
-        <Button variant="ghost" size="sm" onClick={files.reload}>
-          <IconRefreshOutlineRegular size={12} /> 刷新文件
-        </Button>
-      </div>
+    <SettingsPage data={{ "data-skill-detail": name }}>
+      <nav className={own.crumbs} aria-label="位置">
+        <button type="button" className={own.crumbLink} aria-label="返回列表" data-skill-back="" onClick={onBack}>
+          <IconChevronLeftOutlineRegular size={12} />
+          技能
+        </button>
+        <span className={own.crumbSep}>/</span>
+        <span className={own.crumbCurrent}>{name}</span>
+      </nav>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "stretch", flexWrap: "wrap" }}>
-        {/* 左：文件树 */}
-        <div
-          data-skill-tree
-          style={{
-            flex: `0 0 ${TREE_WIDTH}px`,
-            minWidth: 0,
-            maxHeight: 360,
-            overflow: "auto",
-            padding: "6px 4px",
-            border: "0.5px solid var(--dsw-alias-settings-card-stroke)",
-            borderRadius: "var(--dsw-radius-lg)",
-            background: "var(--dsw-alias-settings-card-fill)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
-            <Button variant="ghost" size="sm" disabled={files.phase !== "ready"} onClick={() => startCreate("", "file")}>
-              <IconPlusOutlineRegular size={11} /> 新建文件
-            </Button>
-            <Button variant="ghost" size="sm" disabled={files.phase !== "ready"} onClick={() => startCreate("", "dir")}>
-              <IconFolderCloseRegular size={11} /> 新建文件夹
-            </Button>
-          </div>
-          {creating !== null && creating.inDir === "" ? (
-            <CreateEntryRow
-              indent={8}
-              kind={creating.kind}
-              onCancel={() => setCreating(null)}
-              onSubmit={(entryName) => submitCreate("", creating.kind, entryName)}
-            />
-          ) : null}
-          {createFailure === null ? null : <ErrorLine text={`创建失败：${createFailure}`} />}
-          {treeBody()}
+      <PageHead
+        title={name}
+        adornment={skill === null ? null : skill.calls > 0 ? <Badge>{`调用 ${skill.calls} 次`}</Badge> : <Badge tone="warning">从未调用</Badge>}
+        lead={
+          skill === null
+            ? `技能列表里还没有读到「${name}」的记录（统计与元数据暂不显示）；文件操作不受影响。`
+            : skill.description === undefined || skill.description === ""
+              ? "（无描述）在下方「元数据」里补一段，Agent 才知道何时加载它。"
+              : skill.description
+        }
+        actions={
+          <IconButton label="刷新文件" spinning={files.phase === "loading"} onClick={files.reload}>
+            <IconRefreshOutlineRegular size={14} />
+          </IconButton>
+        }
+      />
+
+      {skill === null ? null : (
+        <div data-skill-usage>
+          <Metrics
+            items={[
+              { key: "calls", label: <span data-skill-usage-cell="calls">总调用次数</span>, value: skill.calls, muted: skill.calls === 0 },
+              { key: "tasks", label: <span data-skill-usage-cell="tasks">覆盖任务数</span>, value: skill.tasks, muted: skill.tasks === 0 },
+              {
+                key: "last",
+                label: <span data-skill-usage-cell="last">最近调用</span>,
+                value: formatSkillTime(skill.last_used),
+                variant: "text",
+                muted: skill.last_used === undefined || skill.last_used === "",
+              },
+            ]}
+          />
         </div>
+      )}
 
-        {/* 右：编辑区 */}
-        <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", flexDirection: "column" }}>
-          {selectedPath === null ? (
-            <div className={css.skillEditorEmpty}>
-              <p className={css.fieldHint} style={{ margin: 0 }}>
-                从左边选一个文件查看和编辑；也可以先用「新建文件 / 新建文件夹」建条目。
-              </p>
+      <Section title="文件" count={fileCount ?? undefined} hint="选中文件在右侧编辑，保存后立即写入技能目录">
+        <div className={own.workbench}>
+          <Card className={own.treeCard} data={{ "data-skill-tree": "" }}>
+            <div className={own.treeHead}>
+              <span className={own.treeHeadTitle}>{name}</span>
+              <IconButton label="新建文件" disabled={files.phase !== "ready"} onClick={() => startCreate("", "file")}>
+                <IconPlusOutlineRegular size={14} />
+              </IconButton>
+              <IconButton label="新建文件夹" disabled={files.phase !== "ready"} onClick={() => startCreate("", "dir")}>
+                <IconFolderCloseRegular size={14} />
+              </IconButton>
             </div>
+            <div className={own.treeBody}>
+              {creating !== null && creating.inDir === "" ? (
+                <CreateEntryRow indent={indentOf(0)} kind={creating.kind} onCancel={() => setCreating(null)} onSubmit={(entryName) => submitCreate("", creating.kind, entryName)} />
+              ) : null}
+              {createFailure === null ? null : (
+                <div className={own.treeNotice}>
+                  <Notice tone="danger">创建失败：{createFailure}</Notice>
+                </div>
+              )}
+              {treeBody()}
+            </div>
+          </Card>
+
+          {selectedPath === null ? (
+            <Card className={own.editorCard}>
+              <div className={own.editorEmpty}>
+                <Empty
+                  inCard
+                  icon={<IconCodeOutlineRegular size={18} />}
+                  title="选择一个文件"
+                  text="从左侧文件树选一个文件查看和编辑；也可以先用 + 新建文件或文件夹。"
+                />
+              </div>
+            </Card>
           ) : (
             <FileEditor
               skillName={name}
@@ -872,38 +944,47 @@ export function SkillDetail({
                 files.reload();
                 onChanged();
               }}
-              onRequestDelete={(path, isDir) => {
-                setDeleteFailure(null);
-                setPendingDelete({ kind: "path", path, isDir });
-              }}
+              onRequestDelete={requestDelete}
             />
           )}
         </div>
-      </div>
+      </Section>
 
-      {skill === null ? null : <MetaForm skill={skill} onSaved={onChanged} />}
+      {skill === null ? null : (
+        <Section title="元数据" hint="名称是目录名，不在这里改">
+          <Card>
+            <Row
+              lead={<Tile small>M</Tile>}
+              label="SKILL.md 头部字段"
+              description={<Meta items={[`license ${skill.license === undefined || skill.license === "" ? "未填" : skill.license}`, `${skill.mcps?.length ?? 0} 个关联 MCP`]} />}
+            />
+            <MetaForm skill={skill} onSaved={onChanged} />
+          </Card>
+        </Section>
+      )}
       {skill === null ? null : <UsageBlock skill={skill} />}
       {skill === null ? null : <VisibilityBlock skill={skill} />}
 
-      {skill === null ? (
-        <p className={css.fieldHint}>技能列表里还没有读到「{name}」的记录（统计与元数据暂不显示）；文件操作不受影响。</p>
-      ) : null}
-
-      <div className={css.subSection}>
-        <button
-          type="button"
-          className={css.dangerBtn}
-          onClick={() => {
-            setDeleteFailure(null);
-            setPendingDelete({ kind: "skill" });
-          }}
-        >
-          <IconTrashOutlineRegular size={12} /> 删除整个技能
-        </button>
-        <span className={css.skillDangerHint}>
-          会一并删除全部文件、MCP 关联与可见性配置（旧页同一入口在列表行上，这里放在详情里以防误删）。
-        </span>
-      </div>
+      <Section title="危险区">
+        <Card>
+          <Row
+            label="删除整个技能"
+            description={<span className={own.dangerText}>会一并删除全部文件、MCP 关联与可见性配置，且不可撤销。</span>}
+          >
+            <button
+              type="button"
+              className={shared.dangerBtn}
+              data-skill-delete-all=""
+              onClick={() => {
+                setDeleteFailure(null);
+                setPendingDelete({ kind: "skill" });
+              }}
+            >
+              删除技能
+            </button>
+          </Row>
+        </Card>
+      </Section>
 
       <Modal
         open={pendingDelete !== null}
@@ -940,6 +1021,7 @@ export function SkillDetail({
               variant="primary"
               size="sm"
               disabled={deleting}
+              data-skill-delete-confirm=""
               onClick={() => {
                 if (pendingDelete !== null && pendingDelete.kind === "skill") onBack();
                 confirmDelete();
@@ -950,13 +1032,19 @@ export function SkillDetail({
           </>
         }
       >
-        {deleteFailure === null ? null : <ErrorLine text={`删除失败：${deleteFailure}`} />}
-        {pendingDelete !== null && pendingDelete.kind === "skill" ? (
-          <p className={css.dialogBodyText}>
-            确认后会先回到技能列表，列表刷新时该技能已不存在；删除结果失败时会在这里显示原因。
-          </p>
-        ) : null}
+        <div className={own.dialogStack}>
+          {pendingDelete === null ? null : (
+            <div className={own.targetBox}>
+              <Tile>{pendingDelete.kind === "path" && pendingDelete.isDir ? <IconFolderCloseRegular size={15} /> : <IconCodeOutlineRegular size={15} />}</Tile>
+              <span className={own.mono}>{pendingDelete.kind === "skill" ? name : pendingDelete.path}</span>
+            </div>
+          )}
+          {deleteFailure === null ? null : <Notice tone="danger">删除失败：{deleteFailure}</Notice>}
+          {pendingDelete !== null && pendingDelete.kind === "skill" ? (
+            <p className={own.dialogText}>确认后会先回到技能列表，列表刷新时该技能已不存在；删除结果失败时会在这里显示原因。</p>
+          ) : null}
+        </div>
       </Modal>
-    </div>
+    </SettingsPage>
   );
 }

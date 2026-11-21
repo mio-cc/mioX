@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/Autumn-27/artex/db"
@@ -43,6 +44,10 @@ type MainAgent struct {
 	planReview func(ctx context.Context, title, plan string) (intercept.PlanReviewOutcome, error)
 	// planExit 在用户批准后退出计划模式（DSH index.ts:358-362）。nil = 只在本轮内存里退出。
 	planExit func()
+	// planStrictFn 读设置 plan_mode_strict（每轮读）：true = 计划批准前拒绝非只读工具。
+	planStrictFn func() bool
+	// planWarnFn 在非严格模式下记录"计划模式调用了非只读工具"（不进模型）。nil = 写日志。
+	planWarnFn func(taskID int64, tool string)
 	// teamMode 是会话级团队模式（tasks.team_mode）。与 planMode 相反，它**改工具集**：
 	// 只有它为真时，共享任务板的 4 个工具（team_add/team_list/team_claim/team_complete）
 	// 才注册进主 agent——DSH 把团队开关当作「会话拥有的能力选择」
@@ -142,6 +147,12 @@ func (m *MainAgent) SetPlanReview(fn func(ctx context.Context, title, plan strin
 
 // SetPlanExit 接上"退出计划模式"（用户批准后，DSH index.ts:358-362）。
 func (m *MainAgent) SetPlanExit(fn func()) { m.planExit = fn }
+
+// SetPlanStrict 接上 plan_mode_strict 设置解析器（P-1 计划模式硬边界，每轮读）。
+func (m *MainAgent) SetPlanStrict(fn func() bool) { m.planStrictFn = fn }
+
+// SetPlanWarn 接上非严格计划模式下的越界告警记录器（不进模型）。
+func (m *MainAgent) SetPlanWarn(fn func(taskID int64, tool string)) { m.planWarnFn = fn }
 
 // SetTeamMode 切换团队模式（tasks.team_mode）。与 SetPlanMode 不同，它决定共享任务板的
 // 4 个工具是否进入工具集：关闭时工具**不在**工具集里（能力不给，而不是调用时报错）。
@@ -363,7 +374,21 @@ func (m *MainAgent) ChatUsing(ctx context.Context, prov llm.Provider, taskID int
 	}
 	if m.planMode {
 		// 计划提交后本轮不再执行任何工具（DSH index.ts:340 的 concludeTurn）。
-		opts.Hooks = &planGateHooks{inner: opts.Hooks, turn: planTurn}
+		// P-1：计划批准前的非只读工具 → plan_mode_strict 开启时拒绝，否则只记一条警告日志。
+		byName := make(map[string]actool.CoreTool, len(tools))
+		for _, tl := range tools {
+			if tl != nil {
+				byName[tl.Name()] = tl
+			}
+		}
+		opts.Hooks = &planGateHooks{inner: opts.Hooks, turn: planTurn, tools: byName, strict: m.planStrictFn,
+			warn: func(name string) {
+				if m.planWarnFn != nil {
+					m.planWarnFn(taskID, name)
+					return
+				}
+				log.Printf("[plan-mode] task %d: 计划模式下调用了非只读工具 %s（plan_mode_strict=false，仅告警）", taskID, name)
+			}}
 	}
 	if m.tx != nil { // persist raw human↔AI conversation; one accumulating file per segment
 		opts.Transcript = m.tx

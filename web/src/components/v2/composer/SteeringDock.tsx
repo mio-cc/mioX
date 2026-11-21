@@ -13,8 +13,8 @@
  */
 import * as React from "react";
 
-import { IconCloseOutlineRegular, IconQuestionOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 import type { SideExchange, SideHistoryState } from "@/v2/data/side-questions";
+import { IconCloseOutlineRegular, IconQuestionOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 
 import css from "./SideQuestions.module.css";
 
@@ -46,20 +46,19 @@ export function SteeringDock({
   const items = history.items;
   React.useEffect(() => {
     if (items.length === 0) return;
-    setOpenId((current) => current ?? (items.length === 1 ? (items[0]?.id ?? null) : (items[items.length - 1]?.id ?? null)));
+    setOpenId(
+      (current) => current ?? (items.length === 1 ? (items[0]?.id ?? null) : (items[items.length - 1]?.id ?? null)),
+    );
   }, [items]);
 
-  if (items.length === 0 && history.phase !== "loading") return null;
+  // DSH 的 dock 只画行（`queue.count` / 行渲染），没有内容的加载态不占位；
+  // 空栈加载时整个 dock 不渲染，避免「读取插话…」这种与参照不一致的吊空文案。
+  if (items.length === 0 && history.phase !== "offline") return null;
 
   const runningId = items.find((item) => item.status === "running")?.id ?? null;
 
   return (
     <div className={css.dock} data-steer-dock="" data-steer-count={items.length}>
-      {history.phase === "loading" && items.length === 0 ? (
-        <div className={css.dockHint} role="status">
-          读取插话…
-        </div>
-      ) : null}
       {history.phase === "offline" ? (
         <div className={css.dockError} role="alert">
           读取插话失败：{history.error ?? "未知原因"}
@@ -88,10 +87,7 @@ export function SteeringDock({
               <span className={css.steerQ} title={item.question}>
                 {item.question}
               </span>
-              <span
-                className={isRunning ? css.steerRunning : css.dockState}
-                role={isRunning ? "status" : undefined}
-              >
+              <span className={isRunning ? css.steerRunning : css.dockState} role={isRunning ? "status" : undefined}>
                 {isRunning ? "回答中…" : DONE_LABEL[item.status]}
               </span>
             </button>

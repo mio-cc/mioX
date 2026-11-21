@@ -30,6 +30,7 @@
 import * as React from "react";
 
 import { sendChat } from "@/v2/data/chat-send";
+import { turnEffortFor } from "@/v2/data/turn-effort";
 
 /** Lifecycle of one queued submission inside this browser page. */
 export type QueuedSubmissionStatus = "queued" | "sending" | "error";
@@ -159,7 +160,7 @@ export function useComposerQueue(options: ComposerQueueOptions): ComposerQueue {
     setFlushing(true);
     errorRef.current(null);
     commit((current) => current.map((row) => (row.id === head.id ? { ...row, status: "sending" } : row)));
-    void sendChat(head.text, head.taskId, [])
+    void sendChat(head.text, head.taskId, [], undefined, turnEffortFor(head.taskId) || undefined)
       .then(() => {
         // 202 accepted: the row has become a real turn, so it leaves the queue.
         commit((current) => current.filter((row) => row.id !== head.id));

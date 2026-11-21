@@ -1,358 +1,326 @@
-/* 任务概览视图（B11）。只用 --dsw-* 语义变量，不写字面色值。 */
+/*
+ * 任务概览视图（D2）：版式来自 design/Kit（Page / Section / Card / Row / Facts / Metrics）；
+ * 这里只放本页特有的小件。只用 --dsw-* 语义变量，不写字面色值；字重只 400/500。
+ */
 
-.wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 20px 48px;
-  min-width: 0;
-  font-family: var(--dsw-font-family);
-  color: var(--dsw-alias-label-primary);
-}
-
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
-  min-width: 0;
-}
-
-.sectionHead {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.sectionTitle {
-  flex: none;
-  font-size: var(--dsw-font-xs-13, 13px);
-  font-weight: 500;
-  line-height: 20px;
-}
-
-.sectionHint {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.count {
-  flex: none;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px 18px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.fieldLabel {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.fieldValue {
-  font-size: var(--dsw-font-xs-13, 13px);
-  line-height: 20px;
-  color: var(--dsw-alias-label-primary);
-  word-break: break-word;
-}
-
-.fieldWide {
-  grid-column: 1 / -1;
-}
-
-.textBlock {
-  margin: 0;
-  font-size: var(--dsw-font-xs-13, 13px);
-  line-height: 20px;
-  color: var(--dsw-alias-label-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.mono {
-  font-family: var(--ds-font-family-code);
-  font-size: var(--dsw-font-xxs-12, 12px);
-  word-break: break-all;
-}
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px;
-}
-
-.statCard {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-2);
-  min-width: 0;
-}
-
-.statLabel {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.statValue {
-  font-size: 20px;
-  line-height: 26px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.state {
-  padding: 10px 0;
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.stateError {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 0.5px solid var(--dsw-alias-state-error-primary);
-  border-radius: var(--dsw-radius-sm);
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-state-error-primary);
-  word-break: break-word;
-}
-
-.empty {
-  margin: 0;
-  padding: 10px 0;
-  font-size: var(--dsw-font-xs-13, 13px);
-  line-height: 20px;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.formRow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-sm);
-  overflow: hidden;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  min-width: 0;
-  padding: 8px 10px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
-  font-size: var(--dsw-font-xs-13, 13px);
-}
-
-.row:first-child {
-  border-top: none;
-}
-
-.rowMain {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.rowText {
-  min-width: 0;
-  flex: 1 1 auto;
+/* PageHead 的说明只占一行（任务描述可能很长，全文在「任务信息」卡里）。 */
+.leadLine {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 20px;
 }
 
-.rowVuln {
-  flex: none;
-  font-family: var(--ds-font-family-code);
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
+.headBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
 }
 
-.rowMeta {
-  flex: none;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
+/* Notice / Skeleton 放进 Card 时的内边距。 */
+.cardInset {
+  padding: 12px;
+}
+
+/* 统计指标值的承载 span（保留 statValue 类名：.tmp/overview-verify.mjs 用 [class*=statValue] 取值）。 */
+.statValue {
+  display: inline;
+}
+
+/* 非数字指标（是/否类）用小一号，避免 24px 汉字压过数字。 */
+.statWord {
+  font-size: 16px;
+  line-height: 32px;
+}
+
+/* ---- 任务信息 ---- */
+
+.num {
   font-variant-numeric: tabular-nums;
 }
 
-.rowActions {
-  display: flex;
+.inlineState {
+  display: inline-flex;
   align-items: center;
-  flex: none;
   gap: 6px;
+  min-width: 0;
 }
 
-.editRow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 10px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
-}
-
-.editRow:first-child {
-  border-top: none;
-}
-
-.grow {
-  flex: 1 1 200px;
-  min-width: 120px;
-}
-
-.narrow {
-  flex: 0 0 120px;
-}
-
-.errorLine {
-  margin: 0;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  line-height: 18px;
-  color: var(--dsw-alias-state-error-primary);
-  word-break: break-word;
-}
-
-.confirmText {
-  margin: 0;
-  font-size: var(--dsw-font-xs-13, 13px);
-  line-height: 20px;
-  color: var(--dsw-alias-label-secondary);
-  word-break: break-word;
-}
-
-/* ---- C18：前沿与统计 / 审计（以下只新增，不改上方 B11 已有的类） ---- */
-
-.subHead {
-  display: flex;
+/* 目标进度：数字 + 细进度条。 */
+.progress {
+  display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-top: 2px;
-  padding-top: 8px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
-}
-
-.subTitle {
-  flex: none;
-  font-size: var(--dsw-font-xs-13, 13px);
-  font-weight: 500;
-  line-height: 20px;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.auditRow {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 8px 10px;
   min-width: 0;
-  padding: 8px 10px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
-  font-size: var(--dsw-font-xs-13, 13px);
 }
 
-.auditRow:first-child {
-  border-top: none;
+.progressTrack {
+  position: relative;
+  flex: 0 0 64px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-skeleton);
 }
 
-.auditLine {
-  flex: 1 1 100%;
+.progressFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--dsw-alias-state-success-primary);
+}
+
+/* 描述 / 目标：卡内 Facts 下方的两栏长文本，中间一条细分隔。 */
+.prose {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px 24px;
+  padding: 14px 16px 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.proseItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.proseLabel {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.proseText {
   margin: 0;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
-.attrBlock {
+.proseEmpty {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+/* ---- 列表行 ---- */
+
+/* 卡内的行列表容器（承载 data-*-rows 钩子；kit Row 之间自画细线）。 */
+.rows {
   display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* 行首的种类胶囊统一宽度，让后面的正文对齐成一列。 */
+.leadBadge {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 44px;
+}
+
+.rowMono {
+  font-family: var(--ds-font-family-code);
+  font-size: 13px;
+}
+
+.rowActions {
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.rowActionsSwitch {
   gap: 8px;
-  min-width: 0;
 }
 
-.attrChips {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
-
-/* ---- C6：任务级拦截 / 允许规则（复用上方 .section / .formRow / .row / .rowMain / .rowText /
-   .rowMeta / .rowVuln / .rowActions / .editRow / .grow / .narrow / .list / .state / .stateError /
-   .empty / .confirmText，本单元不新增类，避免与 B11、C18 已验收的样式冲突） ---- */
-
-/* ---- 收口 P2:A11：活动流点行（旧页总览活动流不点行，/v2 用 `?task=` 深链到会话） ---- */
-
-.activityRowBtn {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  width: 100%;
-  min-width: 0;
-  margin: -8px -10px;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
+.dangerIcon {
+  color: var(--dsw-alias-label-tertiary);
 }
 
 @media (hover: hover) {
-  .activityRowBtn:hover {
-    background: var(--dsw-alias-bg-layer-2);
+  .dangerIcon:hover:not(:disabled) {
+    color: var(--dsw-alias-state-error-primary);
   }
 }
 
-.activityRowBtn:focus-visible {
-  outline: 2px solid var(--dsw-alias-label-tertiary);
-  outline-offset: -2px;
+.time {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 行内编辑：Row stacked，控件整宽（覆盖 kit 行控件的 60% 上限）。 */
+.editRow {
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.editRow > div:last-child {
+  flex: 1 1 auto;
+  max-width: none;
+  justify-content: stretch;
+}
+
+.formLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.grow {
+  flex: 1 1 220px;
+  min-width: 140px;
+}
+
+.narrow {
+  flex: 0 1 150px;
+  min-width: 110px;
+}
+
+/* 输入框不得超出所在列（否则会压到行尾按钮上）。 */
+.grow,
+.narrow {
+  display: flex;
+  overflow: hidden;
+}
+
+.grow > *,
+.narrow > * {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.formEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* 卡片底部的「新增」栏：列表之后，细线分隔。 */
+.addBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  min-width: 0;
+}
+
+/* ---- DX-OV：总目标行与验收项列表 ---- */
+
+/* 总目标行下、验收项列表上的小节隔：细分隔线 + 12px 眉题。 */
+.goalsSubHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 16px;
+  min-width: 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.goalsSubTitle {
+  font-weight: 500;
+  color: var(--dsw-alias-label-secondary);
+  letter-spacing: 0.02em;
+}
+
+/* 总目标行内联的失败原因（写失败了不清快照）。 */
+.tgoalError {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
+.addBar:not(:first-child) {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* 窄面板里新增栏会折行：输入框填满所在行，主按钮总在行尾。 */
+.addBar .grow {
+  flex: 1 1 180px;
+  min-width: 140px;
+}
+
+.addBar .narrow {
+  flex: 1 1 120px;
+}
+
+.addBar > button:last-child {
+  margin-left: auto;
+}
+
+.addLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- 统计与审计 ---- */
+
+.subSection {
+  margin-top: 16px;
+}
+
+.auditLines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.auditLine {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.auditCode {
+  font-family: var(--ds-font-family-code);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.chips {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.footNote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- 删除 / 启停确认弹窗 ---- */
+
+.confirmText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
 }

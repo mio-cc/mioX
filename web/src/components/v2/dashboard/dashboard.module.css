@@ -541,7 +541,8 @@
 }
 
 .strong {
-  font-weight: 600;
+  /* 102 规范 §1：字重只用 400/500。 */
+  font-weight: 500;
 }
 
 .warn {
@@ -889,4 +890,3 @@
   white-space: nowrap;
   color: var(--dsw-alias-label-secondary);
 }
-

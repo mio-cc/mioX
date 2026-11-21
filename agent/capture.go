@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -76,6 +77,50 @@ func captureRunSession(ctx context.Context, s *agentcore.Session, input string, 
 	lastTool := &runTrace{startedAt: time.Now()}
 	var lastUsage *llm.Usage
 
+	// DSH sessionStats 口径（ui-chat StatsPills.tsx WindowStats）：每次 LLM 调用
+	// （step）的 ttft（step 起点 → 首个模型输出 delta）与 decode（首 delta → 该
+	// step 的 usage 事件）耗时，写进 usage 活动行的 metadata（不动 schema）。
+	//
+	// 计时边界只由 usage 事件推进：harness 在流式中边解析边执行工具
+	// （norma/harness/query.go:838-839），同一 step 的工具结果可能在模型仍在输出时
+	// 到达；若在 tool_result 处重置时钟，会清掉本 step 的首 delta 时刻，decode 计时
+	// 丢失或从中途起算（tok/s 偏大）。工具调用本身（KindToolUse）也是模型输出，
+	// 同样作为首 delta。
+	//
+	// harness 的 KindUsage 是本次 Prompt 循环的**累计**用量（query.go:456-461），
+	// 所以这里同时写入本 step 的增量 step_*_tokens（累计差值），前端据此算
+	// tok/s、缓存命中与当前上下文大小，不再对累计值求和。
+	stepStartedAt := time.Now() // 本 step 起点：循环开始或上一个 step 的 usage 时刻
+	var llmFirstDeltaAt time.Time
+	var prevUsage llm.Usage // 上一个 usage 事件的累计值（同一 Prompt 循环内）
+	markFirstDelta := func() {
+		if llmFirstDeltaAt.IsZero() {
+			llmFirstDeltaAt = time.Now()
+		}
+	}
+	llmStats := func(cum llm.Usage) json.RawMessage {
+		meta := map[string]int64{
+			"step_input_tokens":       int64(cum.InputTokens - prevUsage.InputTokens),
+			"step_output_tokens":      int64(cum.OutputTokens - prevUsage.OutputTokens),
+			"step_cache_read_tokens":  int64(cum.CacheReadTokens - prevUsage.CacheReadTokens),
+			"step_cache_write_tokens": int64(cum.CacheWriteTokens - prevUsage.CacheWriteTokens),
+		}
+		if !llmFirstDeltaAt.IsZero() { // 无流式 delta（非流式/协议错误）时不谎报计时
+			meta["ttft_ms"] = llmFirstDeltaAt.Sub(stepStartedAt).Milliseconds()
+			meta["decode_ms"] = time.Since(llmFirstDeltaAt).Milliseconds()
+		}
+		raw, err := json.Marshal(meta)
+		if err != nil {
+			return nil
+		}
+		return raw
+	}
+	endStep := func(cum llm.Usage) {
+		prevUsage = cum
+		stepStartedAt = time.Now()
+		llmFirstDeltaAt = time.Time{}
+	}
+
 	// toolCalls counts this turn's tool invocations: a turn that used no tool is one
 	// of the refusal signals (an agent that is working calls tools).
 	toolCalls := 0
@@ -98,6 +143,7 @@ func captureRunSession(ctx context.Context, s *agentcore.Session, input string, 
 			if ev.ToolUse == nil {
 				continue
 			}
+			markFirstDelta() // a tool call is model output too
 			flush()
 			toolNames[ev.ToolUse.ID] = ev.ToolUse.Name
 			in := string(ev.ToolUse.Input)
@@ -113,11 +159,15 @@ func captureRunSession(ctx context.Context, s *agentcore.Session, input string, 
 			out := blocksText(ev.ToolResult.Content)
 			lastTool.done(ev.ToolResult.ToolUseID)
 			auditTrace.Complete(ev.ToolResult.ToolUseID, out, ev.ToolResult.IsError)
+			// No clock reset here: a result can arrive while the same step is still
+			// streaming (tools run as soon as their arguments close).
 			rec(db.Activity{Kind: "tool_result", Tool: toolNames[ev.ToolResult.ToolUseID], ToolUseID: ev.ToolResult.ToolUseID,
 				IsError: ev.ToolResult.IsError, Summary: firstLine(out, 200), Detail: out})
 		case harness.KindText:
+			markFirstDelta()
 			addDelta("text", ev.Text)
 		case harness.KindThinking:
+			markFirstDelta()
 			addDelta("thinking", ev.Text)
 		case harness.KindUsage:
 			// live cumulative token usage (per model turn). Emitted as a non-rendered
@@ -126,10 +176,12 @@ func captureRunSession(ctx context.Context, s *agentcore.Session, input string, 
 			// buffered final-answer text must stay for the KindResult de-dup.
 			if ev.Usage != nil {
 				u := *ev.Usage
+				meta := llmStats(u)
 				lastUsage = &u
-				rec(db.Activity{Kind: "usage",
+				rec(db.Activity{Kind: "usage", Metadata: meta,
 					InputTokens: &u.InputTokens, OutputTokens: &u.OutputTokens,
 					CacheReadTokens: &u.CacheReadTokens, CacheWriteTokens: &u.CacheWriteTokens})
+				endStep(u)
 			}
 		case harness.KindResult:
 			if ev.Terminal != nil {

@@ -6,27 +6,92 @@
  * rows above a settings card, and the full provider editor inside it.
  */
 import * as React from "react";
-import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { Button } from "@/vendor/dsh/primitives/Button";
-import { Switch } from "@/vendor/dsh/primitives/Switch";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
-import { SelectMenu } from "./SelectMenu";
-import { LlmRetrySection } from "./LlmRetrySection";
+
+import { isAuthDisabled } from "@/lib/auth";
+import type { LLMProfile } from "@/lib/types";
+import { probeAuthMode } from "@/v2/data/auth";
+import { resetLlmPoolMember, useLlmPool } from "@/v2/data/llm-pool";
 import {
-  ModelProfileExtraFields,
-  extraDraftFromProfile,
-  maxTokensFieldToStore,
-  thinkingToStore,
-  type ProfileExtraDraft,
-} from "./ModelProfileFields";
-import { ModelsAddProvider } from "./ModelsAddProvider";
+  activateLlmProfile,
+  deleteLlmProfile,
+  formatContextWindow,
+  formatMaxTokens,
+  parseContextWindow,
+  parseMaxTokens,
+  saveLlmProfile,
+  testLlmConnection,
+  useLlmProfiles,
+} from "@/v2/data/llm-profiles";
+import { useSettings } from "@/v2/data/settings";
+import { useUpdate } from "@/v2/data/update";
+import { Button } from "@/vendor/dsh/primitives/Button";
+import {
+  IconAgentPresetOutlineRegular,
+  IconCloseOutlineRegular,
+  IconCordisPluginOutlineRegular,
+  IconGaugeOutlineRegular,
+  IconLayersOutlineRegular,
+  IconMailUnreadOutlineRegular,
+  IconPlusOutlineRegular,
+  IconQueueOutlineRegular,
+  IconRefreshOutlineRegular,
+  IconSettingsOutlineRegular,
+  IconShieldOutlineRegular,
+  IconSlidersTwoOutlineRegular,
+} from "@/vendor/dsh/primitives/icons/index";
+import { Modal } from "@/vendor/dsh/primitives/Modal";
+import {
+  AddSlot,
+  AddSlots,
+  Badge,
+  Card,
+  Chain,
+  ChainAdd,
+  ChainArrow,
+  ChainStep,
+  Disclosure,
+  Dot,
+  Editor,
+  EditorActions,
+  EditorGroup,
+  Empty,
+  Field,
+  FieldGrid,
+  FilterBar,
+  kit,
+  Meta,
+  Notice,
+  PageHead,
+  Row as KitRow,
+  Section,
+  SettingsPage as KitSettingsPage,
+  Skeleton,
+  TextInput,
+} from "@/components/v2/design/Kit";
+import { Switch } from "@/vendor/dsh/primitives/Switch";
+import { Tag } from "@/vendor/dsh/primitives/Tag";
+
+// 修改密码弹窗由 P3-B13 交付（components/v2/auth/ChangePasswordDialog.tsx）；
+// 本单元（B14）只在通用页加入口与挂载。
+import { ChangePasswordDialog } from "../auth/ChangePasswordDialog";
+import { ToolsPage } from "../tools/ToolsPage";
+import { AgentPresetsPage } from "./AgentPresetsPage";
 import { InterceptPage } from "./InterceptRulesPage";
+import { LlmRetrySection } from "./LlmRetrySection";
 import { McpPage } from "./McpPage";
-import { SkillsPage } from "./SkillsPage";
+import {
+  extraDraftFromProfile,
+  ModelProfileExtraFields,
+  maxTokensFieldToStore,
+  type ProfileExtraDraft,
+  thinkingToStore,
+} from "./ModelProfileFields";
+import { ModelIdField } from "./ModelIdField";
+import { ModelsAddProvider } from "./ModelsAddProvider";
 import { NotifyPage } from "./NotifyPage";
-import { UpdateSection, UpdateSectionView } from "./UpdateSection";
 import { RuntimeSection } from "./RuntimeSection";
+import { SelectMenu } from "./SelectMenu";
+import css from "./SettingsDialog.module.css";
 import {
   AboutRecheckSection,
   ConstraintInjectSection,
@@ -35,50 +100,10 @@ import {
   UpdateRestartRow,
 } from "./SettingsExtras";
 import { SettingsRow } from "./SettingsRow";
+import { SkillsPage } from "./SkillsPage";
 import { TaskCategorySettings } from "./TaskCategorySettings";
-import { AgentPresetsPage } from "./AgentPresetsPage";
-import { ToolsPage } from "../tools/ToolsPage";
-// 修改密码弹窗由 P3-B13 交付（components/v2/auth/ChangePasswordDialog.tsx）；
-// 本单元（B14）只在通用页加入口与挂载。
-import { ChangePasswordDialog } from "../auth/ChangePasswordDialog";
-import { isAuthDisabled } from "@/lib/auth";
-import { probeAuthMode } from "@/v2/data/auth";
-
 import { toast } from "./Toast";
-import {
-  IconSettingsOutlineRegular,
-  IconLayersOutlineRegular,
-  IconCordisPluginOutlineRegular,
-  IconAgentPresetOutlineRegular,
-  IconCloseOutlineRegular,
-  IconGaugeOutlineRegular,
-  IconShieldOutlineRegular,
-  IconMailUnreadOutlineRegular,
-  IconQueueOutlineRegular,
-  IconRefreshOutlineRegular,
-  IconSlidersTwoOutlineRegular,
-  IconTrashOutlineRegular,
-  IconPlusOutlineRegular,
-  IconChevronDownOutlineRegular,
-  IconChevronRightOutlineRegular,
-} from "@/vendor/dsh/primitives/icons/index";
-
-import type { LLMProfile } from "@/lib/types";
-import { useSettings } from "@/v2/data/settings";
-import {
-  useLlmProfiles,
-  saveLlmProfile,
-  deleteLlmProfile,
-  activateLlmProfile,
-  testLlmConnection,
-  formatContextWindow,
-  parseContextWindow,
-  formatMaxTokens,
-  parseMaxTokens,
-} from "@/v2/data/llm-profiles";
-import { resetLlmPoolMember, useLlmPool } from "@/v2/data/llm-pool";
-import { useUpdate } from "@/v2/data/update";
-import css from "./SettingsDialog.module.css";
+import { UpdateSection, UpdateSectionView } from "./UpdateSection";
 
 const PAGES = [
   { id: "general", label: "通用设置", Icon: IconSettingsOutlineRegular },
@@ -106,10 +131,10 @@ function SettingsPage(): React.ReactNode {
   // 一个页面只开一次 GET /settings：通用页原有分区与 C11 的「任务并发」分区共用这份状态。
   const server = useSettings();
   return (
-    <>
+    <KitSettingsPage data={{ "data-settings-general": "" }}>
       <GeneralContent server={server} />
       <OtherSettingsPage server={server} />
-    </>
+    </KitSettingsPage>
   );
 }
 
@@ -128,81 +153,111 @@ function GeneralContent({ server }: { server: ReturnType<typeof useSettings> }):
 
   return (
     <>
-      <h2 className={css.pageTitle}>通用设置</h2>
+      <PageHead title="通用设置" lead="服务端开关、Agent 约束、版本更新与界面偏好。" />
       <ServerStatusRow server={server} />
-      <ServerSwitches server={server} />
+
+      <Section title="服务端">
+        <Card>
+          <ServerSwitches server={server} />
+        </Card>
+      </Section>
+
       <ConstraintInjectSection server={server} />
-      <UpdateSectionWithRestart />
-      <ChangePasswordRow />
-      <NewTaskRow />
+
+      <Section title="版本">
+        <UpdateSectionWithRestart />
+      </Section>
+
+      <Section title="账户与任务">
+        <Card>
+          <ChangePasswordRow />
+          <NewTaskRow />
+        </Card>
+      </Section>
+
       <PermissionLevelsNote />
-      <Row label="语言">
-        <SelectMenu
-          value={language}
-          onChange={setLanguage}
-          options={[
-            { value: "zh", label: "中文" },
-            { value: "en", label: "English" },
-          ]}
-        />
-      </Row>
 
-      <div className={css.group}>
-        <div className={css.groupLabel}>外观</div>
-        <SegmentedControl
-          id="appearance"
-          label="外观"
-          value={appearance}
-          onChange={setAppearance}
-          options={[
-            { value: "light", label: "浅色" },
-            { value: "dark", label: "深色" },
-            { value: "system", label: "跟随系统" },
-          ]}
-        />
-      </div>
+      <Section title="界面">
+        <Card>
+          <KitRow label="外观" description="浅色、深色，或跟随系统设置。">
+            <FilterBar
+              id="appearance"
+              label="外观"
+              value={appearance}
+              onChange={setAppearance}
+              options={[
+                { value: "light", label: "浅色" },
+                { value: "dark", label: "深色" },
+                { value: "system", label: "跟随系统" },
+              ]}
+            />
+          </KitRow>
+          <KitRow label="语言">
+            <SelectMenu
+              value={language}
+              onChange={setLanguage}
+              ariaLabel="语言"
+              options={[
+                { value: "zh", label: "中文" },
+                { value: "en", label: "English" },
+              ]}
+            />
+          </KitRow>
+          <KitRow label="字号大小" description="仅影响会话内容的字号。">
+            <span className={css.numberField}>
+              14<span className={css.unit}>px</span>
+            </span>
+          </KitRow>
+        </Card>
+      </Section>
 
-      <Row label="字号大小" hint="仅影响会话内容的字号">
-        <span className={css.numberField}>14<span className={css.unit}>px</span></span>
-      </Row>
-      <Row label="工作步骤展示" hint="选择希望看到多少工具调用细节">
-        <SelectMenu
-          value={stepDetail}
-          onChange={setStepDetail}
-          options={[
-            { value: "detailed", label: "详细" },
-            { value: "compact", label: "精简" },
-            { value: "hidden", label: "隐藏" },
-          ]}
-        />
-      </Row>
-      <Row label="工作步骤收起时机" hint="选择何时自动收起工作步骤">
-        <SelectMenu
-          value={collapseTiming}
-          onChange={setCollapseTiming}
-          options={[
-            { value: "after-answer", label: "回答结束后" },
-            { value: "turn-end", label: "每轮结束" },
-            { value: "never", label: "从不" },
-          ]}
-        />
-      </Row>
-      <Row label="收起后显示的回复" hint="工作步骤收起后，保留哪些助手回复">
-        <SelectMenu
-          value={keptReplies}
-          onChange={setKeptReplies}
-          options={[
-            { value: "all", label: "全部回复" },
-            { value: "final", label: "仅最终回复" },
-          ]}
-        />
-      </Row>
-      <Row label="显示代码工作视图" hint="开启后，显示轨迹、本轮代码差异，可选择完整的 Agent 预设切换">
-        <Switch checked={codeView} onChange={setCodeView} label="显示代码工作视图" />
-      </Row>
-      <Row label="快捷键" hint="查看和编辑当前可用的快捷键和输入操作">
-        <Button variant="outline" size="sm" onClick={() => toast("快捷键编辑器：Ctrl+Alt+N 新建会话，Ctrl+, 打开设置")}>编辑快捷键</Button>
-      </Row>
+      <Section title="会话">
+        <Card>
+          <KitRow label="工作步骤展示" description="希望看到多少工具调用细节。">
+            <SelectMenu
+              value={stepDetail}
+              onChange={setStepDetail}
+              ariaLabel="工作步骤展示"
+              options={[
+                { value: "detailed", label: "详细" },
+                { value: "compact", label: "精简" },
+                { value: "hidden", label: "隐藏" },
+              ]}
+            />
+          </KitRow>
+          <KitRow label="工作步骤收起时机" description="何时自动收起工作步骤。">
+            <SelectMenu
+              value={collapseTiming}
+              onChange={setCollapseTiming}
+              ariaLabel="工作步骤收起时机"
+              options={[
+                { value: "after-answer", label: "回答结束后" },
+                { value: "turn-end", label: "每轮结束" },
+                { value: "never", label: "从不" },
+              ]}
+            />
+          </KitRow>
+          <KitRow label="收起后显示的回复" description="工作步骤收起后保留哪些助手回复。">
+            <SelectMenu
+              value={keptReplies}
+              onChange={setKeptReplies}
+              ariaLabel="收起后显示的回复"
+              options={[
+                { value: "all", label: "全部回复" },
+                { value: "final", label: "仅最终回复" },
+              ]}
+            />
+          </KitRow>
+          <KitRow label="显示代码工作视图" description="显示轨迹、本轮代码差异，可选择完整的 Agent 预设切换。">
+            <Switch checked={codeView} onChange={setCodeView} label="显示代码工作视图" />
+          </KitRow>
+          <KitRow label="快捷键" description="查看和编辑当前可用的快捷键和输入操作。">
+            <Button variant="outline" size="sm" onClick={() => toast("快捷键编辑器：Ctrl+Alt+N 新建会话，Ctrl+, 打开设置")}>
+              编辑快捷键
+            </Button>
+          </KitRow>
+        </Card>
+      </Section>
     </>
   );
 }
@@ -234,12 +289,6 @@ function OtherSettingsPage({ server }: { server: ReturnType<typeof useSettings> 
   );
 }
 
-
-
-
-
-
-
 /**
  * 权限档是任务级命令，后端没有「全局默认权限档」字段（旧设置页
  * components/settings/settings-dialog.tsx:444-470 的 D10-T4 结论相同）。
@@ -254,23 +303,38 @@ const PERMISSION_LEVELS = [
   { value: "danger-full", label: "完全权限", desc: "不拦截（不可逆操作仍要人工确认）" },
 ] as const;
 
+/** Tone per permission level: the dot reads as how much the level lets through. */
+const PERMISSION_TONE: Record<(typeof PERMISSION_LEVELS)[number]["value"], "info" | "success" | "warning" | "danger"> = {
+  auto: "info",
+  "read-only": "success",
+  "workspace-write": "warning",
+  "danger-full": "danger",
+};
+
 function PermissionLevelsNote(): React.ReactNode {
   return (
-    <div className={css.group} data-field="permission-levels">
-      <div className={css.groupLabel}>权限档（任务级命令）</div>
-      <div className={css.rowHint}>
-        没有全局默认权限档：在任务对话输入框的「权限」chip 里切换本会话档位，下一轮生效。显式拦截规则始终优先于档位预设。
-      </div>
-      <div className={css.levelList} role="list" aria-label="权限档说明">
-        {PERMISSION_LEVELS.map((level) => (
-          <div className={css.levelRow} key={level.value} role="listitem" data-permission-level={level.value}>
-            <span>{level.label}</span>
-            <span className={css.rowHint}>{level.desc}</span>
-            <span>{`（${level.value}）`}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <Section
+      title="权限档"
+      hint="任务级命令，没有全局默认：在会话输入框的「权限」里切换，下一轮生效"
+      data={{ "data-field": "permission-levels" }}
+    >
+      <Card>
+        <div role="list" aria-label="权限档说明">
+          {PERMISSION_LEVELS.map((level) => (
+            <KitRow
+              key={level.value}
+              lead={<Dot tone={PERMISSION_TONE[level.value]} />}
+              label={level.label}
+              description={level.desc}
+              data={{ "data-permission-level": level.value }}
+            >
+              <span className={`${kit.mono} ${css.permValue}`}>{level.value}</span>
+            </KitRow>
+          ))}
+        </div>
+      </Card>
+      <p className={css.sectionFoot}>显式拦截规则始终优先于档位预设。</p>
+    </Section>
   );
 }
 
@@ -307,11 +371,11 @@ function ChangePasswordRow(): React.ReactNode {
 
   return (
     <>
-      <Row label="修改密码" hint="用于本机登录口令；修改后已签发的登录 token 仍有效直至过期">
+      <KitRow label="修改密码" description="本机登录口令；修改后已签发的登录 token 仍有效直至过期。">
         <Button variant="outline" size="sm" data-change-password-open="" onClick={() => setOpen(true)}>
           修改密码
         </Button>
-      </Row>
+      </KitRow>
       <ChangePasswordDialog open={open} onClose={() => setOpen(false)} />
     </>
   );
@@ -349,7 +413,9 @@ export function SettingsDialog({
         <header className={css.header}>
           <h2 className={css.dialogTitle}>设置</h2>
           <div className={css.headerActions}>
-            <Button variant="outline" size="sm" onClick={() => toast("配置文件：data/config.json（已复制路径）")}>打开配置文件</Button>
+            <Button variant="outline" size="sm" onClick={() => toast("配置文件：data/config.json（已复制路径）")}>
+              打开配置文件
+            </Button>
             <button type="button" className={css.closeBtn} aria-label="关闭" onClick={onClose}>
               <IconCloseOutlineRegular size={14} />
             </button>
@@ -376,7 +442,9 @@ export function SettingsDialog({
             {page === "runtime" ? <RuntimePage /> : null}
             {page === "intercept" ? <InterceptPage /> : null}
             {page === "notify" ? <NotifyPage /> : null}
-            {page === "plugins" ? <NotWiredPage title="内置插件" reason="后端暂未提供插件清单接口（/api/plugin* 路由不存在，已全量核查）" /> : null}
+            {page === "plugins" ? (
+              <NotWiredPage title="内置插件" reason="后端暂未提供插件清单接口（/api/plugin* 路由不存在，已全量核查）" />
+            ) : null}
             {page === "presets" ? <AgentPresetsPage /> : null}
             {page === "tools" ? <ToolsPage /> : null}
             {page === "mcp" ? <McpPage /> : null}
@@ -390,20 +458,26 @@ export function SettingsDialog({
 
 /** Proof of the data path: reads the real settings endpoint and reports the phase. */
 function ServerStatusRow({ server }: { server: ReturnType<typeof useSettings> }): React.ReactNode {
-  const label =
-    server.phase === "loading" ? "读取中…" : server.phase === "ready" ? "已连接" : "未连接（后端不可达）";
+  const label = server.phase === "loading" ? "读取中…" : server.phase === "ready" ? "已连接" : "未连接（后端不可达）";
+  const tone = server.phase === "ready" ? "success" : server.phase === "loading" ? "neutral" : "danger";
   return (
-    <div className={css.serverRow}>
-      <span className={css.serverLabel}>服务端设置</span>
-      <span className={css.serverValue}>{label}</span>
+    <div className={css.serverStrip} data-server-status={server.phase}>
+      <Dot tone={tone} pulse={server.phase === "loading"} />
+      <span className={css.serverStripLabel}>服务端 {label}</span>
       {server.data !== null ? (
-        <span className={css.serverDetail}>
-          流量采集 {server.data.traffic_capture ? "开" : "关"} · LLM 录制 {server.data.llm_record ? "开" : "关"} ·
-          搜索 {server.data.web_search_backend}
-        </span>
+        <Meta
+          className={css.serverStripMeta}
+          items={[
+            `流量采集 ${server.data.traffic_capture ? "开" : "关"}`,
+            `LLM 录制 ${server.data.llm_record ? "开" : "关"}`,
+            `搜索 ${server.data.web_search_backend}`,
+          ]}
+        />
       ) : null}
       {server.error !== null ? <span className={css.serverError}>{server.error}</span> : null}
-      <button type="button" className={css.serverRetry} onClick={server.reload}>重新读取</button>
+      <button type="button" className={css.serverRetry} onClick={server.reload}>
+        重新读取
+      </button>
     </div>
   );
 }
@@ -427,7 +501,7 @@ function ServerSwitches({ server }: { server: ReturnType<typeof useSettings> }):
       {rows.map((row) => {
         const value = server.data === null ? false : server.data[row.key] === true;
         return (
-          <Row key={row.key} label={row.label} hint={row.hint}>
+          <KitRow key={row.key} label={row.label} description={row.hint} data={{ "data-server-switch": row.key }}>
             <Switch
               checked={value}
               disabled={server.data === null}
@@ -438,10 +512,14 @@ function ServerSwitches({ server }: { server: ReturnType<typeof useSettings> }):
                 });
               }}
             />
-          </Row>
+          </KitRow>
         );
       })}
-      {failure !== null ? <div className={css.serverError}>保存失败：{failure}</div> : null}
+      {failure !== null ? (
+        <div className={css.cardNotice}>
+          <Notice tone="danger">保存失败：{failure}</Notice>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -449,11 +527,17 @@ function ServerSwitches({ server }: { server: ReturnType<typeof useSettings> }):
 /** Shown instead of controls whose backend does not exist yet. */
 function NotWiredPage({ title, reason }: { title: string; reason: string }): React.ReactNode {
   return (
-    <>
-      <h2 className={css.pageTitle}>{title}</h2>
-      <p className={css.pageLead}>此页尚未接入后端，因此不渲染任何控件。</p>
-      <p className={css.pageLead}>{reason}</p>
-    </>
+    <KitSettingsPage data={{ "data-settings-not-wired": "" }}>
+      <PageHead title={title} />
+      <Card>
+        <Empty
+          inCard
+          icon={<IconCordisPluginOutlineRegular size={18} />}
+          title="尚未接入后端"
+          text={`此页暂不渲染任何控件，避免出现无效开关。${reason}。`}
+        />
+      </Card>
+    </KitSettingsPage>
   );
 }
 
@@ -462,8 +546,6 @@ function ModelsPage(): React.ReactNode {
   const profiles = useLlmProfiles();
   const [adding, setAdding] = React.useState(false);
   const [preset, setPreset] = React.useState(false);
-  if (profiles.phase === "loading") return <p className={css.pageLead}>读取模型配置…</p>;
-  if (profiles.phase === "offline") return <p className={css.pageLead}>未连接后端（读不到模型配置）</p>;
   if (adding) {
     return (
       <ModelsAddProvider
@@ -480,34 +562,55 @@ function ModelsPage(): React.ReactNode {
       />
     );
   }
+  const active = profiles.profiles.find((profile) => profile.is_default);
   return (
-    <>
-      <h2 className={css.pageTitle}>模型</h2>
-      <p className={css.pageLead}>来自 GET /llm/profiles，共 {profiles.profiles.length} 个配置。</p>
-      {profiles.profiles.map((profile) => (
-        <ProfileCard key={profile.id} profile={profile} onSaved={profiles.reload} />
-      ))}
-      <button
-        type="button"
-        className={css.addProvider}
-        onClick={() => {
-          setPreset(true);
-          setAdding(true);
-        }}
-      >
-        <IconPlusOutlineRegular size={13} /> OpenCode 公开免费
-      </button>
-      <button
-        type="button"
-        className={css.addProvider}
-        onClick={() => {
-          setPreset(false);
-          setAdding(true);
-        }}
-      >
-        <IconPlusOutlineRegular size={13} /> 添加模型提供商
-      </button>
-    </>
+    <KitSettingsPage data={{ "data-settings-models": "" }}>
+      <PageHead
+        title="模型"
+        lead={
+          profiles.phase === "ready"
+            ? `${profiles.profiles.length} 个模型配置${active === undefined ? "" : `，当前生效：${active.name}`}。展开一项即可编辑连接、推理等级与重试。`
+            : "管理模型提供商与连接。"
+        }
+      />
+      {profiles.phase === "loading" ? (
+        <Card>
+          <Skeleton label="读取模型配置" />
+        </Card>
+      ) : null}
+      {profiles.phase === "offline" ? (
+        <Notice tone="danger" action={<Button variant="ghost" size="sm" onClick={profiles.reload}>重试</Button>}>
+          未连接后端（读不到模型配置）
+        </Notice>
+      ) : null}
+      {profiles.phase === "ready" ? (
+        <Section title="提供商" count={profiles.profiles.length}>
+          {profiles.profiles.map((profile) => (
+            <ProfileCard key={profile.id} profile={profile} onSaved={profiles.reload} />
+          ))}
+          <AddSlots>
+            <AddSlot
+              data={{ "data-models-add": "custom" }}
+              onClick={() => {
+                setPreset(false);
+                setAdding(true);
+              }}
+            >
+              <IconPlusOutlineRegular size={13} /> 添加模型提供商
+            </AddSlot>
+            <AddSlot
+              data={{ "data-models-add": "opencode" }}
+              onClick={() => {
+                setPreset(true);
+                setAdding(true);
+              }}
+            >
+              <IconPlusOutlineRegular size={13} /> OpenCode 公开免费
+            </AddSlot>
+          </AddSlots>
+        </Section>
+      ) : null}
+    </KitSettingsPage>
   );
 }
 
@@ -518,6 +621,16 @@ const PROFILE_FORMATS = [
 ] as const;
 
 const REASONING_LEVELS = ["off", "low", "medium", "high", "xhigh", "max"] as const;
+
+/** Display labels for the stored reasoning-effort values (stored values stay the wire strings). */
+const REASONING_LEVEL_LABEL: Record<(typeof REASONING_LEVELS)[number], string> = {
+  off: "关闭",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "XHigh",
+  max: "Max",
+};
 
 /**
  * One configured profile: a summary row that expands into its editor.
@@ -542,28 +655,77 @@ function ProfileCard({ profile, onSaved }: { profile: LLMProfile; onSaved: () =>
       .finally(() => setBusy(false));
   };
 
+  const formatLabel = PROFILE_FORMATS.find((item) => item.value === profile.format)?.label ?? profile.format;
   return (
-    <>
-      <Row label={profile.name} hint={`${profile.format} · ${profile.base_url ?? ""}`}>
-        <div className={css.inlineRow}>
-          <span className={css.providerId}>{profile.model}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label="设为当前生效"
-            disabled={busy || profile.is_default}
-            onClick={activate}
-          >
-            {profile.is_default ? "当前生效" : "设为当前生效"}
+    <Card selected={open} data={{ "data-model-profile": String(profile.id) }}>
+      <KitRow
+        lead={<ProviderGlyph name={profile.name} />}
+        label={profile.name}
+        labelAdornment={
+          profile.is_default ? (
+            <Badge tone="success">
+              <Dot tone="success" />
+              当前生效
+            </Badge>
+          ) : null
+        }
+        description={
+          <Meta
+            items={[
+              <span key="model" className={kit.mono}>
+                {profile.model}
+              </span>,
+              formatLabel,
+              profile.base_url === undefined || profile.base_url === "" ? null : (
+                <span key="url" className={kit.mono} title={profile.base_url}>
+                  {hostOf(profile.base_url)}
+                </span>
+              ),
+            ]}
+          />
+        }
+      >
+        {profile.is_default ? null : (
+          <Button variant="ghost" size="sm" aria-label="设为当前生效" disabled={busy} onClick={activate}>
+            设为生效
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setOpen((value) => !value)}>
-            {open ? "收起" : "编辑"}
-          </Button>
+        )}
+        <Button
+          variant={open ? "ghost" : "outline"}
+          size="sm"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+        >
+          {open ? "收起" : "编辑"}
+        </Button>
+      </KitRow>
+      {failure === null ? null : (
+        <div className={css.cardNotice}>
+          <Notice tone="danger">切换失败：{failure}</Notice>
         </div>
-      </Row>
-      {failure === null ? null : <p className={css.serverError}>切换失败：{failure}</p>}
+      )}
       {open ? <ProfileEditor profile={profile} onSaved={onSaved} /> : null}
-    </>
+    </Card>
+  );
+}
+
+/** Host part of an API base URL for the compact summary line. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    // Not an absolute URL (relative or malformed): show it as typed.
+    return url;
+  }
+}
+
+/** Monogram tile for a provider row: first letter of the profile name. */
+function ProviderGlyph({ name }: { name: string }): React.ReactNode {
+  const letter = (name.trim()[0] ?? "?").toUpperCase();
+  return (
+    <span className={css.providerGlyph} aria-hidden="true">
+      {letter}
+    </span>
   );
 }
 
@@ -744,153 +906,183 @@ function ProfileEditor({ profile, onSaved }: { profile: LLMProfile; onSaved: () 
       .finally(() => setSaving(false));
   };
 
-  const levelOptions = REASONING_LEVELS.map((level) => ({ value: level, label: level }));
+  const levelOptions = REASONING_LEVELS.map((level) => ({ value: level, label: REASONING_LEVEL_LABEL[level] }));
 
   return (
-    <div className={css.modelCard}>
-      <div className={css.providerHead}>
-        <span className={css.providerName}>{profile.name}</span>
-        <span className={css.providerId}>{profile.model}</span>
-      </div>
-
-      <label className={css.fieldLabel} htmlFor={`${uid}-provider`}>Provider ID</label>
-      <input
-        id={`${uid}-provider`}
-        className={css.textField}
-        value={name}
-        placeholder="acme-gateway"
-        aria-label="Provider ID"
-        disabled={saving}
-        onChange={(event) => setName(event.currentTarget.value)}
-      />
-      <p className={css.fieldHint}>该配置的唯一标识（不能与已有配置同名）；只用于区分配置，不写入模型请求。</p>
-
-      <label className={css.fieldLabel} htmlFor={`${uid}-base-url`}>API 地址</label>
-      <input
-        id={`${uid}-base-url`}
-        className={css.textField}
-        value={baseUrl}
-        placeholder="https://gateway.example/v1"
-        aria-label="API 地址"
-        disabled={saving}
-        onChange={(event) => setBaseUrl(event.currentTarget.value)}
-      />
-
-      <label className={css.fieldLabel} htmlFor={`${uid}-format`}>API 协议</label>
-      <SelectMenu id={`${uid}-format`} value={format} onChange={setFormat} options={PROFILE_FORMATS} disabled={saving} />
-
-      <label className={css.fieldLabel} htmlFor={`${uid}-key`}>API 密钥</label>
-      <input
-        id={`${uid}-key`}
-        className={css.textField}
-        type="password"
-        autoComplete="new-password"
-        value={apiKey}
-        placeholder="留空则保持已存储的密钥"
-        aria-label="API 密钥"
-        disabled={saving}
-        onChange={(event) => setApiKey(event.currentTarget.value)}
-      />
-      <p className={css.fieldHint}>{profile.api_key_hint ? `已存储：${profile.api_key_hint}` : "未存储密钥（keyless 端点可留空）"}</p>
-
-      <div className={css.catalogRow}>
-        <button type="button" className={css.linkBtn} aria-label="高级设置" aria-expanded={advanced} onClick={() => setAdvanced((value) => !value)}>
-          {advanced ? <IconChevronDownOutlineRegular size={12} /> : <IconChevronRightOutlineRegular size={12} />} 高级设置
-        </button>
-      </div>
-
-      {advanced ? (
-        <>
-          <label className={css.fieldLabel} htmlFor={`${uid}-model-id`}>模型 ID</label>
-          <input
-            id={`${uid}-model-id`}
-            className={css.textField}
-            value={model}
-            placeholder="模型 ID"
-            aria-label="模型 ID"
-            disabled={saving}
-            onChange={(event) => setModel(event.currentTarget.value)}
-          />
-
-          <div className={css.modelGrid}>
-            <label className={css.modelField} htmlFor={`${uid}-context`}>
-              <span>上下文窗口</span>
-              <input
-                id={`${uid}-context`}
-                className={css.textField}
-                value={contextWindow}
-                placeholder="1M"
-                aria-label="上下文窗口"
-                disabled={saving}
-                onChange={(event) => setContextWindow(event.currentTarget.value)}
-              />
-            </label>
-            <label className={css.modelField} htmlFor={`${uid}-max-tokens`}>
-              <span>最大输出 token 数</span>
-              <input
-                id={`${uid}-max-tokens`}
-                className={css.textField}
-                value={maxTokens}
-                placeholder="128K"
-                aria-label="最大输出 token 数"
-                disabled={saving}
-                onChange={(event) => setMaxTokens(event.currentTarget.value)}
-              />
-            </label>
-          </div>
-
-          <div className={css.reasonRow}>
-            <span className={css.typeLabel}>推理等级</span>
-          </div>
-          <div className={css.levelList}>
-            {levels.map((level, index) => (
-              <div key={`${level}-${String(index)}`} className={css.levelRow}>
-                <SelectMenu
-                  value={level}
-                  onChange={(next) => setLevels((prev) => prev.map((item, i) => (i === index ? next : item)))}
-                  options={levelOptions}
-                  disabled={saving}
-                />
-                <button
-                  type="button"
-                  className={css.iconBtnSmall}
-                  aria-label="删除档位"
-                  title="删除档位"
-                  disabled={saving}
-                  onClick={() => setLevels((prev) => prev.filter((_, i) => i !== index))}
-                >
-                  <IconTrashOutlineRegular size={13} />
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              className={css.addChip}
+    <Editor inCard data={{ "data-model-editor": String(profile.id) }}>
+      <EditorGroup title="连接">
+        <FieldGrid>
+          <Field
+            label="Provider ID"
+            htmlFor={`${uid}-provider`}
+            hint="唯一标识，只用于区分配置，不写入模型请求。"
+          >
+            <TextInput
+              id={`${uid}-provider`}
+              value={name}
+              placeholder="acme-gateway"
+              aria-label="Provider ID"
               disabled={saving}
-              onClick={() => setLevels((prev) => [...prev, "off"])}
+              onChange={(event) => setName(event.currentTarget.value)}
+            />
+          </Field>
+          <Field label="API 协议" htmlFor={`${uid}-format`}>
+            <SelectMenu
+              id={`${uid}-format`}
+              value={format}
+              onChange={setFormat}
+              options={PROFILE_FORMATS}
+              disabled={saving}
+            />
+          </Field>
+          <Field label="API 地址" htmlFor={`${uid}-base-url`} span>
+            <TextInput
+              id={`${uid}-base-url`}
+              mono
+              value={baseUrl}
+              placeholder="https://gateway.example/v1"
+              aria-label="API 地址"
+              disabled={saving}
+              onChange={(event) => setBaseUrl(event.currentTarget.value)}
+            />
+          </Field>
+          <Field
+            label="API 密钥"
+            htmlFor={`${uid}-key`}
+            span
+            hint={profile.api_key_hint ? `已存储：${profile.api_key_hint}；留空则保持不变。` : "未存储密钥（keyless 端点可留空）。"}
+          >
+            <TextInput
+              id={`${uid}-key`}
+              mono
+              type="password"
+              autoComplete="new-password"
+              value={apiKey}
+              placeholder="留空则保持已存储的密钥"
+              aria-label="API 密钥"
+              disabled={saving}
+              onChange={(event) => setApiKey(event.currentTarget.value)}
+            />
+          </Field>
+          <Field
+            label="模型"
+            htmlFor={`${uid}-model-id`}
+            span
+            hint="「获取模型」向该端点请求可用列表（Key 留空时用已存的 Key）；也可直接输入目录外的模型 ID。"
+          >
+            <ModelIdField
+              id={`${uid}-model-id`}
+              value={model}
+              onChange={setModel}
+              format={format}
+              baseUrl={baseUrl}
+              apiKey={apiKey}
+              proxy={extra.proxy}
+              profileId={Number(profile.id)}
+              disabled={saving}
+            />
+          </Field>
+        </FieldGrid>
+      </EditorGroup>
+
+      <EditorGroup>
+        <Disclosure
+          open={advanced}
+          onToggle={() => setAdvanced((value) => !value)}
+          label="高级设置"
+          hint="上下文 · 推理等级 · 代理 · 限速 · 重试"
+        >
+          高级设置
+        </Disclosure>
+
+        {advanced ? (
+          <>
+            <FieldGrid>
+              <Field label="上下文窗口" htmlFor={`${uid}-context`} hint="如 131072、256K、1M">
+                <TextInput
+                  id={`${uid}-context`}
+                  value={contextWindow}
+                  placeholder="1M"
+                  aria-label="上下文窗口"
+                  disabled={saving}
+                  onChange={(event) => setContextWindow(event.currentTarget.value)}
+                />
+              </Field>
+              <Field label="最大输出 token" htmlFor={`${uid}-max-tokens`} hint="如 8192、64K">
+                <TextInput
+                  id={`${uid}-max-tokens`}
+                  value={maxTokens}
+                  placeholder="128K"
+                  aria-label="最大输出 token 数"
+                  disabled={saving}
+                  onChange={(event) => setMaxTokens(event.currentTarget.value)}
+                />
+              </Field>
+            </FieldGrid>
+
+            <Field
+              label="推理等级"
+              hint="从左到右依次尝试，前一档失败时切到下一档；至少保留一个关闭以外的档位。"
             >
-              <IconPlusOutlineRegular size={12} /> 添加档位
-            </button>
-          </div>
+              <Chain label="推理等级失败切换顺序">
+                {levels.length === 0 ? <span className={css.chainEmpty}>未设置，按模型默认</span> : null}
+                {levels.map((level, index) => (
+                  <React.Fragment key={`${level}-${String(index)}`}>
+                    {index > 0 ? <ChainArrow /> : null}
+                    <ChainStep index={index + 1} data={{ "data-reasoning-level": level }}>
+                      <SelectMenu
+                        value={level}
+                        onChange={(next) => setLevels((prev) => prev.map((item, i) => (i === index ? next : item)))}
+                        options={levelOptions}
+                        disabled={saving}
+                        className={css.chainSelect}
+                        ariaLabel={`第 ${String(index + 1)} 档推理等级`}
+                      />
+                      <button
+                        type="button"
+                        className={css.chainRemove}
+                        aria-label="删除档位"
+                        title="删除档位"
+                        disabled={saving}
+                        onClick={() => setLevels((prev) => prev.filter((_, i) => i !== index))}
+                      >
+                        <IconCloseOutlineRegular size={10} />
+                      </button>
+                    </ChainStep>
+                  </React.Fragment>
+                ))}
+                <ChainAdd disabled={saving} onClick={() => setLevels((prev) => [...prev, "off"])}>
+                  <IconPlusOutlineRegular size={12} /> 添加档位
+                </ChainAdd>
+              </Chain>
+            </Field>
 
-          <ModelProfileExtraFields
-            value={extra}
-            onChange={(patch) => setExtra((prev) => ({ ...prev, ...patch }))}
-            disabled={busy}
-            format={format}
-            uid={uid}
-          />
-        </>
-      ) : null}
+            <ModelProfileExtraFields
+              value={extra}
+              onChange={(patch) => setExtra((prev) => ({ ...prev, ...patch }))}
+              disabled={busy}
+              format={format}
+              uid={uid}
+            />
+          </>
+        ) : null}
+      </EditorGroup>
 
-      {failure === null ? null : <div className={css.serverError}>操作失败：{failure}</div>}
-      {probe === null ? null : <p className={css.fieldHint}>连通：{probe}</p>}
+      {failure === null ? null : <Notice tone="danger">操作失败：{failure}</Notice>}
+      {probe === null ? null : (
+        <Notice tone="success" data={{ "data-model-probe": "ok" }}>
+          连通：{probe}
+        </Notice>
+      )}
 
-      <div className={css.cardActions}>
-        <button type="button" className={css.dangerBtn} aria-label="删除模型" disabled={saving} onClick={remove}>
-          删除模型
-        </button>
-        <Button variant="outline" size="sm" aria-label="撤销改动" disabled={busy || !dirty} onClick={revert}>
+      <EditorActions
+        start={
+          <button type="button" className={css.dangerBtn} aria-label="删除模型" disabled={saving} onClick={remove}>
+            删除模型
+          </button>
+        }
+      >
+        <Button variant="ghost" size="sm" aria-label="撤销改动" disabled={busy || !dirty} onClick={revert}>
           撤销改动
         </Button>
         <Button variant="outline" size="sm" aria-label="测试连接" disabled={busy} onClick={test}>
@@ -899,8 +1091,8 @@ function ProfileEditor({ profile, onSaved }: { profile: LLMProfile; onSaved: () 
         <Button variant="primary" size="sm" disabled={busy || !dirty} onClick={save}>
           保存
         </Button>
-      </div>
-    </div>
+      </EditorActions>
+    </Editor>
   );
 }
 
@@ -937,12 +1129,10 @@ function TextSettingBlock({
   }, [value]);
   const locked = disabled === true || saving;
   return (
-    <div className={css.block}>
-      <div className={css.rowLabel}>{label}</div>
-      <div className={css.rowHint}>{hint}</div>
-      <div className={css.blockControl}>
-        <input
-          className={css.textField}
+    <KitRow label={label} description={failure === null ? hint : <span className={css.inlineError}>保存失败：{failure}</span>} stacked>
+      <div className={css.inlineSave}>
+        <TextInput
+          mono
           type={secret === true ? "password" : "text"}
           autoComplete={secret === true ? "new-password" : "off"}
           aria-label={label}
@@ -954,7 +1144,7 @@ function TextSettingBlock({
         <Button
           variant="outline"
           size="sm"
-          disabled={locked || draft === ""}
+          disabled={locked || draft === "" || draft === value}
           onClick={() => {
             setSaving(true);
             setFailure(null);
@@ -971,50 +1161,78 @@ function TextSettingBlock({
               .finally(() => setSaving(false));
           }}
         >
-          保存
+          {saving ? "保存中…" : "保存"}
         </Button>
       </div>
-      {failure === null ? null : <div className={css.serverError}>保存失败：{failure}</div>}
-    </div>
+    </KitRow>
   );
 }
 
 /** 运行时：GET /settings 的真实字段；新增项走暂存表单，代理与 Key 沿用就地写回。 */
 function RuntimePage(): React.ReactNode {
   const server = useSettings();
-  if (server.phase === "loading") return <p className={css.pageLead}>读取运行时设置…</p>;
-  if (server.phase === "offline") return <p className={css.pageLead}>未连接后端（读不到运行时设置）</p>;
+  const head = <PageHead title="运行时" lead="任务并发、网络出口、搜索与解释器。改动经「保存修改」一次写回。" />;
+  if (server.phase === "loading") {
+    return (
+      <KitSettingsPage>
+        {head}
+        <Card>
+          <Skeleton label="读取运行时设置" />
+        </Card>
+      </KitSettingsPage>
+    );
+  }
+  if (server.phase === "offline") {
+    return (
+      <KitSettingsPage>
+        {head}
+        <Notice tone="danger" action={<Button variant="ghost" size="sm" onClick={server.reload}>重试</Button>}>
+          未连接后端（读不到运行时设置）
+        </Notice>
+      </KitSettingsPage>
+    );
+  }
   const backend = server.data?.web_search_backend ?? "";
   const braveConfigured = server.data?.brave_key_set === true;
-  const show = (label: string, value: unknown): React.ReactNode => (
-    <Row key={label} label={label}>
-      <span>{String(value ?? "—")}</span>
-    </Row>
-  );
+  const concurrencyOn = server.data?.task_concurrency_enabled === true;
   return (
-    <>
-      <h2 className={css.pageTitle}>运行时</h2>
-      <p className={css.pageLead}>来自 GET /settings 的真实字段；改动经「保存修改」写回 PUT /settings。</p>
-      {show("任务并发开关", server.data?.task_concurrency_enabled)}
-      {show("任务并发上限", server.data?.task_concurrency_limit)}
-      <TextSettingBlock
-        label="全局代理"
-        hint="所有 Agent 的目标流量经此代理出网；支持 http / https / socks5，可带 user:pass 认证。留空=直连。"
-        placeholder="socks5://user:pass@host:1080 或 http://host:port"
-        value={server.data?.global_proxy ?? ""}
-        apply={(next) => server.save({ global_proxy: next })}
-      />
-      <TextSettingBlock
-        label="Brave Search API Key"
-        hint={`免费额度约 2,000 次/月。未配置 Key 时搜索工具不会启用。当前 ${backend === "" ? "未知" : backend} · ${braveConfigured ? "已配置（值不回显）" : "未配置"}`}
-        placeholder="输入 Brave API Key"
-        value=""
-        secret
-        clearOnSuccess
-        apply={(next) => server.save({ brave_search_api_key: next })}
-      />
+    <KitSettingsPage data={{ "data-settings-runtime": "" }}>
+      {head}
+      <Section title="任务并发" hint="只读，来自服务端配置">
+        <Card>
+          <KitRow label="任务并发" description="同一时间允许多个任务并行运行。">
+            <span className={css.poolState}>
+              <Dot tone={concurrencyOn ? "success" : "neutral"} />
+              {concurrencyOn ? "开启" : "关闭"}
+            </span>
+          </KitRow>
+          <KitRow label="并发上限" description="同时运行的任务数上限。">
+            <span className={`${css.poolState} ${kit.numeric}`}>{String(server.data?.task_concurrency_limit ?? "—")}</span>
+          </KitRow>
+        </Card>
+      </Section>
+      <Section title="网络出口">
+        <Card>
+          <TextSettingBlock
+            label="全局代理"
+            hint="所有 Agent 的目标流量经此代理出网（http / https / socks5，可带 user:pass）；留空直连。"
+            placeholder="socks5://user:pass@host:1080"
+            value={server.data?.global_proxy ?? ""}
+            apply={(next) => server.save({ global_proxy: next })}
+          />
+          <TextSettingBlock
+            label="Brave Search API Key"
+            hint={`免费额度约 2,000 次/月；当前搜索来源 ${backend === "" ? "未知" : backend} · ${braveConfigured ? "Key 已配置（不回显）" : "Key 未配置"}。`}
+            placeholder="输入 Brave API Key"
+            value=""
+            secret
+            clearOnSuccess
+            apply={(next) => server.save({ brave_search_api_key: next })}
+          />
+        </Card>
+      </Section>
       <RuntimeSection server={server} />
-    </>
+    </KitSettingsPage>
   );
 }
 
@@ -1025,8 +1243,26 @@ function LlmPoolPage(): React.ReactNode {
   const [saving, setSaving] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  if (pool.phase === "loading" || server.phase === "loading") return <p className={css.pageLead}>读取池状态…</p>;
-  if (pool.phase === "offline" || server.phase === "offline") return <p className={css.pageLead}>未连接后端（读不到池状态）</p>;
+  if (pool.phase === "loading" || server.phase === "loading") {
+    return (
+      <KitSettingsPage>
+        <PageHead title="LLM 池" lead="故障转移链与熔断状态。" />
+        <Card>
+          <Skeleton label="读取池状态" />
+        </Card>
+      </KitSettingsPage>
+    );
+  }
+  if (pool.phase === "offline" || server.phase === "offline") {
+    return (
+      <KitSettingsPage>
+        <PageHead title="LLM 池" lead="故障转移链与熔断状态。" />
+        <Notice tone="danger" action={<Button variant="ghost" size="sm" onClick={() => { pool.reload(); server.reload(); }}>重试</Button>}>
+          未连接后端（读不到池状态）
+        </Notice>
+      </KitSettingsPage>
+    );
+  }
   const data = server.data as unknown as Record<string, unknown>;
   const enabled = data["llm_pool_enabled"] === true;
   const bindFallback = data["llm_pool_bind_fallback"] === true;
@@ -1066,61 +1302,113 @@ function LlmPoolPage(): React.ReactNode {
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
   };
 
+  const chain = pool.pool?.chain ?? [];
+  const tripped = chain.filter((link) => link.state !== "ok").length;
   return (
-    <>
-      <h2 className={css.pageTitle}>LLM 池</h2>
-      <p className={css.pageLead}>来自 GET /llm/pool 与 GET /settings 的真实状态。</p>
-      <Row label="启用故障转移池" hint="链路里前一个模型失败时自动切到下一个">
-        <Switch
-          checked={enabled}
-          disabled={saving !== null}
-          onChange={(next) => save({ llm_pool_enabled: next })}
-          label="启用故障转移池"
-        />
-      </Row>
-      <Row label="绑定回退配置" hint="切换到回退模型时保持同一 profile 上下文">
-        <Switch
-          checked={bindFallback}
-          disabled={saving !== null}
-          onChange={(next) => save({ llm_pool_bind_fallback: next })}
-          label="绑定回退配置"
-        />
-      </Row>
-      <div className={css.poolHead}>
-        <span className={css.rowLabel}>故障转移链</span>
-        <button type="button" className={css.linkBtn} style={{ whiteSpace: "nowrap" }} onClick={resetAll}>
-          <IconRefreshOutlineRegular size={12} /> 全部恢复
-        </button>
-      </div>
-      <Row label="池状态">
-        <span>{enabled ? "已启用" : "未启用"} · 链路 {pool.pool?.chain.length ?? 0} 个模型</span>
-      </Row>
-      {pool.pool?.chain.map((link) => (
-        <Row
-          key={link.profile_id}
-          label={link.name}
-          hint={link.model + " · " + link.format + " · 优先级 " + link.priority}
-        >
-          <div className={css.inlineRow}>
-            <span>
-              {link.active ? "当前" : "备用"} · {link.state} · 失败 {link.fails} 次
-              {link.excluded ? " · 已排除" : ""}
-            </span>
-            <button
-              type="button"
-              className={css.iconBtnSmall}
-              aria-label="立即恢复"
-              title="立即恢复：清除熔断并让下一次调用立刻重试"
-              disabled={link.state === "ok"}
-              onClick={() => reset(link.profile_id)}
-            >
-              <IconRefreshOutlineRegular size={13} />
-            </button>
-          </div>
-        </Row>
-      ))}
-      {error === null ? null : <p className={css.pageLead}>保存失败：{error}</p>}
+    <KitSettingsPage data={{ "data-settings-llm-pool": "" }}>
+      <PageHead
+        title="LLM 池"
+        lead="前一个模型失败时按链路顺序自动切到下一个；熔断的成员可以手动立即恢复。"
+        adornment={
+          <Badge tone={enabled ? "success" : "neutral"}>{enabled ? "已启用" : "未启用"}</Badge>
+        }
+      />
+
+      <Section title="策略">
+        <Card>
+          <KitRow label="启用故障转移池" description="链路里前一个模型失败时自动切到下一个。">
+            <Switch
+              checked={enabled}
+              disabled={saving !== null}
+              onChange={(next) => save({ llm_pool_enabled: next })}
+              label="启用故障转移池"
+            />
+          </KitRow>
+          <KitRow label="绑定回退配置" description="切换到回退模型时保持同一 profile 上下文。">
+            <Switch
+              checked={bindFallback}
+              disabled={saving !== null}
+              onChange={(next) => save({ llm_pool_bind_fallback: next })}
+              label="绑定回退配置"
+            />
+          </KitRow>
+        </Card>
+      </Section>
+
+      <Section
+        title="故障转移链"
+        count={chain.length}
+        hint={tripped > 0 ? `${String(tripped)} 个成员处于熔断` : "全部正常"}
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<IconRefreshOutlineRegular size={12} />}
+            disabled={tripped === 0}
+            onClick={resetAll}
+          >
+            全部恢复
+          </Button>
+        }
+      >
+        <Card>
+          {chain.length === 0 ? (
+            <Empty inCard title="链路为空" text="在 设置 → 模型 里添加提供商后，它们会按优先级进入这条链。" />
+          ) : (
+            chain.map((link, index) => {
+              const ok = link.state === "ok";
+              return (
+                <KitRow
+                  key={link.profile_id}
+                  data={{ "data-pool-link": String(link.profile_id) }}
+                  lead={
+                    <span className={link.active ? `${css.poolStep} ${css.poolStepActive}` : css.poolStep} aria-hidden="true">
+                      {index + 1}
+                    </span>
+                  }
+                  label={link.name}
+                  labelAdornment={
+                    <>
+                      {link.active ? <Badge tone="info">当前</Badge> : null}
+                      {link.excluded ? <Badge>已排除</Badge> : null}
+                    </>
+                  }
+                  description={
+                    <Meta
+                      items={[
+                        <span key="m" className={kit.mono}>
+                          {link.model}
+                        </span>,
+                        link.format,
+                        `优先级 ${String(link.priority)}`,
+                      ]}
+                    />
+                  }
+                >
+                  <span className={css.poolState}>
+                    <Dot tone={ok ? "success" : "danger"} />
+                    {ok ? "正常" : link.state}
+                    {link.fails > 0 ? <span className={css.poolFails}>失败 {link.fails}</span> : null}
+                  </span>
+                  <button
+                    type="button"
+                    className={css.iconBtnSmall}
+                    aria-label="立即恢复"
+                    title="立即恢复：清除熔断并让下一次调用立刻重试"
+                    disabled={ok}
+                    onClick={() => reset(link.profile_id)}
+                  >
+                    <IconRefreshOutlineRegular size={13} />
+                  </button>
+                </KitRow>
+              );
+            })
+          )}
+        </Card>
+        {error === null ? null : <Notice tone="danger">保存失败：{error}</Notice>}
+      </Section>
+
       <LlmRetrySection />
-    </>
+    </KitSettingsPage>
   );
 }

@@ -5,16 +5,42 @@
  * 旧页面依据：ARTEX/web/src/app/(main)/function/tasks/detail/_tabs/overview-tab.tsx:316-348（重跑）、
  * sessions-tab.tsx:586-632（暂停/恢复/取消）、sessions-tab.tsx:1534（给 worker 发消息）。
  * DSH 依据：DSH 无意图页，按「会话视图 tab 扩展」实现（100-实施计划总表 §4.2）。
+ *
+ * D2 版式：PageHead（刷新 + 重跑全部受阻）→ 「意图」Section（状态 FilterBar，每项带条数）→
+ * 列表卡（每条意图一行：状态点 + 标题 + 状态徽标 + 元信息；行尾一个状态动作 + ⋯ 菜单），
+ * 「发消息」在行下方展开为内嵌输入条。写入行为与 data-* 钩子不变。
  */
 import { type ReactNode, useMemo, useState } from "react";
 
 import type { Task, TaskNode } from "@/lib/types";
 import { toast } from "@/components/v2/settings/Toast";
+import {
+  Badge,
+  Card,
+  Dot,
+  Empty,
+  FilterBar,
+  IconButton,
+  type KitTone,
+  kit,
+  Meta,
+  Notice,
+  Page,
+  PageHead,
+  Row,
+  Section,
+  Skeleton,
+} from "@/components/v2/design/Kit";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Input } from "@/vendor/dsh/primitives/Input";
+import { Menu, MenuItemButton } from "@/vendor/dsh/primitives/Menu";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
-import { Tag } from "@/vendor/dsh/primitives/Tag";
+import {
+  IconEllipsisOutlineRegular,
+  IconGoalOutlineRegular,
+  IconPaperPlaneOutlineRegular,
+  IconRefreshOutlineRegular,
+} from "@/vendor/dsh/primitives/icons/index";
 import {
   controlIntent,
   isRerunnable,
@@ -39,17 +65,16 @@ const FILTER_OPTIONS: readonly { value: StateFilter; label: string }[] = [
 ];
 
 /**
- * 状态对应的 Tag 色调。
+ * 状态对应的语义色调（点与徽标共用）。
  * @param state - 后端意图状态。
- * @returns Tag 的 tone。
+ * @returns kit 色调。
  */
-function stateTone(state: string): "neutral" | "info" | "success" | "warning" | "danger" | "outline" {
+function stateTone(state: string): KitTone {
   if (state === "done") return "success";
   if (state === "running") return "info";
   if (state === "blocked") return "danger";
   if (state === "paused" || state === "stopped") return "warning";
-  if (state === "open") return "neutral";
-  return "outline";
+  return "neutral";
 }
 
 /**
@@ -83,12 +108,22 @@ export function IntentsView({ task }: { task: Task }): ReactNode {
   const [messageFor, setMessageFor] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
 
   const rows = useMemo(
     () => state.intents.filter((row) => matchesFilter(row.state, filter)),
     [state.intents, filter],
   );
   const blockedCount = useMemo(() => state.intents.filter((row) => row.state === "blocked").length, [state.intents]);
+  const filterCounts = useMemo(() => {
+    const counts: Record<StateFilter, number> = { all: 0, running: 0, blocked: 0, done: 0, other: 0 };
+    for (const row of state.intents) {
+      for (const option of FILTER_OPTIONS) {
+        if (matchesFilter(row.state, option.value)) counts[option.value] += 1;
+      }
+    }
+    return counts;
+  }, [state.intents]);
 
   /** 写操作统一入口：置忙、失败提示、成功后重读。 */
   const runControl = async (
@@ -170,184 +205,271 @@ export function IntentsView({ task }: { task: Task }): ReactNode {
       });
   };
 
+  /**
+   * 行尾的状态动作：重跑 / 暂停 / 恢复，三者互斥，最多一个。
+   * @param row - 意图行。
+   * @returns 动作按钮或 null。
+   */
+  const stateAction = (row: TaskNode): ReactNode => {
+    const busy = busyId === row.id;
+    if (isRerunnable(row.state)) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          data-intent-rerun=""
+          onClick={() => {
+            void runControl(row, "重跑", () => rerunIntent(task.id, row.id), `意图 #${row.id} 已置回待派发`);
+          }}
+        >
+          重跑
+        </Button>
+      );
+    }
+    if (row.state === "running" || row.state === "open") {
+      return (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          data-intent-pause=""
+          onClick={() => {
+            void runControl(row, "暂停", () => controlIntent(task.id, row.id, "pause"), `意图 #${row.id} 已暂停`);
+          }}
+        >
+          暂停
+        </Button>
+      );
+    }
+    if (row.state === "paused") {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          data-intent-resume=""
+          onClick={() => {
+            void runControl(row, "恢复", () => controlIntent(task.id, row.id, "resume"), `意图 #${row.id} 已恢复`);
+          }}
+        >
+          恢复
+        </Button>
+      );
+    }
+    return null;
+  };
+
+  const loading = state.phase === "loading";
+
   return (
-    <div className={css.wrap} data-intents-view="">
-      <div className={css.toolbar}>
-        <SegmentedControl
-          id="intents-filter"
-          label="按状态筛选意图"
-          value={filter}
-          options={FILTER_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
-          onChange={(next) => setFilter(next as StateFilter)}
-        />
-        <span className={css.count} data-intents-count={rows.length}>
-          {rows.length} 条
-        </span>
-        <div className={css.toolbarRight}>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={blockedCount === 0 || specialBusy !== null}
-            title={blockedCount === 0 ? "当前没有受阻的意图" : "把所有受阻意图置回待派发"}
-            data-intents-rerun-blocked=""
-            onClick={runRerunAll}
+    <Page data={{ "data-intents-view": "" }}>
+      <PageHead
+        title="意图"
+        lead="planner 拆解目标后派给 worker 的执行单元。可以重跑受阻项、暂停或恢复运行中的意图，也能直接给 worker 递一句话。"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={blockedCount === 0 || specialBusy !== null}
+              title={blockedCount === 0 ? "当前没有受阻的意图" : "把所有受阻意图置回待派发"}
+              data-intents-rerun-blocked=""
+              onClick={runRerunAll}
+            >
+              {specialBusy === "rerunAll" ? "重跑中…" : blockedCount > 0 ? `重跑全部受阻 · ${blockedCount}` : "重跑全部受阻"}
+            </Button>
+            <IconButton label="刷新" spinning={loading} onClick={state.reload} data-intents-refresh="">
+              <IconRefreshOutlineRegular size={14} />
+            </IconButton>
+          </>
+        }
+      />
+
+      <Section
+        title="意图列表"
+        count={
+          <span data-intents-count={rows.length}>
+            {rows.length} 条
+          </span>
+        }
+        actions={
+          <FilterBar
+            id="intents-filter"
+            label="按状态筛选意图"
+            value={filter}
+            options={FILTER_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+              count: state.phase === "ready" ? filterCounts[option.value] : undefined,
+            }))}
+            onChange={(next) => setFilter(next as StateFilter)}
+          />
+        }
+      >
+        {state.phase === "offline" ? (
+          <Notice
+            tone="danger"
+            action={
+              <Button variant="ghost" size="sm" onClick={state.reload}>
+                重试
+              </Button>
+            }
           >
-            {specialBusy === "rerunAll" ? "重跑中…" : `重跑全部受阻（${blockedCount}）`}
-          </Button>
-          <Button variant="outline" size="sm" onClick={state.reload} data-intents-refresh="">
-            刷新
-          </Button>
-        </div>
-      </div>
+            意图读取失败：{state.error}
+          </Notice>
+        ) : null}
 
-      {state.phase === "loading" ? <div className={css.state}>加载意图…</div> : null}
+        {loading && state.intents.length === 0 ? (
+          <Card>
+            <Skeleton label="加载意图" />
+          </Card>
+        ) : null}
 
-      {state.phase === "offline" ? (
-        <div className={css.stateError} role="alert">
-          <span>意图读取失败：{state.error}</span>
-          <Button variant="outline" size="sm" onClick={state.reload}>
-            重试
-          </Button>
-        </div>
-      ) : null}
+        {state.phase === "ready" && state.intents.length === 0 ? (
+          <Card>
+            <Empty
+              inCard
+              icon={<IconGoalOutlineRegular size={18} />}
+              title="还没有意图"
+              text="让 planner 拆解目标后，意图会出现在这里，并实时反映 worker 的执行状态。"
+            />
+          </Card>
+        ) : null}
 
-      {state.phase === "ready" && state.intents.length === 0 ? (
-        <p className={css.empty}>这个任务还没有意图。让 planner 拆解目标后，意图会出现在这里。</p>
-      ) : null}
+        {state.phase === "ready" && state.intents.length > 0 && rows.length === 0 ? (
+          <Card>
+            <Empty
+              inCard
+              title="当前筛选下没有意图"
+              text="换一个状态，或回到全部查看。"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => setFilter("all")}>
+                  查看全部
+                </Button>
+              }
+            />
+          </Card>
+        ) : null}
 
-      {state.phase === "ready" && state.intents.length > 0 && rows.length === 0 ? (
-        <p className={css.empty}>当前筛选下没有意图。</p>
-      ) : null}
-
-      {rows.length > 0 ? (
-        <ul className={css.list}>
-          {rows.map((row) => (
-            <li key={row.id} className={css.row} data-intent-id={row.id} data-state={row.state}>
-              <div className={css.rowHead}>
-                <span className={css.title} title={intentTitle(row.payload, row.id)}>
-                  {intentTitle(row.payload, row.id)}
-                </span>
-                <Tag tone={stateTone(row.state)}>{intentStateLabel(row.state)}</Tag>
-                <span className={css.rowMeta}>
-                  #{row.id}
-                  {row.priority > 0 ? ` · 优先级 ${row.priority}` : ""}
-                  {row.ts === "" ? "" : ` · ${sessionTime(row.ts)}`}
-                </span>
-              </div>
-              <div className={css.actions}>
-                {isRerunnable(row.state) ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busyId === row.id}
-                    data-intent-rerun=""
-                    onClick={() => {
-                      void runControl(
-                        row,
-                        "重跑",
-                        () => rerunIntent(task.id, row.id),
-                        `意图 #${row.id} 已置回待派发`,
-                      );
-                    }}
+        {rows.length > 0 ? (
+          <Card className={css.list}>
+            {rows.map((row) => {
+              const title = intentTitle(row.payload, row.id);
+              const tone = stateTone(row.state);
+              const busy = busyId === row.id;
+              const live = row.state !== "done" && row.state !== "deleted";
+              const composing = messageFor === row.id;
+              return (
+                <div key={row.id} className={css.item} data-intent-id={row.id} data-state={row.state}>
+                  <Row
+                    lead={<Dot tone={tone} pulse={row.state === "running"} />}
+                    label={<span title={title}>{title}</span>}
+                    labelAdornment={<Badge tone={tone}>{intentStateLabel(row.state)}</Badge>}
+                    description={
+                      <Meta
+                        items={[
+                          <span key="id" className={kit.mono}>
+                            #{row.id}
+                          </span>,
+                          row.priority > 0 ? `优先级 ${row.priority}` : null,
+                          row.ts === "" ? null : sessionTime(row.ts),
+                          row.delete_reason === undefined || row.delete_reason === "" ? null : (
+                            <span key="reason" className={css.reason} title={row.delete_reason}>
+                              删除原因：{row.delete_reason}
+                            </span>
+                          ),
+                        ]}
+                      />
+                    }
                   >
-                    重跑
-                  </Button>
-                ) : null}
-                {row.state === "running" || row.state === "open" ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busyId === row.id}
-                    data-intent-pause=""
-                    onClick={() => {
-                      void runControl(
-                        row,
-                        "暂停",
-                        () => controlIntent(task.id, row.id, "pause"),
-                        `意图 #${row.id} 已暂停`,
-                      );
-                    }}
-                  >
-                    暂停
-                  </Button>
-                ) : null}
-                {row.state === "paused" ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busyId === row.id}
-                    data-intent-resume=""
-                    onClick={() => {
-                      void runControl(
-                        row,
-                        "恢复",
-                        () => controlIntent(task.id, row.id, "resume"),
-                        `意图 #${row.id} 已恢复`,
-                      );
-                    }}
-                  >
-                    恢复
-                  </Button>
-                ) : null}
-                {row.state !== "done" && row.state !== "deleted" ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busyId === row.id}
-                      data-intent-message-toggle=""
-                      onClick={() => {
-                        setMessageFor(messageFor === row.id ? null : row.id);
-                        setMessage("");
-                      }}
-                    >
-                      发消息
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busyId === row.id}
-                      data-intent-cancel=""
-                      onClick={() => {
-                        setCancelTarget(row);
-                        setCancelReason("");
-                        setCancelMode("soft");
-                      }}
-                    >
-                      取消意图
-                    </Button>
-                  </>
-                ) : null}
-              </div>
-              {messageFor === row.id ? (
-                <div className={css.messageRow}>
-                  <Input
-                    value={message}
-                    placeholder="给这个 worker 的下一步指令"
-                    data-intent-message-input={row.id}
-                    onChange={(event) => setMessage(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        submitMessage(row);
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={sending || message.trim() === ""}
-                    data-intent-message-send=""
-                    onClick={() => submitMessage(row)}
-                  >
-                    {sending ? "发送中…" : "发送"}
-                  </Button>
+                    {stateAction(row)}
+                    {live ? (
+                      <Menu
+                        open={menuFor === row.id}
+                        onClose={() => setMenuFor(null)}
+                        align="end"
+                        portal
+                        anchor={
+                          <IconButton
+                            label="更多操作"
+                            aria-haspopup="menu"
+                            aria-expanded={menuFor === row.id}
+                            disabled={busy}
+                            data-intent-more=""
+                            onClick={() => setMenuFor(menuFor === row.id ? null : row.id)}
+                          >
+                            <IconEllipsisOutlineRegular size={15} />
+                          </IconButton>
+                        }
+                      >
+                        <MenuItemButton
+                          data-intent-message-toggle=""
+                          onSelect={() => {
+                            setMenuFor(null);
+                            setMessageFor(composing ? null : row.id);
+                            setMessage("");
+                          }}
+                        >
+                          {composing ? "收起消息框" : "给 worker 发消息"}
+                        </MenuItemButton>
+                        <MenuItemButton
+                          danger
+                          separatorBefore
+                          data-intent-cancel=""
+                          onSelect={() => {
+                            setMenuFor(null);
+                            setCancelTarget(row);
+                            setCancelReason("");
+                            setCancelMode("soft");
+                          }}
+                        >
+                          取消意图…
+                        </MenuItemButton>
+                      </Menu>
+                    ) : null}
+                  </Row>
+                  {composing ? (
+                    <div className={css.composer}>
+                      <Input
+                        className={css.composerInput}
+                        icon={<IconPaperPlaneOutlineRegular size={14} />}
+                        value={message}
+                        placeholder="给这个 worker 的下一步指令，回车发送"
+                        aria-label={`给意图 #${row.id} 的 worker 发消息`}
+                        autoFocus
+                        data-intent-message-input={row.id}
+                        onChange={(event) => setMessage(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            submitMessage(row);
+                          } else if (event.key === "Escape") {
+                            event.preventDefault();
+                            setMessageFor(null);
+                          }
+                        }}
+                      />
+                      <Button variant="ghost" size="sm" disabled={sending} onClick={() => setMessageFor(null)}>
+                        取消
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={sending || message.trim() === ""}
+                        data-intent-message-send=""
+                        onClick={() => submitMessage(row)}
+                      >
+                        {sending ? "发送中…" : "发送"}
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+              );
+            })}
+          </Card>
+        ) : null}
+      </Section>
 
       <Modal
         open={cancelTarget !== null}
@@ -379,7 +501,7 @@ export function IntentsView({ task }: { task: Task }): ReactNode {
           <p className={css.confirmText}>
             {cancelTarget === null ? "" : `#${cancelTarget.id} ${intentTitle(cancelTarget.payload, cancelTarget.id)}`}
           </p>
-          <SegmentedControl
+          <FilterBar
             id="intent-cancel-mode"
             label="取消方式"
             value={cancelMode}
@@ -401,6 +523,6 @@ export function IntentsView({ task }: { task: Task }): ReactNode {
           </label>
         </div>
       </Modal>
-    </div>
+    </Page>
   );
 }

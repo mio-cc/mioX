@@ -19,7 +19,7 @@ import * as React from "react";
 
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Switch } from "@/vendor/dsh/primitives/Switch";
-import { SettingsSecretField, SettingsValueField } from "@/vendor/dsh/primitives/settings-form/fields";
+import { Badge, Card, EditorActions, Notice, Row as KitRow, Section, TextInput } from "@/components/v2/design/Kit";
 
 import type { Settings } from "@/lib/types";
 import { detectPython, testWebSearch, type SettingsState } from "@/v2/data/settings";
@@ -78,15 +78,9 @@ function ToggleRow(props: {
   onChange: (next: boolean) => void;
 }): React.ReactNode {
   return (
-    <div className={css.row} data-field={props.field}>
-      <div className={css.rowText}>
-        <div className={css.rowLabel}>{props.label}</div>
-        <div className={css.rowHint}>{props.hint}</div>
-      </div>
-      <div className={css.rowControl}>
-        <Switch checked={props.checked} label={props.label} onChange={props.onChange} />
-      </div>
-    </div>
+    <KitRow label={props.label} description={props.hint} data={{ "data-field": props.field }}>
+      <Switch checked={props.checked} label={props.label} onChange={props.onChange} />
+    </KitRow>
   );
 }
 
@@ -184,137 +178,162 @@ export function RuntimeSection({ server }: { server: SettingsState }): React.Rea
     }
   };
 
+  const probeOk = probeResult !== null && probeResult.startsWith("测试成功");
   return (
-    <section aria-label="运行时设置" data-section="runtime" className={own.section}>
-      <ToggleRow
-        field="noa-compaction"
-        label="上下文压缩（noa）"
-        hint="实验功能：由模型接管上下文压缩，取代内置 compaction；对之后启动的运行生效。"
-        checked={draft.noa}
-        onChange={(next) => setDraft((current) => ({ ...current, noa: next }))}
-      />
-      <div data-field="workers">
-        <SettingsValueField
-          id="runtime-workers"
-          label="并发工作数"
-          hint="每个任务并发运行的工作 agent 数量（默认 3）；对之后启动的任务生效。"
-          text={draft.workers}
-          numeric
-          placeholder="3"
-          overridden={draft.workers !== "" && draft.workers !== String(data.workers ?? "")}
-          invalid={invalid}
-          overriddenLabel="已修改"
-          resetLabel="还原"
-          invalidLabel="并发数必须是大于 0 的整数"
-          disabled={saving}
-          onEdit={(text) => setDraft((current) => ({ ...current, workers: text }))}
-          onReset={() => setDraft((current) => ({ ...current, workers: String(data.workers ?? "") }))}
-        />
-      </div>
-      <div data-field="python-interpreter">
-        <SettingsValueField
-          id="runtime-python"
-          label="Python 解释器"
-          hint="自定义脚本工具用它跑 Python；留空=运行时自动检测（python3 优先）。「重新检测」会把检测到的路径直接写入后端。"
-          text={draft.python}
-          placeholder="/usr/bin/python3（留空=自动检测）"
-          overridden={draft.python !== (data.python_interpreter ?? "")}
-          invalid={false}
-          overriddenLabel="已修改"
-          resetLabel="还原"
-          invalidLabel=""
-          disabled={saving}
-          onEdit={(text) => setDraft((current) => ({ ...current, python: text }))}
-          onReset={() => setDraft((current) => ({ ...current, python: data.python_interpreter ?? "" }))}
-        />
-        <div className={own.actions}>
-          <Button
-            variant="outline"
-            size="sm"
-            data-action="detect-python"
-            disabled={saving || probing !== null}
-            onClick={() => void probePython()}
-          >
-            {probing === "python" ? "检测中…" : "重新检测"}
-          </Button>
-        </div>
-      </div>
-      <ToggleRow
-        field="web-search-enabled"
-        label="网络搜索总开关"
-        hint="开启后，各 Agent 才能在自身配置里启用 web_search；搜索不走流量记录代理。"
-        checked={draft.searchOn}
-        onChange={(next) => setDraft((current) => ({ ...current, searchOn: next }))}
-      />
-      <div className={css.row} data-field="web-search-backend">
-        <div className={css.rowText}>
-          <div className={css.rowLabel}>搜索来源</div>
-          <div className={css.rowHint}>
-            Brave 需填 Key；Tavily 需填 Key；DeepSeek 复用当前激活的 LLM 配置（须为 anthropic 协议，每次搜索消耗一次模型调用）。
-          </div>
-        </div>
-        <div className={css.rowControl}>
-          <SelectMenu
-            value={draft.backend}
-            options={BACKENDS}
-            disabled={saving}
-            onChange={(value) => setDraft((current) => ({ ...current, backend: value }))}
+    <div aria-label="运行时设置" data-section="runtime" className={own.section}>
+      <Section title="Agent 运行">
+        <Card>
+          <ToggleRow
+            field="noa-compaction"
+            label="上下文压缩（noa）"
+            hint="实验功能：由模型接管上下文压缩，取代内置 compaction；对之后启动的运行生效。"
+            checked={draft.noa}
+            onChange={(next) => setDraft((current) => ({ ...current, noa: next }))}
           />
-        </div>
-      </div>
-      <div data-field="tavily-key">
-        <SettingsSecretField
-          id="runtime-tavily-key"
-          label="Tavily Search API Key"
-          hint="已存 Key 不回显；留空即保持原值，填写后随「保存修改」写入。前往 https://tavily.com 注册获取。"
-          text={draft.tavily}
-          configured={data.tavily_key_set === true}
-          stateLabel={data.tavily_key_set === true ? "已配置（值不回显）" : "未配置"}
-          disabled={saving}
-          onEdit={(text) => setDraft((current) => ({ ...current, tavily: text }))}
-        />
-      </div>
-      <div data-field="web-search-proxy">
-        <SettingsValueField
-          id="runtime-search-proxy"
-          label="搜索出口代理"
-          hint="独立出口代理，仅用于访问搜索端点（http / https / socks5）；与记录流量的 MITM 代理无关。留空=直连。"
-          text={draft.searchProxy}
-          placeholder="http://host:port 或 socks5://host:port（留空=直连）"
-          overridden={draft.searchProxy !== (data.web_search_proxy ?? "")}
-          invalid={false}
-          overriddenLabel="已修改"
-          resetLabel="还原"
-          invalidLabel=""
-          disabled={saving}
-          onEdit={(text) => setDraft((current) => ({ ...current, searchProxy: text }))}
-          onReset={() => setDraft((current) => ({ ...current, searchProxy: data.web_search_proxy ?? "" }))}
-        />
-      </div>
-      <div className={own.actions}>
+          <KitRow
+            label="并发工作数"
+            description={invalid ? <span className={css.inlineError}>并发数必须是大于 0 的整数</span> : "每个任务并发运行的 worker 数（默认 3）；对之后启动的任务生效。"}
+            labelAdornment={draft.workers !== "" && draft.workers !== String(data.workers ?? "") ? <Badge tone="info">已修改</Badge> : null}
+            data={{ "data-field": "workers" }}
+          >
+            <span className={own.narrowInput}>
+              <TextInput
+                id="runtime-workers"
+                inputMode="numeric"
+                value={draft.workers}
+                placeholder="3"
+                aria-label="并发工作数"
+                aria-invalid={invalid}
+                disabled={saving}
+                onChange={(event) => setDraft((current) => ({ ...current, workers: event.currentTarget.value }))}
+              />
+            </span>
+          </KitRow>
+          <KitRow
+            label="Python 解释器"
+            description="自定义脚本工具用它跑 Python；留空自动检测（python3 优先）。「重新检测」会直接写入后端。"
+            labelAdornment={draft.python !== (data.python_interpreter ?? "") ? <Badge tone="info">已修改</Badge> : null}
+            stacked
+            data={{ "data-field": "python-interpreter" }}
+          >
+            <div className={css.inlineSave}>
+              <TextInput
+                id="runtime-python"
+                mono
+                value={draft.python}
+                placeholder="/usr/bin/python3（留空=自动检测）"
+                aria-label="Python 解释器"
+                disabled={saving}
+                onChange={(event) => setDraft((current) => ({ ...current, python: event.currentTarget.value }))}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                data-action="detect-python"
+                disabled={saving || probing !== null}
+                onClick={() => void probePython()}
+              >
+                {probing === "python" ? "检测中…" : "重新检测"}
+              </Button>
+            </div>
+          </KitRow>
+        </Card>
+      </Section>
+
+      <Section title="网络搜索">
+        <Card>
+          <ToggleRow
+            field="web-search-enabled"
+            label="网络搜索总开关"
+            hint="开启后，各 Agent 才能在自身配置里启用 web_search；搜索不走流量记录代理。"
+            checked={draft.searchOn}
+            onChange={(next) => setDraft((current) => ({ ...current, searchOn: next }))}
+          />
+          <KitRow
+            label="搜索来源"
+            description="Brave / Tavily 需填 Key；DeepSeek 复用当前生效的 anthropic 协议配置，每次搜索消耗一次模型调用。"
+            data={{ "data-field": "web-search-backend" }}
+          >
+            <SelectMenu
+              value={draft.backend}
+              options={BACKENDS}
+              disabled={saving}
+              ariaLabel="搜索来源"
+              onChange={(value) => setDraft((current) => ({ ...current, backend: value }))}
+            />
+          </KitRow>
+          <KitRow
+            label="Tavily Search API Key"
+            labelAdornment={
+              <Badge tone={data.tavily_key_set === true ? "success" : "neutral"}>
+                {data.tavily_key_set === true ? "已配置" : "未配置"}
+              </Badge>
+            }
+            description="已存 Key 不回显；留空保持原值，填写后随「保存修改」写入。"
+            stacked
+            data={{ "data-field": "tavily-key" }}
+          >
+            <TextInput
+              id="runtime-tavily-key"
+              mono
+              type="password"
+              autoComplete="new-password"
+              value={draft.tavily}
+              placeholder={data.tavily_key_set === true ? "••••••••（保持原值）" : "tvly-…"}
+              aria-label="Tavily Search API Key"
+              disabled={saving}
+              onChange={(event) => setDraft((current) => ({ ...current, tavily: event.currentTarget.value }))}
+            />
+          </KitRow>
+          <KitRow
+            label="搜索出口代理"
+            description="仅用于访问搜索端点（http / https / socks5），与记录流量的 MITM 代理无关；留空直连。"
+            labelAdornment={draft.searchProxy !== (data.web_search_proxy ?? "") ? <Badge tone="info">已修改</Badge> : null}
+            stacked
+            data={{ "data-field": "web-search-proxy" }}
+          >
+            <TextInput
+              id="runtime-search-proxy"
+              mono
+              value={draft.searchProxy}
+              placeholder="http://host:port 或 socks5://host:port"
+              aria-label="搜索出口代理"
+              disabled={saving}
+              onChange={(event) => setDraft((current) => ({ ...current, searchProxy: event.currentTarget.value }))}
+            />
+          </KitRow>
+        </Card>
+        {probeResult === null ? null : (
+          <Notice tone={probeOk ? "success" : "danger"} data={{ "data-field": "runtime-probe-result" }}>
+            {probeResult}
+          </Notice>
+        )}
+      </Section>
+
+      {failure === null ? null : <Notice tone="danger">保存失败：{failure}</Notice>}
+      <EditorActions
+        start={
+          <Button
+            variant="ghost"
+            size="sm"
+            data-action="test-web-search"
+            disabled={saving || probing !== null}
+            onClick={() => void probeSearch()}
+          >
+            {probing === "search" ? "测试中…" : "测试 Web 搜索"}
+          </Button>
+        }
+      >
         <Button
-          variant="outline"
+          variant="primary"
           size="sm"
-          data-action="test-web-search"
-          disabled={saving || probing !== null}
-          onClick={() => void probeSearch()}
+          data-action="save-runtime"
+          disabled={!dirty || invalid || saving}
+          onClick={() => void save()}
         >
-          {probing === "search" ? "测试中…" : "测试 Web 搜索"}
-        </Button>
-        <Button variant="primary" size="sm" data-action="save-runtime" disabled={!dirty || invalid || saving} onClick={() => void save()}>
           {saving ? "保存中…" : "保存修改"}
         </Button>
-      </div>
-      {probeResult === null ? null : (
-        <p className={css.rowHint} role="status" data-field="runtime-probe-result">
-          {probeResult}
-        </p>
-      )}
-      {failure === null ? null : (
-        <p className={css.serverError} role="alert">
-          保存失败：{failure}
-        </p>
-      )}
-    </section>
+      </EditorActions>
+    </div>
   );
 }

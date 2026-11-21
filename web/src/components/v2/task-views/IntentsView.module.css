@@ -1,111 +1,46 @@
-/* 意图视图（A02）。只用 --dsw-* 语义变量。 */
+/* 意图视图（D2）：版式来自 design/Kit；这里只放本页特有的小件。只用 --dsw-* 语义变量。 */
 
-.wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 20px 48px;
-  min-width: 0;
-  font-family: var(--dsw-font-family);
-  color: var(--dsw-alias-label-primary);
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.count {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.toolbarRight {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.state {
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.stateError {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 0.5px solid var(--dsw-alias-state-error-primary);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.empty {
-  margin: 0;
-  padding: 24px 0;
-  text-align: center;
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
+/* The list card clips the inline composer to its rounded corners. */
 .list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  overflow: hidden;
 }
 
-.row {
+/* One intent = its Row plus an optional inline composer; hairline between intents. */
+.item {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 4px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
-}
-
-.rowHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   min-width: 0;
 }
 
-.title {
-  flex: 1 1 auto;
-  min-width: 0;
+.item + .item {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.reason {
+  max-width: 320px;
   overflow: hidden;
+  color: var(--dsw-alias-state-warn-label);
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--dsw-font-xs-13, 13px);
-  line-height: 20px;
 }
 
-.rowMeta {
-  flex: none;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.messageRow {
+/* Inline "message the worker" bar: sits under the row on a quieter fill, indented to the label. */
+.composer {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  padding: 10px 16px 12px 40px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
 }
 
+.composerInput {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Cancel dialog form. */
 .form {
   display: flex;
   flex-direction: column;
@@ -114,7 +49,7 @@
 
 .confirmText {
   margin: 0;
-  font-size: var(--dsw-font-xs-13, 13px);
+  font-size: 13px;
   line-height: 20px;
   color: var(--dsw-alias-label-secondary);
   word-break: break-word;
@@ -127,7 +62,7 @@
 }
 
 .fieldLabel {
-  font-size: var(--dsw-font-xxs-12, 12px);
+  font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
 }
@@ -135,13 +70,13 @@
 .textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font-family: inherit;
-  font-size: var(--dsw-font-xs-13, 13px);
+  font-size: 13px;
   line-height: 20px;
   resize: vertical;
 }

@@ -30,8 +30,11 @@
  * `_tabs/sessions-tab.tsx:1233-1259,1655-1729`
  * DSH 依据：`ui-conversation/src/client/skeleton/ConversationMainPanel.tsx:13-49`
  * 对照表行：P1:B25 P1:B27 P1:B28
+ * U1（.tmp/d6-ia-inventory.md §4.6、§5）：选中的视图落 `?view=<id>`（`v2/data/
+ * conversation-view-url.ts` 读写 + `miox:conversation-view` 事件），右栏与外部
+ * 跳转不再依赖组件内 state；切任务仍重置为「对话」，未知 id 经别名表回落对话。
  */
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createMainSession,
@@ -41,6 +44,8 @@ import {
   primaryMainLane,
   useSessionLanes,
 } from "@/v2/data/sessions";
+import { CONVERSATION_VIEW_EVENT, readViewParam } from "@/v2/data/conversation-view-url";
+import { resolveViewAlias } from "@/v2/data/conversation-views";
 
 import { ConversationContent } from "./ConversationContent";
 import { ConversationHeader } from "./ConversationHeader";
@@ -57,7 +62,12 @@ import { SessionLaneSwitcher } from "./SessionLaneSwitcher";
 export function ConversationMainPanel(props: ConversationSkeletonProps): ReactNode {
   const blank = props.task === null;
   const phase = blank ? "hero" : "active";
-  const [view, setView] = useState<ConversationViewId>("chat");
+  // U1：视图深链 `?view=<id>`（别名解析在 `v2/data/conversation-views.ts`）。
+  // 初值只在首挂载读一次地址；切任务仍重置为「对话」（见下方的 taskId effect）。
+  const [view, setView] = useState<ConversationViewId>(() => {
+    const raw = readViewParam();
+    return raw === null ? "chat" : resolveViewAlias(raw);
+  });
   /** Selected lane key, or null for the merged transcript of every lane. */
   const [lane, setLane] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -70,13 +80,60 @@ export function ConversationMainPanel(props: ConversationSkeletonProps): ReactNo
   const [newSessionToken, setNewSessionToken] = useState(0);
   const taskId = props.task?.id ?? null;
   const { lanes, current, loading, error, reload } = useSessionLanes(taskId);
+  /** 上一轮的 taskId：区分「首挂载/自动选任务」与用户真的换了任务（U1）。 */
+  const lastTaskId = useRef<string | null>(taskId);
 
   // Another task is another lane list and another transcript: go back to all lanes.
   useEffect(() => {
+    const previous = lastTaskId.current;
+    lastTaskId.current = taskId;
     setLane(null);
-    setView("chat");
     setCreateError(null);
+    // U1：换任务回到「对话」并把地址上的 `?view=`/`?hl=` 一并摘掉（视图是任务私有的，
+    // 带着旧任务的视图走没有意义）；首挂载与自动选中第一个任务时尊重地址里已有的 view。
+    if (previous !== null && previous !== taskId) {
+      setView("chat");
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("view") || url.searchParams.has("hl")) {
+        url.searchParams.delete("view");
+        url.searchParams.delete("hl");
+        window.history.replaceState(window.history.state, "", url.toString());
+      }
+    }
   }, [taskId]);
+
+  // U1：外部跳转（右栏 `setConversationView`：先改地址再派发 `miox:conversation-view`）
+  // 与 Back/Forward（popstate）都是「地址已变」，这里重读 `?view=` 跟上即可。
+  useEffect(() => {
+    const syncFromUrl = (): void => {
+      const raw = readViewParam();
+      setView(raw === null ? "chat" : resolveViewAlias(raw));
+    };
+    window.addEventListener(CONVERSATION_VIEW_EVENT, syncFromUrl);
+    window.addEventListener("popstate", syncFromUrl);
+    return () => {
+      window.removeEventListener(CONVERSATION_VIEW_EVENT, syncFromUrl);
+      window.removeEventListener("popstate", syncFromUrl);
+    };
+  }, []);
+
+  // U1：视图选择回写 `?view=`（replaceState，与 Shell 的 `?task=` 同法，Shell.tsx:381-394），
+  // 使 URL 与选中视图始终一致。
+  const writeViewUrl = useCallback((next: ConversationViewId): void => {
+    const url = new URL(window.location.href);
+    if (next === "chat") url.searchParams.delete("view");
+    else url.searchParams.set("view", next);
+    window.history.replaceState(window.history.state, "", url.toString());
+  }, []);
+
+  /** 切视图：更新状态并同步地址（U1）。 */
+  const onSelectView = useCallback(
+    (next: ConversationViewId): void => {
+      setView(next);
+      writeViewUrl(next);
+    },
+    [writeViewUrl],
+  );
 
   // A selected lane that is no longer in the list (the intent was hard-deleted,
   // or the list reloaded without it) would leave the transcript pointed at a
@@ -158,7 +215,7 @@ export function ConversationMainPanel(props: ConversationSkeletonProps): ReactNo
 
   return (
     <div className={css.root} data-phase={phase} data-drawer={props.drawer ? "" : undefined}>
-      <ConversationHeader {...props} blank={blank} view={view} onSelectView={setView} laneBar={laneBar} />
+      <ConversationHeader {...props} blank={blank} view={view} onSelectView={onSelectView} laneBar={laneBar} />
       <ConversationContent
         {...props}
         blank={blank}

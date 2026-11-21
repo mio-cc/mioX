@@ -1,168 +1,94 @@
-/* 探索图视图（C13）。只用 --dsw-* 语义变量。 */
+/* 探索图视图（D2）：版式来自 design/Kit；这里只放本页特有的小件。只用 --dsw-* 语义变量。 */
 
-.wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 20px 48px;
-  min-width: 0;
-  font-family: var(--dsw-font-family);
-  color: var(--dsw-alias-label-primary);
-}
+/* ---- Filter + stats bar ---- */
 
-.toolbar {
+.bar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
+  margin-left: -10px;
 }
 
 .count {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
+  margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
 
-.state {
-  padding: 16px 20px;
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-label-tertiary);
+.num {
+  color: var(--dsw-alias-label-primary);
 }
 
-.stateError {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 20px;
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-state-error-primary);
-  word-break: break-word;
-}
+/* ---- Canvas card ---- */
 
-.empty {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 18px 20px;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.canvas {
-  height: 420px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
+.graphCard {
   overflow: hidden;
-  background: var(--dsw-alias-bg-layer-2);
+}
+
+.graphCanvas {
+  position: relative;
+  min-width: 0;
+}
+
+/* The legacy ExplorationGraph (exploration-graph.tsx:657) only sets w-full overflow-hidden rounded-xl;
+   the old graph-tab passed h-[72vh]. It must get a declared height here or React Flow renders at zero.
+   Inside the card the corners come from the card, so the inner radius is flattened. */
+.explorationHeight {
+  height: 68vh;
+  min-height: 440px;
+  border-radius: 0 !important;
+}
+
+/* Weight rule (400/500 only): the legacy canvas uses font-semibold on node titles and
+   an inline fontWeight 600 on edge labels; cap both at 500 from here without touching the component. */
+.graphCanvas :global(.font-semibold),
+.graphCanvas :global(.react-flow__edge-text) {
+  font-weight: 500 !important;
 }
 
 .legend {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.legendTitle {
-  font-weight: 500;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.legendItem {
-  color: var(--dsw-alias-label-secondary);
-}
-
-.hint {
-  margin-left: auto;
-}
-
-.muted {
-  color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.nodeList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  max-height: 240px;
-  overflow-y: auto;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-1);
-}
-
-.nodeRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
-  font-size: var(--dsw-font-xxs-12, 12px);
-}
-
-.nodeRow:last-child {
-  border-bottom: none;
-}
-
-.nodeTitle {
-  flex: 1 1 auto;
+  gap: 8px 20px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-primary);
+  padding: 10px 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
-/* ---- 按节点分页浏览（P2:L1；分页条几何照 BroadcastView.module.css:296-320） ---- */
-
-.pagerBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
-}
-
-.subHead {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.subTitle {
-  font-size: var(--dsw-font-xs-13, 13px);
-  font-weight: 500;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.pager {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 6px 0;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.range {
-  font-variant-numeric: tabular-nums;
-}
-
-.pagerRight {
+.legendGroup {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-left: auto;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
 }
 
-.pageInfo {
-  font-variant-numeric: tabular-nums;
+.legendLabel {
+  margin-right: 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+  letter-spacing: 0.02em;
 }
+
+.legendMuted {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.legendHint {
+  margin-left: auto;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- Node list card: capped height, scrolls inside ---- */
+
+.scrollCard {
+  max-height: 320px;
+  overflow-y: auto;
+}
+

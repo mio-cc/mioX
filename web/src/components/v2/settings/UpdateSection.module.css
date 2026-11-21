@@ -1,42 +1,68 @@
-/* Version + self-update block. Token-only; no literal colors. */
+/* Version + self-update block (D3): a settings card with a title band, a
+   label/value status grid, notices, and a right-aligned action bar.
+   Token-only; no literal colors. */
 
 .section {
-  padding: 14px 0;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
+  background: var(--dsw-alias-settings-card-fill);
 }
 
 .title {
   margin: 0;
   font-size: 14px;
+  line-height: 22px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
 }
 
 .lead {
-  margin: 4px 0 10px;
+  margin: -8px 0 0;
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Status facts as a two-column grid of label/value rows on a layer-1 inset. */
 .statusList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0 0 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 .statusRow {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 28px;
-  padding: 2px 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 8px 14px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.statusRow:nth-child(-n + 2) {
+  border-top: 0;
+}
+
+.statusRow:nth-child(even) {
+  border-left: 0.5px solid var(--dsw-alias-border-l1);
 }
 
 .statusLabel {
-  flex: 0 0 84px;
-  font-size: 13px;
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
   color: var(--dsw-alias-label-tertiary);
 }
 
@@ -47,6 +73,7 @@
   gap: 6px;
   min-width: 0;
   font-size: 13px;
+  line-height: 20px;
   color: var(--dsw-alias-label-primary);
 }
 
@@ -56,22 +83,24 @@
 }
 
 .dot {
-  width: 6px;
-  height: 6px;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-state-idle-primary);
 }
 
 .dot[data-state="ok"] {
-  background: var(--dsw-alias-state-success-primary, var(--dsw-alias-brand-primary-new-colorprimary-new-color));
+  background: var(--dsw-alias-state-success-primary);
 }
 
 .dot[data-state="bad"] {
-  background: var(--dsw-alias-state-error-primary, var(--dsw-alias-label-primary));
+  background: var(--dsw-alias-state-error-primary);
 }
 
 .inlineBtn {
   height: 22px;
+  margin-left: auto;
   padding: 0 6px;
   font-size: 12px;
 }
@@ -97,7 +126,7 @@
 }
 
 .progressWrap {
-  margin: 0 0 10px;
+  margin: 0;
 }
 
 .progressTrack {
@@ -115,7 +144,7 @@
 .progressFill {
   height: 100%;
   border-radius: 999px;
-  background: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  background: var(--dsw-alias-state-business-primary);
   transition: width 200ms var(--ds-ease-in-out, ease-in-out);
 }
 
@@ -129,27 +158,37 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .progressTrack[data-pulse="on"] {
+    animation: none;
+  }
+}
+
 .notice {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin: 0 0 8px;
-  padding: 6px 8px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-multi-select);
+  gap: 8px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--dsw-radius-md);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent);
   font-size: 12px;
   line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-state-warn-label);
 }
 
 .notice[data-tone="bad"] {
-  border-color: var(--dsw-alias-border-l3);
-  color: var(--dsw-alias-label-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.notice svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .hint {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
@@ -158,6 +197,21 @@
 .actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
-  margin: 2px 0 10px;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .statusList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .statusRow:nth-child(2) {
+    border-top: 0.5px solid var(--dsw-alias-border-l1);
+  }
+
+  .statusRow:nth-child(even) {
+    border-left: 0;
+  }
 }

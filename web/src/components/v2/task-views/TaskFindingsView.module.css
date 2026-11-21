@@ -1,188 +1,61 @@
-/* 任务内发现视图（C14）。只用 --dsw-* 语义变量。 */
+/* 任务内发现视图（D2）：版式来自 design/Kit；这里只放本页特有的小件。只用 --dsw-* 语义变量。 */
 
-.wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 20px 48px;
-  min-width: 0;
-  font-family: var(--dsw-font-family);
-  color: var(--dsw-alias-label-primary);
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.filterLabel {
-  flex: none;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.filterBar {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-x: auto;
-}
-
-.count {
-  flex: none;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-
-.state {
-  padding: 16px 0;
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.stateError {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 0.5px solid var(--dsw-alias-state-error-primary);
-  border-radius: var(--dsw-radius-sm);
-  font-size: var(--dsw-font-xs-13, 13px);
-  color: var(--dsw-alias-state-error-primary);
-  word-break: break-word;
-}
-
-.empty {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 18px 0;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
+/* Nine statuses + 全部: let the quiet filter row bleed to the section edge and scroll if narrow. */
+.filters {
+  margin: 0 -10px 4px;
 }
 
 .list {
+  overflow: hidden;
+}
+
+/* Keeps the 8px dot on the label's first line when the row is top-aligned. */
+.dotSeat {
+  display: grid;
+  place-items: center;
+  height: 22px;
+}
+
+.desc {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-bg-layer-1);
+  gap: 2px;
+  min-width: 0;
+}
+
+.summary {
+  display: -webkit-box;
   overflow: hidden;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  padding: 10px 12px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
-}
-
-.row:first-child {
-  border-top: none;
-}
-
-.rowMain {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.rowHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.rowTitle {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--dsw-font-xs-13, 13px);
-  font-weight: 500;
-}
-
-.rowSummary {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.rowMeta {
-  display: flex;
-  align-items: center;
-  flex: none;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.tagQuiet {
-  flex: none;
-}
-
-.statusTag {
-  flex: none;
-}
-
-.statusSelect {
-  height: 26px;
-  padding: 0 6px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-primary);
-  font-family: inherit;
-  font-size: var(--dsw-font-xxs-12, 12px);
-}
-
-.statusSelect:disabled {
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .saving {
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-state-business-primary);
 }
 
-.time {
-  flex: none;
-  font-size: var(--dsw-font-xxs-12, 12px);
+/* Inherited rows show their status as plain secondary text (no control). */
+.readOnlyStatus {
+  font-size: 12px;
+  line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .pager {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 2px;
-  border-top: 0.5px solid var(--dsw-alias-border-l1);
-  font-size: var(--dsw-font-xxs-12, 12px);
-  color: var(--dsw-alias-label-tertiary);
-  font-variant-numeric: tabular-nums;
+  gap: 4px;
+  padding: 8px 8px 8px 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
-.pagerActions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.pageInfo {
+  margin-right: auto;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
 }

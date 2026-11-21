@@ -26,7 +26,7 @@ import { toast } from "@/components/v2/settings/Toast";
 import type { Finding, FindingStatus } from "@/lib/types";
 import { Button } from "@/vendor/dsh/primitives/Button";
 import { Modal } from "@/vendor/dsh/primitives/Modal";
-import { SegmentedControl } from "@/vendor/dsh/primitives/SegmentedControl";
+import { FilterBar } from "@/components/v2/design/Kit";
 import { IconDownloadOutlineRegular } from "@/vendor/dsh/primitives/icons/index";
 import {
   STATUS_FILTER_ORDER,
@@ -201,7 +201,7 @@ export function FindingsExportDialog({
     >
       <div className={wcss.dialogBody} data-findings-export-dialog="">
         <span className={wcss.fieldLabel}>导出范围</span>
-        <SegmentedControl
+        <FilterBar
           id="findings-export-scope"
           label="导出范围"
           value={scope}
@@ -226,7 +226,7 @@ export function FindingsExportDialog({
         </p>
 
         <span className={wcss.fieldLabel}>导出格式</span>
-        <SegmentedControl
+        <FilterBar
           id="findings-export-format"
           label="导出格式"
           value={format}

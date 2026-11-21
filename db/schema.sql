@@ -1514,3 +1514,42 @@ CREATE TRIGGER trg_message_feedback_upd BEFORE UPDATE ON message_feedback
 --        选 off 时请求体【不带】reasoning_effort（db.EffortWireValue，由
 --        server/task_llm.go 的 withEffort 在每轮覆盖时套用）。
 ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS reasoning_efforts TEXT NOT NULL DEFAULT '';
+
+-- =====================================================================
+-- 自动化（定时任务）。见 .tmp/d5-goal-plan-schedule-design.md §3.3 / §5 S-1。
+-- automations：一条规则；automation_runs：每次（计划/实际）运行一条记录。
+-- 幂等：全部 IF NOT EXISTS，每次启动重放安全。updated_at 是 PATCH 的乐观锁令牌。
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS automations (
+    id           BIGSERIAL PRIMARY KEY,
+    title        TEXT NOT NULL DEFAULT '',
+    prompt       TEXT NOT NULL,
+    target_kind  TEXT NOT NULL DEFAULT 'task' CHECK (target_kind IN ('task','agent','new_task')),
+    task_id      BIGINT REFERENCES tasks(id) ON DELETE SET NULL,
+    agent_key    TEXT NOT NULL DEFAULT '',
+    timing_kind  TEXT NOT NULL CHECK (timing_kind IN ('once','every','daily','weekly','cron')),
+    timing       JSONB NOT NULL DEFAULT '{}',
+    enabled      BOOLEAN NOT NULL DEFAULT true,
+    safety       TEXT NOT NULL DEFAULT 'readonly' CHECK (safety IN ('readonly','inherit')),
+    next_run_at  TIMESTAMPTZ,
+    last_run_at  TIMESTAMPTZ,
+    last_status  TEXT NOT NULL DEFAULT '',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_automations_task ON automations(task_id);
+CREATE INDEX IF NOT EXISTS idx_automations_due  ON automations(enabled, next_run_at);
+
+CREATE TABLE IF NOT EXISTS automation_runs (
+    id             BIGSERIAL PRIMARY KEY,
+    automation_id  BIGINT NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+    scheduled_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    started_at     TIMESTAMPTZ,
+    finished_at    TIMESTAMPTZ,
+    status         TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','running','done','failed','skipped')),
+    summary        TEXT NOT NULL DEFAULT '',
+    findings_delta INTEGER NOT NULL DEFAULT 0,
+    task_id        BIGINT,
+    error          TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_auto ON automation_runs(automation_id, id DESC);

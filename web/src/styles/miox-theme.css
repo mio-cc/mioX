@@ -1,0 +1,51 @@
+/*
+ * mioX theme layer over the vendored DSH tokens (dsw.css). Imported right after
+ * dsw.css by app/v2/layout.tsx, so equal-specificity rules here win.
+ *
+ * Typography (D4 diagnosis, .tmp/d4-cheap-diagnosis.md): on Windows the DSH stack
+ * resolves CJK text to Microsoft YaHei, which ships no 500 weight — every
+ * "medium" label rendered as regular (measured ink 400 = 500), flattening the
+ * hierarchy. The stack below leads with Geist for Latin (loaded by next/font on
+ * <body>) and Noto Sans SC for CJK (variable weights; measured 500 = 1.24x the
+ * ink of 400), keeping PingFang / YaHei as fallbacks for machines without it.
+ * Declared on body (not :root) because --font-geist lives on <body> and modals
+ * portal straight into it.
+ */
+body {
+  --dsh-font-family-text-default: var(--font-geist, "Geist"), "Noto Sans SC", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --dsh-font-family-code-default: var(--font-geist-mono, "Geist Mono"), "JetBrains Mono", "SF Mono", Consolas,
+    "Noto Sans SC", "Microsoft YaHei";
+  --dsw-font-family: var(--dsh-font-family-text, var(--dsh-font-family-text-default)), var(--dsh-font-family-text-default);
+  --ds-font-family-code: var(--dsh-font-family-code, var(--dsh-font-family-code-default)), var(--dsh-font-family-code-default);
+  --dsw-font-family-brand: "Montserrat", var(--dsh-font-family-text-default);
+}
+
+/* The v2 surface renders in the token family everywhere (portals included). */
+.v2-scope,
+body > [role="dialog"],
+body > [data-radix-portal] {
+  font-family: var(--dsw-font-family);
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Surface hierarchy (D4 · G5). DSH draws settings cards as layer-2 white on a
+ * white panel; with mioX's dense pages that reads as one flat sheet. In light
+ * mode, kit cards and metric tiles take the faintest cool tint so a page has a
+ * visible back plane and raised groups; the hairline stroke stays. Dark mode
+ * already separates layer-1/layer-2, so it is left untouched.
+ */
+body:not([data-ds-dark-theme]) .v2-scope,
+body:not([data-ds-dark-theme]) > [role="dialog"],
+body:not([data-ds-dark-theme]) > [data-radix-portal] {
+  --dsw-alias-settings-card-fill: rgb(251, 251, 252);
+  --dsw-alias-settings-card-stroke: rgba(15, 23, 42, 0.09);
+}
+
+/* Numbers in tables, counters and metrics line up. */
+.v2-scope [data-kit-metric],
+.v2-scope [data-kit-facts],
+.v2-scope table {
+  font-variant-numeric: tabular-nums;
+}

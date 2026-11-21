@@ -32,10 +32,13 @@ export interface ConversationViewTab {
  * mirroring `view-pins.ts` FIXED_VIEW_ID ordering in
  * `ConversationSession.tsx:136-139`.
  */
-export const CONVERSATION_VIEW_TABS: readonly ConversationViewTab[] = [
-  { id: "chat", label: "对话" },
-  { id: "trajectory", label: "轨迹" },
-];
+export const CONVERSATION_VIEW_TABS: readonly ConversationViewTab[] = [{ id: "chat", label: "对话" }];
+
+/**
+ * Built-in Views that live only in the 更多视图 menu. DSH treats the trajectory as a
+ * developer View (`ui-conversation/src/client/apply.ts:219`), so U2 moves it there.
+ */
+export const CONVERSATION_MORE_TABS: readonly ConversationViewTab[] = [{ id: "trajectory", label: "轨迹" }];
 
 /** Backend mutations the Session header's More menu can request. */
 export interface ConversationTaskActions {

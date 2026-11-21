@@ -1,14 +1,19 @@
-/* Staged runtime settings section: fields keep their own hairline separators,
-   this file only owns the section stack and the action row. */
+/* Staged runtime settings (D3): kit Sections stacked with the page rhythm;
+   this file only owns the stack gap and the narrow numeric field. */
 
 .section {
   display: flex;
   flex-direction: column;
+  gap: 24px;
 }
 
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 0 4px;
+/* Worker count: a short numeric field instead of a full-width input. */
+.narrowInput {
+  display: inline-flex;
+  width: 88px;
+}
+
+.narrowInput input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
