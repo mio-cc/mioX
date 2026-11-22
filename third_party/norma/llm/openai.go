@@ -8,9 +8,30 @@ import (
 	"iter"
 	"net/http"
 	"strings"
+	"sync/atomic"
 )
 
-type openaiProvider struct{ cfg Config }
+type openaiProvider struct {
+	cfg Config
+	// noReasoningReplay: learned per instance after the first 422 extra_forbidden
+	// on assistant reasoning_content — every later build strips the field.
+	noReasoningReplay atomic.Bool
+}
+
+// stripAssistantReasoning reports whether err is a gateway's pydantic rejection
+// of the assistant `reasoning_content` field ("extra_forbidden", HTTP 422). Some
+// gateways REQUIRE thinking to be echoed on tool-call turns (the sanitize layer
+// fills a placeholder for exactly that world) while others — the GLM zcode route
+// does this — forbid the field outright; the two requirements cannot both be met
+// statically, so the provider learns per instance: on first rejection it strips
+// the field from every assistant message and retries.
+func stripAssistantReasoning(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "status 422") && strings.Contains(s, "extra_forbidden") && strings.Contains(s, "reasoning_content")
+}
 
 type oaMessage struct {
 	Role             string       `json:"role"`
@@ -264,6 +285,17 @@ func (p *openaiProvider) buildBody(req CompletionRequest, stream bool) ([]byte, 
 
 	msgs := toOpenAIMessages(joinSystem(req.System), req.Messages)
 	msgs = sanitizeOpenAIMessages(msgs, thinking)
+	if p.noReasoningReplay.Load() {
+		// Learned: this gateway forbids assistant reasoning_content entirely
+		// (422 extra_forbidden), so replayed and placeholder thinking must not
+		// be sent — drop the field from every assistant message (omitempty then
+		// omits the key).
+		for i := range msgs {
+			if msgs[i].Role == "assistant" {
+				msgs[i].ReasoningContent = ""
+			}
+		}
+	}
 
 	body := oaReq{
 		Model:       p.cfg.Model,
@@ -320,9 +352,9 @@ func isEmptyResponseRetryable(stopReason string) bool {
 func (p *openaiProvider) Stream(ctx context.Context, req CompletionRequest) iter.Seq2[StreamEvent, error] {
 	return func(yield func(StreamEvent, error) bool) {
 		body, err := p.buildBody(req, true)
-		if err != nil {
-			yield(StreamEvent{}, err)
-			return
+  if err != nil {
+  	yield(StreamEvent{}, err)
+  	return
 		}
 		for attempt := 0; ; attempt++ {
 			resp, err := doStream(ctx, p.cfg, p.cfg.BaseURL+"/chat/completions", body, func(r *http.Request) {
@@ -330,9 +362,18 @@ func (p *openaiProvider) Stream(ctx context.Context, req CompletionRequest) iter
 				p.cfg.setBearer(r.Header)
 				r.Header.Set("accept", "text/event-stream")
 			}, "openai")
-			if err != nil {
-				yield(StreamEvent{}, err)
-				return
+   if err != nil {
+   	if !p.noReasoningReplay.Load() && stripAssistantReasoning(err) {
+   		p.noReasoningReplay.Store(true)
+   		body, err = p.buildBody(req, true)
+   		if err != nil {
+   			yield(StreamEvent{}, err)
+   			return
+   		}
+   		continue
+   	}
+   	yield(StreamEvent{}, err)
+   	return
 			}
 
 			// Consume one attempt's stream. State is fresh per attempt (a retry
@@ -424,6 +465,14 @@ func (p *openaiProvider) Complete(ctx context.Context, req CompletionRequest) (M
 			r.Header.Set("accept", "application/json")
 		}, "openai")
 		if err != nil {
+			if !p.noReasoningReplay.Load() && stripAssistantReasoning(err) {
+				p.noReasoningReplay.Store(true)
+				body, err = p.buildBody(req, false)
+				if err != nil {
+					return Message{}, "", Usage{}, err
+				}
+				continue
+			}
 			return Message{}, "", Usage{}, err
 		}
 		raw, rerr := io.ReadAll(resp.Body)
