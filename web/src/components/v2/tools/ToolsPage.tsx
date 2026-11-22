@@ -112,7 +112,7 @@ function matches(tool: { key: string; description: string; agents: string[] }, q
  * 分组依据：后端 GET /tools（`Tool`，见 lib/types.ts）只有 key/system/kind 等字段，没有
  * category/group；kind 对内置行恒为 "builtin"。因此按 key 命名规则归组，不写死 key 名单：
  * - 大写驼峰 key（Monitor/TaskList/TaskOutput/TaskStop）是 harness 会话工具的移植命名，自成一组；
- * - 其余小写 key 是渗透平台的业务处理器，按语义前缀（intent/work/task/asset/compan/scope/
+ * - 其余小写 key 是平台的业务处理器，按语义前缀（intent/work/task/asset/compan/scope/
  *   fact/graph/hint/goal/constraint/finding/report/traffic/memory/team/skill/mcp/custom_tool/
  *   llm_profile）从前到后先命中先归组，组序固定；
  * - 没被任何谓词命中的 key 落到「其它」兜底组（目前为空），不丢行。

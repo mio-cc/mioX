@@ -14,7 +14,7 @@ import { Modal } from "@/vendor/dsh/primitives/Modal";
 import { IconFolderOpenRegular } from "@/vendor/dsh/primitives/icons/index";
 import css from "./WorkspaceFlow.module.css";
 
-const CANDIDATE_DIRS = ["D:\\demo", "D:\\projects\\miox-lab", "D:\\整理\\工具\\ATX渗透"];
+const CANDIDATE_DIRS = ["D:\\demo", "D:\\projects\\miox-lab"];
 
 const basename = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 

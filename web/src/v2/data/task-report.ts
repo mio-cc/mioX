@@ -22,7 +22,7 @@ export interface ReportState {
 }
 
 /**
- * 读取一个任务的渗透测试报告（Markdown 原文）。
+ * 读取一个任务的报告（Markdown 原文）。
  * @param taskId - 任务 id；null 时不请求。
  * @returns 阶段、原文、错误与重新读取。
  */

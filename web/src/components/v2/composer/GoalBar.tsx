@@ -32,7 +32,7 @@ import css from "./GoalBar.module.css";
 /**
  * D5 目标模式：一个概念一个名字——用户下的那一条是「目标」，planner 拆出来、由
  * prove_goal 逐条证实的是「验收项」（任务行 goals_met / goals_total）。目标条显示
- * 「验收项 3/7」进度；清除收进 ⋯ 菜单并二次确认（渗透任务的目标重写成本高）；
+ * 「验收项 3/7」进度；清除收进 ⋯ 菜单并二次确认（长任务的目标重写成本高）；
  * 「标记已达成」走 POST /goal/complete（后端 G-3）。
  */
 export interface GoalProgress {
